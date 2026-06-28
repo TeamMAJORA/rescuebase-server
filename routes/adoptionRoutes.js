@@ -2,8 +2,6 @@ const express = require("express");
 const router = express.Router();
 const AdoptionApplication = require("../models/AdoptionApplication");
 
-
-//The main
 router.post("/", async (req, res) => {
     try {
         const application = await AdoptionApplication.create({
