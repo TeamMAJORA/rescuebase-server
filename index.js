@@ -12,6 +12,7 @@ dotenv.config();
 const serviceAccount = require("./config/serviceAccountKey.json");
 const authRoutes = require("./routes/authRoutes");
 const adoptionRoutes = require("./routes/adoptionRoutes");
+const ledgerRoutes = require("./routes/ledgerRoutes");
 
 const app = express();
 
@@ -33,6 +34,7 @@ mongoose
 
 app.use("/api/auth", authRoutes);
 app.use("/api/adoptions", adoptionRoutes);
+app.use("/api/ledger", ledgerRoutes);
 
 app.get("/", (req, res) => {
     res.send("RescueBase Backend is now running.");
