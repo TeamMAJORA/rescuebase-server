@@ -10,6 +10,22 @@ router.post("/", async (req, res) => {
             status: "pending",
         });
 
+        await LedgerEntry.create({
+            type: "adoption",
+            action: "application_submitted",
+            actorName: application.fullName,
+            actorEmail: application.email,
+            targetType: "AdoptionApplication",
+            targetId: application._id.toString(),
+            description: `${application.fullName} submitted an adoption application for ${application.petName || "a pet"}.`,
+            status: "pending",
+            metadata: {
+                petName: application.petName,
+                petBreed: application.petBreed,
+                applicantEmail: application.email,
+            },
+        });
+
         res.status(201).json({
             success: true,
             message: "Adoption application submitted.",
@@ -69,7 +85,7 @@ router.get("/user/:email/latest", async (req, res) => {
 
 router.patch("/:id/status", async (req, res) => {
     try {
-        const { status } = req.body;
+        const { status, adminName, adminEmail } = req.body;
 
         if (!["pending", "approved", "rejected"].includes(status)) {
             return res.status(400).json({
@@ -90,6 +106,22 @@ router.patch("/:id/status", async (req, res) => {
                 message: "Application not found",
             });
         }
+
+        await LedgerEntry.create({
+            type: "adoption",
+            action: `application_${status}`,
+            actorName: adminName || "Admin User",
+            actorEmail: adminEmail || "admin",
+            targetType: "AdoptionApplication",
+            targetId: application._id.toString(),
+            description: `Admin ${status} the adoption application of ${application.fullName} for ${application.petName || "a pet"}.`,
+            status,
+            metadata: {
+                petName: application.petName,
+                petBreed: application.petBreed,
+                applicantEmail: application.email,
+            },
+        });
 
         res.json({
             success: true,

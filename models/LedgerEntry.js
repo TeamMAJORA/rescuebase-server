@@ -2,41 +2,41 @@ const mongoose = require("mongoose");
 
 const ledgerEntrySchema = new mongoose.Schema(
     {
-        type : {
-            type : String,
-            enum : ["adoption", "donation", "foster", "animal", "system"],
-            default : "system",
+        type: {
+            type: String,
+            enum: ["adoption", "donation", "foster", "animal", "system"],
+            default: "system",
         },
 
-        action : {
-            type : String,
-            required : true,
+        action: {
+            type: String,
+            required: true,
         },
 
-        actorName : String,
-        actorEmail : String,
+        actorName: String,
+        actorEmail: String,
 
-        targetType : String,
-        targetId : String,
+        targetType: String,
+        targetId: String,
 
-        description : {
-            type : String,
-            required : true,
+        description: {
+            type: String,
+            required: true,
         },
 
-        status : String,
+        status: String,
 
-        amount : {
-            type : Number,
-            default : 0,
+        amount: {
+            type: Number,
+            default: 0,
         },
 
-        metadata : {
-            type : mongoose.Schema.Types.Mixed,
-            default : {},
+        metadata: {
+            type: mongoose.Schema.Types.Mixed,
+            default: {},
         },
     },
-    { timestamps : true }
+    { timestamps: true }
 );
 
-module.exports = mongoose.model("ledgerEntry", ledgerEntrySchema);
+module.exports = mongoose.model("LedgerEntry", ledgerEntrySchema);
