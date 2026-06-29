@@ -1,3 +1,5 @@
+// RENAME IT TO LOGGER
+
 const mongoose = require("mongoose");
 
 const ledgerEntrySchema = new mongoose.Schema(
