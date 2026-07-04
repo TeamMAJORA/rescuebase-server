@@ -8,6 +8,7 @@ router.post("/assignments", async (req, res) => {
     try {
         const assignment = await FosterAssignment.create({
             ...req.body,
+            fosterEmail : String(req.body.fosterEmail || "" ).trim().toLowerCase(),
             status: "active",
         });
 
@@ -183,6 +184,125 @@ router.patch("/assignments/:id/complete", async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Failed to complete foster assignment.",
+            error: error.message,
+        });
+    }
+});
+
+router.patch("/assignments/:id", async (req, res) => {
+    try {
+        const currentAssignment = await FosterAssignment.findById(req.params.id);
+
+        if (!currentAssignment) {
+            return res.status(404).json({
+                success: false,
+                message: "Foster assignment not found",
+            });
+        }
+
+        if (currentAssignment.status !== "active") {
+            return res.status(400).json({
+                success: false,
+                message: "Only in-progress foster assignments can be updated",
+            });
+        }
+
+        const assignment = await FosterAssignment.findByIdAndUpdate(
+            req.params.id,
+            {
+                $set: {
+                    petName: req.body.petName,
+                    petBreed: req.body.petBreed,
+                    petImage: req.body.petImage,
+                    fosterName: req.body.fosterName,
+                    fosterEmail: String(req.body.fosterEmail || "")
+                        .trim()
+                        .toLowerCase(),
+                    careInstructions: req.body.careInstructions,
+                },
+            },
+            {
+                new: true,
+                runValidators: true,
+            }
+        );
+
+        await LedgerEntry.create({
+            type: "foster",
+            action: "foster_assignment_updated",
+            actorName: req.body.adminName || "Admin User",
+            actorEmail: req.body.adminEmail || "admin",
+            targetType: "FosterAssignment",
+            targetId: assignment._id.toString(),
+            description: `Foster assignment for ${assignment.petName} was updated.`,
+            status: assignment.status,
+            metadata: {
+                petName: assignment.petName,
+                fosterEmail: assignment.fosterEmail,
+            },
+        });
+
+        res.json({
+            success: true,
+            message: "Foster assignment updated",
+            assignment,
+        });
+    } catch (error) {
+        console.error("Update foster assignment error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to update foster assignment.",
+            error: error.message,
+        });
+    }
+});
+
+router.delete("/assignments/:id", async (req, res) => {
+    try {
+        const assignment = await FosterAssignment.findById(req.params.id);
+
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                message: "Foster assignment not found.",
+            });
+        }
+
+        if (assignment.status !== "active") {
+            return res.status(400).json({
+                success: false,
+                message: "Only in-progress foster assignments can be deleted.",
+            });
+        }
+
+        await LedgerEntry.create({
+            type: "foster",
+            action: "foster_assignment_deleted",
+            actorName: req.body.adminName || "Admin User",
+            actorEmail: req.body.adminEmail || "admin",
+            targetType: "FosterAssignment",
+            targetId: assignment._id.toString(),
+            description: `In-progress foster assignment for ${assignment.petName} was deleted.`,
+            status: "deleted",
+            metadata: {
+                petName: assignment.petName,
+                fosterEmail: assignment.fosterEmail,
+            },
+        });
+
+        await FosterAssignment.findByIdAndDelete(req.params.id);
+
+        res.json({
+            success: true,
+            message: "Foster assignment deleted.",
+        });
+    } catch (error) {
+        console.error("Delete foster assignment error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to delete foster assignment.",
             error: error.message,
         });
     }
