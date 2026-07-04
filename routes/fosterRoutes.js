@@ -1,5 +1,5 @@
-const exporess = require("express");
-const router = exporess.Router();
+const express = require("express");
+const router = express.Router();
 
 const FosterAssignment = require("../models/FosterAssignment");
 const LedgerEntry = require("../models/LedgerEntry");
@@ -43,7 +43,7 @@ router.post("/assignments", async (req, res) => {
 
 router.get("/assignments", async (req, res) => {
     try {
-        const assignment = await FosterAssignment.find().sort({
+        const assignments = await FosterAssignment.find().sort({
             createdAt: -1,
         });
 
@@ -56,7 +56,7 @@ router.get("/assignments", async (req, res) => {
 
         res.status(500).json({
             success: false,
-            message: "Failed to fetch foster assignmments.",
+            message: "Failed to fetch foster assignments.",
         });
     }
 });
@@ -130,6 +130,60 @@ router.post("/assignments/:id/updates", async (req, res) => {
         res.status(500).json({
             success: false,
             message: "Failed to submit foster update.",
+        });
+    }
+});
+
+router.patch("/assignments/:id/complete", async (req, res) => {
+    try {
+        const assignment = await FosterAssignment.findByIdAndUpdate(
+            req.params.id,
+            {
+                $set: {
+                    status: "completed",
+                    endDate: new Date(),
+                },
+            },
+            {
+                new: true,
+                runValidators: true,
+            }
+        );
+
+        if (!assignment) {
+            return res.status(404).json({
+                success: false,
+                message: "Foster assignment not found.",
+            });
+        }
+
+        await LedgerEntry.create({
+            type: "foster",
+            action: "foster_assignment_completed",
+            actorName: req.body.adminName || "Admin User",
+            actorEmail: req.body.adminEmail || "admin",
+            targetType: "FosterAssignment",
+            targetId: assignment._id.toString(),
+            description: `${assignment.fosterName}'s foster assignment for ${assignment.petName} was completed.`,
+            status: "completed",
+            metadata: {
+                petName: assignment.petName,
+                fosterEmail: assignment.fosterEmail,
+            },
+        });
+
+        res.json({
+            success: true,
+            message: "Foster assignment completed.",
+            assignment,
+        });
+    } catch (error) {
+        console.error("Complete foster assignment error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to complete foster assignment.",
+            error: error.message,
         });
     }
 });
