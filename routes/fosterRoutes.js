@@ -63,7 +63,7 @@ router.get("/assignments", async (req, res) => {
 
 router.get("/assignments/foster/:email/active", async (req, res) => {
     try {
-        const email = decodeURIComponent(req.params.email);
+        const email = decodeURIComponent(req.params.email).trim().toLowerCase();
 
         const assignment = await FosterAssignment.findOne({
             fosterEmail: email,
