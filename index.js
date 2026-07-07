@@ -15,11 +15,22 @@ const adoptionRoutes = require("./routes/adoptionRoutes");
 const ledgerRoutes = require("./routes/ledgerRoutes");
 const fosterRoutes = require("./routes/fosterRoutes");
 const userRoutes = require("./routes/userRoutes");
+const donationRoutes = require("./routes/donationRoutes");
 
 const app = express();
 
+const allowedOrigins = [
+    //LocalIP will be put in here ( IF Deployed put the deploy link instead ) will be put in an ENV SOON
+];
+
 app.use(cors({
-    origin: process.env.CLIENT_URL,
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error(`CORS blocked origin: ${origin}`));
+        }
+    },
     credentials: true,
 }));
 
@@ -39,6 +50,7 @@ app.use("/api/adoptions", adoptionRoutes);
 app.use("/api/ledger", ledgerRoutes);
 app.use("/api/foster", fosterRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/donations", donationRoutes);
 
 app.get("/", (req, res) => {
     res.send("RescueBase Backend is now running.");
@@ -46,6 +58,6 @@ app.get("/", (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`)
 });
