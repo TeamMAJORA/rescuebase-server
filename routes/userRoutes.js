@@ -78,4 +78,6 @@ router.patch("/:id", async (req, res) => {
             error : error.message
         })
     }
-})
+});
+
+module.exports = router;
