@@ -14,6 +14,7 @@ const authRoutes = require("./routes/authRoutes");
 const adoptionRoutes = require("./routes/adoptionRoutes");
 const ledgerRoutes = require("./routes/ledgerRoutes");
 const fosterRoutes = require("./routes/fosterRoutes");
+const userRoutes = require("./routes/userRoutes");
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/adoptions", adoptionRoutes);
 app.use("/api/ledger", ledgerRoutes);
 app.use("/api/foster", fosterRoutes);
+app.use("/api/users", userRoutes);
 
 app.get("/", (req, res) => {
     res.send("RescueBase Backend is now running.");
