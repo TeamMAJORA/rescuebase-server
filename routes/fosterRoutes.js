@@ -184,7 +184,80 @@ router.patch("/applications/:id/status", async (req, res) => {
 });
 
 router.post("/assignments", async (req, res) => {
-    
+    try {
+        const fosterEmail = String(req.body.fosterEmail || "")
+            .trim()
+            .toLowerCase();
+
+        const approvedApplication = await FosterApplication.findOne({
+            applicantEmail: fosterEmail,
+            status: "approved",
+        }).sort({ reviewedAt: -1, createdAt: -1 });
+
+        if (!approvedApplication) {
+            return res.status(400).json({
+                success: false,
+                message: "This foster caregiver is not approved yet.",
+            });
+        }
+
+        const activeAssignmentsCount = await FosterAssignment.countDocuments({
+            fosterEmail,
+            status: "active",
+        });
+
+        if (activeAssignmentsCount >= approvedApplication.capacity) {
+            return res.status(400).json({
+                success: false,
+                message: "This foster caregiver has already reached their foster capacity.",
+            });
+        }
+
+        const assignment = await FosterAssignment.create({
+            petName: req.body.petName,
+            petBreed: req.body.petBreed || "",
+            petImage: req.body.petImage || "",
+            fosterName: req.body.fosterName || approvedApplication.applicantName,
+            fosterEmail,
+            fosterApplicationId: approvedApplication._id,
+            shelterName: req.body.shelterName || "RescueBase Shelter",
+            careInstructions:
+                req.body.careInstructions ||
+                "Provide food, water, shelter, and weekly updates.",
+            status: "active",
+        });
+
+        await LedgerEntry.create({
+            type: "foster",
+            action: "foster_assignment_created",
+            actorName: req.body.adminName || "Admin User",
+            actorEmail: req.body.adminEmail || "admin",
+            targetType: "FosterAssignment",
+            targetId: assignment._id.toString(),
+            description: `${assignment.fosterName} was assigned to foster ${assignment.petName}.`,
+            status: "active",
+            metadata: {
+                petName: assignment.petName,
+                fosterEmail: assignment.fosterEmail,
+                fosterApplicationId: approvedApplication._id.toString(),
+                fosterCapacity: approvedApplication.capacity,
+            },
+        });
+
+        res.status(201).json({
+            success : true,
+            message : "Foster assignment created.",
+            assignment,
+        });
+    } catch (error) {
+        console.error("Create foster assignment error: ", error);
+
+        res.status(500).json({
+            success : false,
+            message : "Failed to cerate foster assignment.",
+            error : error.message,
+        });
+    }
 });
 
 router.get("/assignments", async (req, res) => {
