@@ -2,13 +2,192 @@ const express = require("express");
 const router = express.Router();
 
 const FosterAssignment = require("../models/FosterAssignment");
+const FosterApplication = require("../models/FosterApplication");
 const LedgerEntry = require("../models/LedgerEntry");
+
+router.post("/applications", async (req, res) => {
+    try {
+        const applicantEmail = String(req.body.applicantEmail || "")
+            .trim()
+            .toLowerCase();
+
+        const existingApplication = await FosterApplication.findOne({
+            applicantEmail,
+            status: "pending",
+        });
+
+        if (existingApplication) {
+            return res.status(400).json({
+                success: false,
+                message: "You already have a pending foster application.",
+            });
+        }
+
+        const application = await FosterApplication.create({
+            applicantName: req.body.applicantName,
+            applicantEmail,
+            phoneNumber: req.body.phoneNumber || "",
+            address: req.body.address || "",
+            housingType: req.body.housingType || "House",
+            hasPets: Boolean(req.body.hasPets),
+            hasChildren: Boolean(req.body.hasChildren),
+            availableSpace: req.body.availableSpace || "",
+            availableTime: req.body.availableTime || "",
+            fosterExperience: req.body.fosterExperience || "",
+            preferredAnimalType: req.body.preferredAnimalType || "Both",
+            capacity: Number(req.body.capacity || 1),
+            status: "pending",
+        });
+
+        await LedgerEntry.create({
+            type: "foster",
+            action: "foster_application_submitted",
+            actorName: application.applicantName,
+            actorEmail: application.applicantEmail,
+            targetType: "FosterApplication",
+            targetId: application._id.toString(),
+            description: `${application.applicantName} submitted a foster caregiver application.`,
+            status: "pending",
+            metadata: {
+                applicantEmail: application.applicantEmail,
+                capacity: application.capacity,
+                preferredAnimalType: application.preferredAnimalType,
+            },
+        });
+
+        res.status(201).json({
+            success: true,
+            message: "Foster application submitted.",
+            application,
+        });
+    } catch (error) {
+        console.error("Create foster application error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to submit foster application.",
+            error: error.message,
+        });
+    }
+});
+
+router.get("/applications", async (req, res) => {
+    try {
+        const applications = await FosterApplication.find().sort({
+            createdAt: -1,
+        });
+
+        res.json({
+            success: true,
+            applications,
+        });
+    } catch (error) {
+        console.error("Fetch foster applications error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch foster applications.",
+            error: error.message,
+        });
+    }
+});
+
+router.get("/applications/applicant/:email", async (req, res) => {
+    try {
+        const applicantEmail = decodeURIComponent(req.params.email)
+            .trim()
+            .toLowerCase();
+
+        const application = await FosterApplication.findOne({
+            applicantEmail,
+        }).sort({ createdAt: -1 });
+
+        res.json({
+            success: true,
+            application,
+        });
+    } catch (error) {
+        console.error("Fetch foster applicant application error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch foster application.",
+            error: error.message,
+        });
+    }
+});
+
+router.patch("/applications/:id/status", async (req, res) => {
+    try {
+        const allowedStatuses = ["pending", "approved", "rejected"];
+
+        if (!allowedStatuses.includes(req.body.status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid foster application status.",
+            });
+        }
+
+        const application = await FosterApplication.findByIdAndUpdate(
+            req.params.id,
+            {
+                $set: {
+                    status: req.body.status,
+                    reviewedByName: req.body.adminName || "Admin User",
+                    reviewedByEmail: req.body.adminEmail || "admin",
+                    reviewNotes: req.body.reviewNotes || "",
+                    reviewedAt: new Date(),
+                },
+            },
+            {
+                new: true,
+                runValidators: true,
+            }
+        );
+
+        if (!application) {
+            return res.status(404).json({
+                success: false,
+                message: "Foster application not found.",
+            });
+        }
+
+        await LedgerEntry.create({
+            type: "foster",
+            action: "foster_application_reviewed",
+            actorName: req.body.adminName || "Admin User",
+            actorEmail: req.body.adminEmail || "admin",
+            targetType: "FosterApplication",
+            targetId: application._id.toString(),
+            description: `${application.applicantName}'s foster application was ${application.status}.`,
+            status: application.status,
+            metadata: {
+                applicantEmail: application.applicantEmail,
+                reviewNotes: application.reviewNotes,
+            },
+        });
+
+        res.json({
+            success: true,
+            message: `Foster application ${application.status}.`,
+            application,
+        });
+    } catch (error) {
+        console.error("Update foster application status error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to update foster application status.",
+            error: error.message,
+        });
+    }
+});
 
 router.post("/assignments", async (req, res) => {
     try {
         const assignment = await FosterAssignment.create({
             ...req.body,
-            fosterEmail : String(req.body.fosterEmail || "" ).trim().toLowerCase(),
+            fosterEmail: String(req.body.fosterEmail || "").trim().toLowerCase(),
             status: "active",
         });
 
