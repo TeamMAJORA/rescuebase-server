@@ -30,6 +30,12 @@ const fosterAssignmentSchema = new mongoose.Schema(
             required : true,
         },
 
+        fosterApplicationId : {
+            type : mongoose.Schema.Types.ObjectId,
+            ref : "FosterApplication",
+            default : null,
+        },
+
         shelterName : {
             type : String,
             default : "RescueBase Shelter",
