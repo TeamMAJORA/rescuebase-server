@@ -18,7 +18,7 @@ const fosterAssignmentSchema = new mongoose.Schema(
         },
 
         petBreed : String,
-        petImages : String,
+        petImage : String,
 
         fosterName : {
             type : String,
