@@ -184,41 +184,7 @@ router.patch("/applications/:id/status", async (req, res) => {
 });
 
 router.post("/assignments", async (req, res) => {
-    try {
-        const assignment = await FosterAssignment.create({
-            ...req.body,
-            fosterEmail: String(req.body.fosterEmail || "").trim().toLowerCase(),
-            status: "active",
-        });
-
-        await LedgerEntry.create({
-            type: "foster",
-            action: "foster_assignment_created",
-            actorName: req.body.adminName || "Admin User",
-            actorEmail: req.body.adminEmail || "admin",
-            targetType: "FosterAssignment",
-            targetId: assignment._id.toString(),
-            description: `${assignment.fosterName} was assigned to foster ${assignment.petName}.`,
-            status: "active",
-            metadata: {
-                petName: assignment.petName,
-                fosterEmail: assignment.fosterEmail,
-            },
-        });
-
-        res.status(201).json({
-            success: true,
-            message: "Foster assignment created.",
-            assignment,
-        });
-    } catch (error) {
-        console.error("Create foster assignment error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to create foster assignment.",
-        });
-    }
+    
 });
 
 router.get("/assignments", async (req, res) => {
