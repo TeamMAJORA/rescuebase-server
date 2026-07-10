@@ -20,7 +20,8 @@ const donationRoutes = require("./routes/donationRoutes");
 const app = express();
 
 const allowedOrigins = [
-    //LocalIP will be put in here ( IF Deployed put the deploy link instead ) will be put in an ENV SOON
+    // This will be put in the env and put it the ipv4 adress with the port used in it.
+    process.env.CORS_URL
 ];
 
 app.use(cors({
