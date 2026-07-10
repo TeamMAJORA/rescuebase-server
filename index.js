@@ -16,12 +16,14 @@ const ledgerRoutes = require("./routes/ledgerRoutes");
 const fosterRoutes = require("./routes/fosterRoutes");
 const userRoutes = require("./routes/userRoutes");
 const donationRoutes = require("./routes/donationRoutes");
+const animalRoutes = require("./routes/animalRoutes")
 
 const app = express();
 
 const allowedOrigins = [
     // This will be put in the env and put it the ipv4 adress with the port used in it.
-    process.env.CORS_URL
+    process.env.CORS_URL,
+    "http://192.168.1.15:5173"
 ];
 
 app.use(cors({
@@ -52,6 +54,7 @@ app.use("/api/ledger", ledgerRoutes);
 app.use("/api/foster", fosterRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/donations", donationRoutes);
+app.use("/api/animals", animalRoutes)
 
 app.get("/", (req, res) => {
     res.send("RescueBase Backend is now running.");
