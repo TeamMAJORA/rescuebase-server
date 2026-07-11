@@ -108,7 +108,7 @@ router.post("/google/login", verifyFirebaseToken, async (req, res) => {
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: "No associated account. Please sign up first.",
+                message: "You don't have an account with us. Please sign up first.",
             });
         }
 
