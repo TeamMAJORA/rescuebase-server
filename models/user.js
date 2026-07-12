@@ -4,7 +4,6 @@ const userSchema = new mongoose.Schema(
     {
         firebaseUid: {
             type: String,
-            default: "",
             unique: true,
             sparse: true,
         },
