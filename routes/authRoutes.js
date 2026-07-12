@@ -1,8 +1,40 @@
 const express = require("express");
+const router = express.Router();
 const { getAuth } = require("firebase-admin/auth");
 const User = require("../models/User");
+const bcrypt = require("bcrypt");
+const nodemailer = require("nodemailer");
 
-const router = express.Router();
+function generateOtp() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function cleanUser(user) {
+    const userObject = user.toObject();
+
+    delete userObject.password;
+    delete userObject.emailOtp;
+    delete userObject.emailOtpExpires;
+    delete userObject.emailOtpAttempts;
+
+    return userObject;
+}
+
+router.post("/email/signup", async (req, res) => {
+    // signup code
+});
+
+router.post("/email/verify-otp", async (req, res) => {
+    // verify otp code
+});
+
+router.post("/email/resend-otp", async (req, res) => {
+    // resend otp code
+});
+
+router.post("/email/login", async (req, res) => {
+    // login code
+});
 
 async function verifyFirebaseToken(req, res, next) {
     try {
