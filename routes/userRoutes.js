@@ -8,19 +8,19 @@ router.get("/", async (req, res) => {
     try {
         const users = await User.find()
             .select("-password")
-            .sort({ createdAt : -1 });
+            .sort({ createdAt: -1 });
 
         res.json({
-            success : true,
+            success: true,
             users,
         });
     } catch (error) {
         console.log("Fetching users error: ", error);
 
         res.status(500).json({
-            success : false,
-            message : "Failed to fetch users",
-            error : error.message,
+            success: false,
+            message: "Failed to fetch users",
+            error: error.message,
         });
     }
 });
@@ -29,8 +29,13 @@ router.patch("/:id", async (req, res) => {
     try {
 
         const allowedFields = [
-            "username", "role", "status", "verified"
-        ]
+            "name",
+            "username",
+            "role",
+            "status",
+            "verified",
+            "profileImage",
+        ];
 
         const allowedUpdates = {};
 
@@ -41,31 +46,31 @@ router.patch("/:id", async (req, res) => {
         });
 
         if (Object.keys(allowedUpdates).length === 0) {
-            return res.status(400).json({
-                success : false,
-                message : "No valid fields provided for this update",
+            return res.status(404).json({
+                success: false,
+                message: "No valid fields provided for this update",
             });
         }
 
         const user = await User.findByIdAndUpdate(
             req.params.id,
-            { $set : allowedUpdates },
+            { $set: allowedUpdates },
             {
-                new : true,
-                runValidators : true,
+                new: true,
+                runValidators: true,
             }
-        ).select("-password");
+        ).select("-password -emailOtp -emailOtpExpires -emailOtpAttempts");
 
         if (!user) {
             return res.status(404).json({
-                success : false,
-                message  : "User not found."
+                success: false,
+                message: "User not found."
             });
         }
 
         res.json({
-            success : true,
-            message : "User updated successfully.",
+            success: true,
+            message: "User updated successfully.",
             user,
         });
 
@@ -73,9 +78,9 @@ router.patch("/:id", async (req, res) => {
         console.log("Update user error: ", error)
 
         res.status(500).json({
-            success : false,
-            message : "Failed to update user.",
-            error : error.message
+            success: false,
+            message: "Failed to update user.",
+            error: error.message
         })
     }
 });
