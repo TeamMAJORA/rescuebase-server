@@ -51,19 +51,309 @@ async function sendOtpEmail(email, otp) {
 }
 
 router.post("/email/signup", async (req, res) => {
-   
+    try {
+        const username = String(req.body.username || "").trim();
+        const email = String(req.body.email || "").trim().toLowerCase();
+        const password = String(req.body.password || "");
+        const confirmPassword = String(req.body.confirmPassword || "");
+
+        if (!username || !email || !password || !confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Please fill in all required fields.",
+            });
+        }
+
+        if (password !== confirmPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Passwords do not match.",
+            });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters.",
+            });
+        }
+
+        const existingUser = await User.findOne({ email }).select(
+            "+password +emailOtp +emailOtpExpires +emailOtpAttempts"
+        );
+
+        if (existingUser && existingUser.verified) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is already registered. Please login instead.",
+            });
+        }
+
+        if (existingUser && existingUser.provider === "google") {
+            return res.status(400).json({
+                success: false,
+                message: "This email is already registered with Google Sign-In.",
+            });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const otp = generateOtp();
+
+        let user;
+
+        if (existingUser && !existingUser.verified) {
+            existingUser.username = username;
+            existingUser.name = username;
+            existingUser.password = hashedPassword;
+            existingUser.provider = "local";
+            existingUser.role = "adopter";
+            existingUser.status = "active";
+            existingUser.verified = false;
+            existingUser.emailOtp = otp;
+            existingUser.emailOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+            existingUser.emailOtpAttempts = 0;
+
+            user = await existingUser.save();
+        } else {
+            user = await User.create({
+                username,
+                name: username,
+                email,
+                password: hashedPassword,
+                provider: "local",
+                role: "adopter",
+                status: "active",
+                verified: false,
+                emailOtp: otp,
+                emailOtpExpires: new Date(Date.now() + 10 * 60 * 1000),
+                emailOtpAttempts: 0,
+            });
+        }
+
+        await sendOtpEmail(email, otp);
+
+        res.status(201).json({
+            success: true,
+            message: "Signup successful. Please check your email for the OTP.",
+            email,
+            user: cleanUser(user),
+        });
+    } catch (error) {
+        console.error("Email signup error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to signup with email.",
+            error: error.message,
+        });
+    }
 });
 
 router.post("/email/verify-otp", async (req, res) => {
-    // verify otp code
+    try {
+        const email = String(req.body.email || "").trim().toLowerCase();
+        const otp = String(req.body.otp || "").trim();
+
+        if (!email || !otp) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and OTP are required.",
+            });
+        }
+
+        const user = await User.findOne({ email }).select(
+            "+password +emailOtp +emailOtpExpires +emailOtpAttempts"
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found.",
+            });
+        }
+
+        if (user.verified) {
+            return res.json({
+                success: true,
+                message: "Account is already verified.",
+                user: cleanUser(user),
+            });
+        }
+
+        if (!user.emailOtp || !user.emailOtpExpires) {
+            return res.status(400).json({
+                success: false,
+                message: "No OTP found. Please request a new code.",
+            });
+        }
+
+        if (user.emailOtpExpires < new Date()) {
+            return res.status(400).json({
+                success: false,
+                message: "OTP expired. Please request a new code.",
+            });
+        }
+
+        if (user.emailOtpAttempts >= 5) {
+            return res.status(429).json({
+                success: false,
+                message: "Too many OTP attempts. Please request a new code.",
+            });
+        }
+
+        if (user.emailOtp !== otp) {
+            user.emailOtpAttempts += 1;
+            await user.save();
+
+            return res.status(400).json({
+                success: false,
+                message: "Invalid OTP.",
+            });
+        }
+
+        user.verified = true;
+        user.emailOtp = "";
+        user.emailOtpExpires = null;
+        user.emailOtpAttempts = 0;
+
+        await user.save();
+
+        res.json({
+            success: true,
+            message: "Email verified successfully.",
+            user: cleanUser(user),
+        });
+    } catch (error) {
+        console.error("Verify OTP error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to verify OTP.",
+            error: error.message,
+        });
+    }
 });
 
 router.post("/email/resend-otp", async (req, res) => {
-    // resend otp code
+    try {
+        const email = String(req.body.email || "").trim().toLowerCase();
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: "Email is required.",
+            });
+        }
+
+        const user = await User.findOne({ email }).select(
+            "+emailOtp +emailOtpExpires +emailOtpAttempts"
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found.",
+            });
+        }
+
+        if (user.verified) {
+            return res.status(400).json({
+                success: false,
+                message: "Account is already verified.",
+            });
+        }
+
+        const otp = generateOtp();
+
+        user.emailOtp = otp;
+        user.emailOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+        user.emailOtpAttempts = 0;
+
+        await user.save();
+        await sendOtpEmail(email, otp);
+
+        res.json({
+            success: true,
+            message: "New OTP sent to your email.",
+        });
+    } catch (error) {
+        console.error("Resend OTP error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to resend OTP.",
+            error: error.message,
+        });
+    }
 });
 
 router.post("/email/login", async (req, res) => {
-    // login code
+    try {
+        const email = String(req.body.email || "").trim().toLowerCase();
+        const password = String(req.body.password || "");
+
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required.",
+            });
+        }
+
+        const user = await User.findOne({ email }).select("+password");
+
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid email or password.",
+            });
+        }
+
+        if (user.provider === "google" && !user.password) {
+            return res.status(400).json({
+                success: false,
+                message: "This account uses Google Sign-In.",
+            });
+        }
+
+        const passwordMatches = await bcrypt.compare(password, user.password || "");
+
+        if (!passwordMatches) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid email or password.",
+            });
+        }
+
+        if (!user.verified) {
+            return res.status(403).json({
+                success: false,
+                message: "Please verify your email OTP before logging in.",
+                needsVerification: true,
+                email: user.email,
+            });
+        }
+
+        if (user.status === "disabled") {
+            return res.status(403).json({
+                success: false,
+                message: "Your account has been disabled.",
+            });
+        }
+
+        res.json({
+            success: true,
+            message: "Login successful.",
+            user: cleanUser(user),
+        });
+    } catch (error) {
+        console.error("Email login error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to login with email.",
+            error: error.message,
+        });
+    }
 });
 
 async function verifyFirebaseToken(req, res, next) {
