@@ -1,108 +1,116 @@
 const mongoose = require("mongoose");
 
-const animalSchema = new mongoose.Schema({
-    name: {
-        type: String,
-        required: true,
-        trim: true,
-    },
+const animalSchema = new mongoose.Schema(
+    {
+        name: {
+            type: String,
+            required: true,
+            trim: true,
+        },
 
-    type: {
-        type: String,
-        enum: ["Dog", "Cat", "Other"],
-        required: true,
-    },
+        type: {
+            type: String,
+            enum: ["Dog", "Cat", "Other"],
+            required: true,
+        },
 
-    breed: {
-        type: String,
-        default: "",
-        trim: true,
-    },
+        breed: {
+            type: String,
+            default: "",
+            trim: true,
+        },
 
-    age: {
-        type: Number,
-        default: 0,
-    },
+        age: {
+            type: Number,
+            default: 0,
+        },
 
-    gender: {
-        type: String,
-        enum: ["Male", "Female", "Unknown"],
-        default: "Unknown"
-    },
+        gender: {
+            type: String,
+            enum: ["Male", "Female", "Unknown"],
+            default: "Unknown",
+        },
 
-    size: {
-        type: String,
-        enum: ["Small", "Medium", "Large", "Unknown"],
-        default: "Unknown",
-    },
+        size: {
+            type: String,
+            enum: ["Small", "Medium", "Large", "Unknown"],
+            default: "Unknown",
+        },
 
-    color: {
-        type: String,
-        default: "",
-        trim: true,
-    },
+        color: {
+            type: String,
+            default: "",
+            trim: true,
+        },
 
-    image: {
-        type: String,
-        default: true,
-    },
+        image: {
+            type: String,
+            default: "",
+        },
 
-    description: {
-        type: String,
-        default: "",
-        trim: true,
-    },
+        description: {
+            type: String,
+            default: "",
+            trim: true,
+        },
 
-    medicalStatus: {
-        type: String,
-        default: "",
-        trim: true,
-    },
+        medicalStatus: {
+            type: String,
+            default: "",
+            trim: true,
+        },
 
-    intakeDate: {
-        type: Date,
-        defaut: Date.now,
-    },
+        behaviorNotes: {
+            type: String,
+            default: "",
+            trim: true,
+        },
 
-    intakeCondition: {
-        type: String,
-        enum: ["Healthy", "Injured", "Sick", "Under Observation", "Unknown"],
-        default: "Unknown",
-    },
+        intakeDate: {
+            type: Date,
+            default: Date.now,
+        },
 
-    availabilitySatus: {
-        type: String,
-        enum: ["available", "unavailable"],
-        default: "available"
-    },
+        intakeCondition: {
+            type: String,
+            enum: ["Healthy", "Injured", "Sick", "Under Observation", "Unknown"],
+            default: "Unknown",
+        },
 
-    adoptionStatus: {
-        type: String,
-        enum: ["available", "pending", "adopted"],
-    },
+        availabilityStatus: {
+            type: String,
+            enum: ["available", "unavailable"],
+            default: "available",
+        },
 
-    fosterStatus: {
-        type: String,
-        enum: ["none", "in_foster", "completed"],
-        default: "none",
-    },
+        adoptionStatus: {
+            type: String,
+            enum: ["available", "pending", "adopted"],
+            default: "available",
+        },
 
-    location: {
-        type: String,
-        default: "RescueBase Shelter",
-        trim: true,
-    },
+        fosterStatus: {
+            type: String,
+            enum: ["none", "in_foster", "completed"],
+            default: "none",
+        },
 
-    createdByName: {
-        type: String,
-        default: "Admin User",
-    },
+        location: {
+            type: String,
+            default: "RescueBase Shelter",
+            trim: true,
+        },
 
-    createdByEmail: {
-        type: String,
-        default: "admin",
+        createdByName: {
+            type: String,
+            default: "Admin User",
+        },
+
+        createdByEmail: {
+            type: String,
+            default: "admin",
+        },
     },
-},
     {
         timestamps: true,
     }
