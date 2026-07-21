@@ -52,7 +52,7 @@ router.post("/image", upload.single("image"), async (req, res) => {
 
         const result = await uploadtoCloudinary(req.file.buffer);;
 
-        res.status(201),json({
+        res.status(201).json({
             success : true,
             message : "Image uploaded successfully.",
             imageUrl : result.secure_url,
