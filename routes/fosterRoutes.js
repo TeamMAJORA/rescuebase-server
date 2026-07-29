@@ -526,4 +526,31 @@ router.delete("/assignments/:id", async (req, res) => {
     }
 });
 
+router.get("/assignments/foster/:email/history", async (req, res) => {
+    try {
+        const fosterEmail = String(req.params.email || "")
+            .trim()
+            .toLowerCase();
+
+        const assignments = await FosterAssignment
+            .find({
+                fosterEmail,
+                status: "completed",
+            })
+            .sort({ endDate: -1 });
+
+        return res.json({
+            success : true,
+            history: assignments,
+        });
+    } catch (error) {
+        console.error("Fetch foster history error:", error);
+
+        return res.status(500).json({
+            success : false, 
+            message : "Failed to fetch foster history."
+        })
+    }
+})
+
 module.exports = router;
