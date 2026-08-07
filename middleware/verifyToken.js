@@ -27,14 +27,30 @@ module.exports = function verifyToken(req, res, next) {
             })
         }
 
+        if (!process.env.JWT_SECRET) {
+            console.error("JWT_SECRET is not configured");
+
+            return res.status(500).json({
+                success : false,
+                message : "Server configuration error."
+            });
+        }
+
         const decoded = jwt.verify(
             token, process.env.JWT_SECRET
         );
 
+        if (!decoded.id || !decoded.email || !decoded.role) {
+            return res.status(401).json({
+                success : false,
+                message : "Invalid authentication payload."
+            })
+        }
+
         req.user = {
             id : decoded.id,
             email : decoded.email,
-            role : String(decoded.role).toLowerCase(),
+            role : String(decoded.role).trim().toLowerCase(),
         };
 
         next();
