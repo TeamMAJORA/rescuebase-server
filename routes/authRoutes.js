@@ -4,6 +4,8 @@ const { getAuth } = require("firebase-admin/auth");
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
+const asyncHandler = require("../middleware/asyncHandler");
+const authController = require("../controllers/authController");
 
 function generateOtp() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -51,102 +53,7 @@ async function sendOtpEmail(email, otp) {
 }
 
 router.post("/email/signup", async (req, res) => {
-    try {
-        const username = String(req.body.username || "").trim();
-        const email = String(req.body.email || "").trim().toLowerCase();
-        const password = String(req.body.password || "");
-        const confirmPassword = String(req.body.confirmPassword || "");
-
-        if (!username || !email || !password || !confirmPassword) {
-            return res.status(400).json({
-                success: false,
-                message: "Please fill in all required fields.",
-            });
-        }
-
-        if (password !== confirmPassword) {
-            return res.status(400).json({
-                success: false,
-                message: "Passwords do not match.",
-            });
-        }
-
-        if (password.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: "Password must be at least 6 characters.",
-            });
-        }
-
-        const existingUser = await User.findOne({ email }).select(
-            "+password +emailOtp +emailOtpExpires +emailOtpAttempts"
-        );
-
-        if (existingUser && existingUser.verified) {
-            return res.status(400).json({
-                success: false,
-                message: "Email is already registered. Please login instead.",
-            });
-        }
-
-        if (existingUser && existingUser.provider === "google") {
-            return res.status(400).json({
-                success: false,
-                message: "This email is already registered with Google Sign-In.",
-            });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-        const otp = generateOtp();
-
-        let user;
-
-        if (existingUser && !existingUser.verified) {
-            existingUser.username = username;
-            existingUser.name = username;
-            existingUser.password = hashedPassword;
-            existingUser.provider = "local";
-            existingUser.role = "adopter";
-            existingUser.status = "active";
-            existingUser.verified = false;
-            existingUser.emailOtp = otp;
-            existingUser.emailOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
-            existingUser.emailOtpAttempts = 0;
-
-            user = await existingUser.save();
-        } else {
-            user = await User.create({
-                username,
-                name: username,
-                email,
-                password: hashedPassword,
-                provider: "local",
-                role: "adopter",
-                status: "active",
-                verified: false,
-                emailOtp: otp,
-                emailOtpExpires: new Date(Date.now() + 10 * 60 * 1000),
-                emailOtpAttempts: 0,
-            });
-        }
-
-        await sendOtpEmail(email, otp);
-
-        res.status(201).json({
-            success: true,
-            message: "Signup successful. Please check your email for the OTP.",
-            email,
-            user: cleanUser(user),
-        });
-    } catch (error) {
-        console.error("Email signup error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to signup with email.",
-            error: error.message,
-        });
-    }
+    asyncHandler(authController.emailSignup);
 });
 
 router.post("/email/verify-otp", async (req, res) => {
@@ -478,98 +385,6 @@ router.post("/google/login", verifyFirebaseToken, async (req, res) => {
         });
     } catch (error) {
         console.error("Login error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Login failed",
-        });
-    }
-});
-
-// Email/password signup. The client creates the Firebase account first
-// (createUserWithEmailAndPassword) and sends us the resulting ID token,
-// same handshake as the Google flow above - just a different provider.
-router.post("/email/signup", verifyFirebaseToken, async (req, res) => {
-    try {
-        const firebaseUser = req.firebaseUser;
-
-        const firebaseUid = firebaseUser.uid;
-        const email = firebaseUser.email;
-        // Firebase ID tokens don't reliably include a freshly-set displayName,
-        // so the client also sends it explicitly in the body.
-        const name = req.body.name || firebaseUser.name || "";
-
-        const existingUser = await User.findOne({
-            $or: [{ firebaseUid }, { email }],
-        });
-
-        if (existingUser) {
-            return res.status(409).json({
-                success: false,
-                message: "Account already registered. Please log in.",
-            });
-        }
-
-        const user = await User.create({
-            firebaseUid,
-            email,
-            name,
-            profileImage: "",
-            provider: "email",
-            role: "adopter",
-            status: "active",
-        });
-
-        return res.status(201).json({
-            success: true,
-            message: "Signup successful",
-            user,
-        });
-    } catch (error) {
-        console.error("Email signup error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Signup failed",
-            error: error.message,
-        });
-    }
-});
-
-// Email/password login. The client signs in with Firebase
-// (signInWithEmailAndPassword) first and sends us the resulting ID token.
-router.post("/email/login", verifyFirebaseToken, async (req, res) => {
-    try {
-        const firebaseUser = req.firebaseUser;
-
-        const firebaseUid = firebaseUser.uid;
-        const email = firebaseUser.email;
-
-        const user = await User.findOne({
-            $or: [{ firebaseUid }, { email }],
-        });
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "No associated account. Please sign up first.",
-            });
-        }
-
-        if (user.status === "disabled") {
-            return res.status(403).json({
-                success: false,
-                message: "This account has been disabled.",
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Login successful",
-            user,
-        });
-    } catch (error) {
-        console.error("Email login error:", error);
 
         return res.status(500).json({
             success: false,
