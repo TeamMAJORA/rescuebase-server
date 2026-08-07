@@ -1,4 +1,3 @@
-
 /*
     Generic request validation middleware (BETA)
 */
