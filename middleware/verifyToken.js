@@ -4,76 +4,99 @@ module.exports = function verifyToken(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
 
-        if(!authHeader) {
+        if (!authHeader) {
             return res.status(401).json({
-                success : false,
-                message : "Authorization header is missing",
+                success: false,
+                message: "Authorization header is missing.",
             });
         }
 
-        if(!authHeader.startsWith("Bearer ")) {
+        if (!authHeader.startsWith("Bearer ")) {
             return res.status(401).json({
-                success : false,
-                message : "Invalid authorization format."
+                success: false,
+                message: "Invalid authorization format.",
             });
         }
 
-        const token = authHeader.split(" ")[1];
+        const token = authHeader.slice(7).trim();
 
         if (!token) {
             return res.status(401).json({
-                success : false,
-                message : "Authentication token is missing.",
-            })
+                success: false,
+                message: "Authentication token is missing.",
+            });
         }
 
         if (!process.env.JWT_SECRET) {
-            console.error("JWT_SECRET is not configured");
+
+            console.error(
+                "JWT_SECRET is not configured."
+            );
 
             return res.status(500).json({
-                success : false,
-                message : "Server configuration error."
+                success: false,
+                message: "Server configuration error.",
             });
         }
 
-        const decoded = jwt.verify(
-            token, process.env.JWT_SECRET
+        const decoded = jwt.verify(token, process.env.JWT_SECRET,
+            {
+                issuer: "RescueBase",
+                audience: "rescuebase-client",
+            }
         );
 
-        if (!decoded.id || !decoded.email || !decoded.role) {
+        if (!decoded || !decoded.id || decoded.email || !decoded.role) {
             return res.status(401).json({
-                success : false,
-                message : "Invalid authentication payload."
-            })
+                success: false,
+                message: "Invalid authentication payload.",
+            });
+        }
+
+        const role = String(decoded.role).trim().toLowerCase();
+
+        if (!role) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid authentication role.",
+            });
         }
 
         req.user = {
-            id : decoded.id,
-            email : decoded.email,
-            role : String(decoded.role).trim().toLowerCase(),
+            id: decoded.id,
+            email: decoded.email,
+            role,
         };
 
         next();
+
     } catch (error) {
+
         if (error.name === "TokenExpiredError") {
+
             return res.status(401).json({
-                success : false,
-                message : "Session has expired. Please log in again.",
+                success: false,
+                message:
+                    "Session has expired. Please log in again.",
             });
         }
 
-        if (error.name === "JsonWebTokenError") {
+        if (
+            error.name === "JsonWebTokenError" ||
+            error.name === "NotBeforeError"
+        ) {
             return res.status(401).json({
-                success : false,
-                message : "Invalid authentication token.",
+                success: false,
+                message:
+                    "Invalid authentication token.",
             });
         }
 
-        console.error("JWT Verification Error: ", error);
+        console.error("JWT Verification Error:", error);
 
         return res.status(500).json({
-            success : false,
-            message : "Authentication failed."
+            success: false,
+            message: "Authentication failed.",
         });
     }
 };
