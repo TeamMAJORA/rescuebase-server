@@ -6,6 +6,7 @@ const bcrypt = require("bcrypt");
 const nodemailer = require("nodemailer");
 const asyncHandler = require("../middleware/asyncHandler");
 const authController = require("../controllers/authController");
+const validateRequest = require("../middleware/validateRequest");
 
 function generateOtp() {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -52,94 +53,15 @@ async function sendOtpEmail(email, otp) {
 
 }
 
-router.post("/email/signup", async (req, res) => {
-    asyncHandler(authController.emailSignup);
-});
+router.post("/email/signup",
+    validateRequest(["username", "email", "password", "confirmPassword"]),
+    asyncHandler(authController.emailSignup)
+);
 
-router.post("/email/verify-otp", async (req, res) => {
-    try {
-        const email = String(req.body.email || "").trim().toLowerCase();
-        const otp = String(req.body.otp || "").trim();
-
-        if (!email || !otp) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and OTP are required.",
-            });
-        }
-
-        const user = await User.findOne({ email }).select(
-            "+password +emailOtp +emailOtpExpires +emailOtpAttempts"
-        );
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found.",
-            });
-        }
-
-        if (user.verified) {
-            return res.json({
-                success: true,
-                message: "Account is already verified.",
-                user: cleanUser(user),
-            });
-        }
-
-        if (!user.emailOtp || !user.emailOtpExpires) {
-            return res.status(400).json({
-                success: false,
-                message: "No OTP found. Please request a new code.",
-            });
-        }
-
-        if (user.emailOtpExpires < new Date()) {
-            return res.status(400).json({
-                success: false,
-                message: "OTP expired. Please request a new code.",
-            });
-        }
-
-        if (user.emailOtpAttempts >= 5) {
-            return res.status(429).json({
-                success: false,
-                message: "Too many OTP attempts. Please request a new code.",
-            });
-        }
-
-        if (user.emailOtp !== otp) {
-            user.emailOtpAttempts += 1;
-            await user.save();
-
-            return res.status(400).json({
-                success: false,
-                message: "Invalid OTP.",
-            });
-        }
-
-        user.verified = true;
-        user.emailOtp = "";
-        user.emailOtpExpires = null;
-        user.emailOtpAttempts = 0;
-
-        await user.save();
-
-        res.json({
-            success: true,
-            message: "Email verified successfully.",
-            user: cleanUser(user),
-        });
-    } catch (error) {
-        console.error("Verify OTP error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to verify OTP.",
-            error: error.message,
-        });
-    }
-});
+router.post("/email/verify-otp",
+    validateRequest(["email", "otp"]),
+    asyncHandler(authController.verifyOtp)
+);
 
 router.post("/email/resend-otp", async (req, res) => {
     try {
