@@ -6,6 +6,8 @@ const {
     initializeApp, cert
 } = require("firebase-admin/app");
 const admin = require("firebase-admin");
+const securityGuard = require("./middleware/securityGuard");
+const errorhandler = require("./middleware/errorHandler")
 
 dotenv.config();
 
@@ -44,6 +46,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(securityGuard);
 
 initializeApp({
     credential: cert(serviceAccount),
@@ -70,6 +73,8 @@ app.use("/api/uploads", uploadRoutes);
 app.get("/", (req, res) => {
     res.send("RescueBase Backend is now running.");
 });
+
+app.use(errorhandler);
 
 const PORT = process.env.PORT || 5000;
 
