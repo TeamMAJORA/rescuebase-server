@@ -113,3 +113,79 @@ exports.emailSignup = async (req, res) => {
         user: cleanUser(user),
     });
 };
+
+exports.verifyOtp = async (req, res) => {
+    const email = String(req.body, email || "").trim().toLowerCase();
+    const otp = String(req.body.otpp || "").trim();
+
+    if (!email) {
+        const error = new Error("Email is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!otp) {
+        const error = new Error("OTP is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const user = await User.findOne({
+        email,
+    }).select(
+        "+password +emailOtp +emailOtpExpires +emailOtpAttempts"
+    );
+
+    if (!user) {
+        const error = new Error("User not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+    
+    if (user.verified) {
+        return res.json({
+            success : true,
+            message : "Account is already verified.",
+            user: cleanUser(user),
+        });
+    }
+
+    if (!user.emailOtp || !user.emailOtpExpires) {
+        const error = new Error("No OTP Found. Please request a new code.");
+        error.codeStatus = 400;
+        throw error;
+    }
+
+    if (user.emailOtpExpires < new Date()) {
+        const error = new Error("OTP Expired. Please request a new code.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (user.emailOtpAttempts >= 5) {
+        const error = new Error("Too many OTP Entry attempts. Please request a new code") 
+        error.statusCode = 429;
+        throw error;
+    }
+
+    if (user.emailOtp !== otp) {
+        user.emailOtpAttempts += 1;
+        await user.save();
+        const error = new Error("Invalid OTP");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    user.verified = true;
+    user.emailOtp = "";
+    user.emailOtpExpires = null;
+    user.emailOtpAttempts = 0;
+    await user.save();
+
+    return res.json({
+        success: true,
+        message: "Email verified successfully.",
+        user: cleanUser(user),
+    });
+};
+
