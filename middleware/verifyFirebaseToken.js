@@ -1,4 +1,4 @@
-const { getAuth } = require("firebase-admin");
+const { getAuth } = require("firebase-admin/auth");
 
 module.exports = async function verifyFirebaseToken(req, res, next) {
     try {
@@ -6,15 +6,15 @@ module.exports = async function verifyFirebaseToken(req, res, next) {
 
         if (!authHeader) {
             return res.status(401).json({
-                success : false,
+                success: false,
                 message: "Authorization header is missing.",
             });
         }
 
         if (!authHeader.startsWith("Bearer ")) {
             return res.status(401).json({
-                success : false,
-                message : "Inavlid authorization format.",
+                success: false,
+                message: "Inavlid authorization format.",
             })
         }
 
@@ -22,14 +22,14 @@ module.exports = async function verifyFirebaseToken(req, res, next) {
 
         if (!token) {
             return res.status(401).json({
-                success : false,
-                message : "Firebase authentication token is missing."
+                success: false,
+                message: "Firebase authentication token is missing."
             });
         }
 
-        const decodedToken = await getAuth().verifyFirebaseToken(token);
+        const decodedToken = await getAuth().verifyIdToken(token);
 
-        req.firbaseUser = decodedToken;
+        req.firebaseUser = decodedToken;
 
         next();
     } catch (error) {
