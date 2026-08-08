@@ -141,11 +141,11 @@ exports.verifyOtp = async (req, res) => {
         error.statusCode = 404;
         throw error;
     }
-    
+
     if (user.verified) {
         return res.json({
-            success : true,
-            message : "Account is already verified.",
+            success: true,
+            message: "Account is already verified.",
             user: cleanUser(user),
         });
     }
@@ -163,7 +163,7 @@ exports.verifyOtp = async (req, res) => {
     }
 
     if (user.emailOtpAttempts >= 5) {
-        const error = new Error("Too many OTP Entry attempts. Please request a new code") 
+        const error = new Error("Too many OTP Entry attempts. Please request a new code")
         error.statusCode = 429;
         throw error;
     }
@@ -192,7 +192,7 @@ exports.verifyOtp = async (req, res) => {
 exports.resendOtp = async (req, res) => {
     const email = String(req.body.email || "").trim().toLowerCase();
 
-    if(!email) {
+    if (!email) {
         const error = new Error("Email is required.");
         error.statusCode = 400;
         throw error;
@@ -204,13 +204,13 @@ exports.resendOtp = async (req, res) => {
         "+emailOtp +emailOtpExpires +emailOtpAttempts"
     );
 
-    if (!user){
+    if (!user) {
         const error = new Error("User not found.");
         error.statusCode = 404;
         throw error;
     }
 
-    if(user.verified) {
+    if (user.verified) {
         const error = new Error("Account is already verified.");
         error.statusCode = 400;
         throw error;
@@ -224,7 +224,105 @@ exports.resendOtp = async (req, res) => {
     await sendOtpEmail(email, otp);
 
     return res.json({
-        success : true,
+        success: true,
         message: "New OTP send to your email.",
     });
-}
+};
+
+exports.emailLogin = async (req, res) => {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "");
+    const user = await User.findOne({
+        user,
+    }).select("+password");
+
+    if (!user) {
+        const error = new Error("Invalid email or password.");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    if (user.provider === "google" && !user.password) {
+        const error = new Error("This account uses Google Sign-In.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const passwordMatches = await bcrypt.compare(password, user.password || "");
+
+    if (!passwordMatches) {
+        const error = new Error("Invalid email or password.");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    if (!user.verified) {
+        const error = new Error("Please verify your email OTP before logging in");
+        error.statusCode = 403;
+        error.needsVerification = true;
+        error.email = user.email;
+        throw error;
+    }
+
+    if (user.status === "disabled") {
+        const error = new Error("Your account is disabled.");
+        error.statusCode = 403;
+        throw error;
+    }
+
+    return res.json({
+        success: true,
+        message: "Login successful.",
+        user: cleanUser(user),
+    });
+};
+
+exports.googleSignup = async (req, res) => {
+    const firebaseUser = req.firebaseUser;
+
+    if (!firebaseUser) {
+        const error = new Error("Firebase authentication information is missing");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const firebaseUid = firebaseUser.uid;
+    const email = String(firebaseUser.email || "").trim().toLowerCase();
+    const name = String(firebaseUser.name || "").trim();
+    const profileImage = String(firebaseUser.picture || "").trim();
+
+    if (!firebaseUid || !email) {
+        const error = new Error("Required Google account information is missing.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const existingUser = await User.findOne({
+        $or: [
+            { firebaseUid },
+            { email },
+        ],
+    });
+
+    if (existingUser) {
+        const error = new Error("Account already registered. Please log in.");
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const user = await User.create({
+        firebaseUid,
+        email,
+        name,
+        profileImage,
+        provider: "google",
+        role: "adopter",
+        status: "active",
+    });
+
+    return res.status(201).json({
+        success: true,
+        message: "Signup successful",
+        user: cleanUser(user),
+    });
+};
