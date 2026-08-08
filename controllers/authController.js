@@ -2,7 +2,8 @@ const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const generateOtp = require("../utils/generateOtp");
 const cleanUser = require("../utils/cleanUser");
-
+const generateToken = require("../utils/generateToken");
+const token = generateToken;
 const {
     sendOtpEmail,
 } = require("../services/emailService");
@@ -232,7 +233,7 @@ exports.emailLogin = async (req, res) => {
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "");
     const user = await User.findOne({
-        user,
+        email,
     }).select("+password");
 
     if (!user) {
@@ -272,6 +273,7 @@ exports.emailLogin = async (req, res) => {
     return res.json({
         success: true,
         message: "Login successful.",
+        token,
         user: cleanUser(user),
     });
 };
@@ -366,6 +368,7 @@ exports.googleLogin = async (req, res) => {
     return res.status(200).json({
         success: true,
         message: "Login successful.",
+        token,
         user: cleanUser(user),
     });
 };
