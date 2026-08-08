@@ -1,6 +1,5 @@
 const bcrypt = require("bcrypt");
-const User = require("../models/user");
-
+const User = require("../models/User");
 const generateOtp = require("../utils/generateOtp");
 const cleanUser = require("../utils/cleanUser");
 
@@ -330,9 +329,9 @@ exports.googleSignup = async (req, res) => {
 exports.googleLogin = async (req, res) => {
     const firebaseUser = req.firebaseUser;
 
-    if(!firebaseUser) {
+    if (!firebaseUser) {
         const error = new Error("Firebase authentication information is missing");
-        error.status = 401;
+        error.statusCode = 401;
         throw error;
     }
 
