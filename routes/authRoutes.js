@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const User = require("../models/User");
 const asyncHandler = require("../middleware/asyncHandler");
 const authController = require("../controllers/authController");
 const validateRequest = require("../middleware/validateRequest");
+const verifyFirebaseToken = require("../middleware/verifyFirebaseToken")
 
 router.post("/email/signup",
     validateRequest(["username", "email", "password", "confirmPassword"]),
