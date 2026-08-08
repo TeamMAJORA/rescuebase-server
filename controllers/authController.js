@@ -189,3 +189,42 @@ exports.verifyOtp = async (req, res) => {
     });
 };
 
+exports.resendOtp = async (req, res) => {
+    const email = String(req.body.email || "").trim().toLowerCase();
+
+    if(!email) {
+        const error = new Error("Email is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const user = await User.findOne({
+        email,
+    }).select(
+        "+emailOtp +emailOtpExpires +emailOtpAttempts"
+    );
+
+    if (!user){
+        const error = new Error("User not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if(user.verified) {
+        const error = new Error("Account is already verified.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const otp = generateOtp();
+    user.emailOtp = otp;
+    user.emailOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+    user.emailOtpAttempts = 0;
+    await user.save();
+    await sendOtpEmail(email, otp);
+
+    return res.json({
+        success : true,
+        message: "New OTP send to your email.",
+    });
+}
