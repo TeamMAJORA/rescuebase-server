@@ -1,6 +1,6 @@
 /*
-    Generic request validation middleware (BETA)
-*/
+ * Generic request validation middleware (BETA)
+ */
 module.exports = function validateRequest(requiredFields = []) {
     return (req, res, next) => {
         if (!req.body || typeof req.body !== "object") {
@@ -13,9 +13,9 @@ module.exports = function validateRequest(requiredFields = []) {
         const missingFields = [];
 
         for (const field of requiredFields) {
-            const vaule = req.body[field];
-
-            if (value === undefined ||
+            const value = req.body[field];
+            if (
+                value === undefined ||
                 value === null ||
                 String(value).trim() === ""
             ) {
@@ -26,10 +26,10 @@ module.exports = function validateRequest(requiredFields = []) {
         if (missingFields.length > 0) {
             return res.status(400).json({
                 success: false,
-                message : "Validation failed.",
+                message: "Validation failed.",
                 missingFields,
             });
         }
         next();
-    }
-}
+    };
+};
