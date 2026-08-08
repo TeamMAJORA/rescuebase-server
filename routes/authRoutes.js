@@ -107,44 +107,6 @@ router.post("/email/login",
 
 router.post("/google/signup", verifyFirebaseToken, asyncHandler(authController.googleSignup));
 
-router.post("/google/login", verifyFirebaseToken, async (req, res) => {
-    try {
-        const firebaseUser = req.firebaseUser;
-
-        const firebaseUid = firebaseUser.uid;
-        const email = firebaseUser.email;
-
-        const user = await User.findOne({
-            $or: [{ firebaseUid }, { email }],
-        });
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "You don't have an account with us. Please sign up first.",
-            });
-        }
-
-        if (user.status === "disabled") {
-            return res.status(403).json({
-                success: false,
-                message: "This account has been disabled.",
-            });
-        }
-
-        return res.status(200).json({
-            success: true,
-            message: "Login successful",
-            user,
-        });
-    } catch (error) {
-        console.error("Login error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Login failed",
-        });
-    }
-});
+router.post("/google/login", verifyFirebaseToken, asyncHandler(authController.googleLogin));
 
 module.exports = router;
