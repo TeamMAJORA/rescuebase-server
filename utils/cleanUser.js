@@ -1,5 +1,5 @@
 function cleanUser(user) {
-    const userObject = user.object();
+    const userObject = user.toObject();
 
     delete userObject.password;
     delete userObject.emailOtp;
