@@ -63,58 +63,10 @@ router.post("/email/verify-otp",
     asyncHandler(authController.verifyOtp)
 );
 
-router.post("/email/resend-otp", async (req, res) => {
-    try {
-        const email = String(req.body.email || "").trim().toLowerCase();
-
-        if (!email) {
-            return res.status(400).json({
-                success: false,
-                message: "Email is required.",
-            });
-        }
-
-        const user = await User.findOne({ email }).select(
-            "+emailOtp +emailOtpExpires +emailOtpAttempts"
-        );
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found.",
-            });
-        }
-
-        if (user.verified) {
-            return res.status(400).json({
-                success: false,
-                message: "Account is already verified.",
-            });
-        }
-
-        const otp = generateOtp();
-
-        user.emailOtp = otp;
-        user.emailOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
-        user.emailOtpAttempts = 0;
-
-        await user.save();
-        await sendOtpEmail(email, otp);
-
-        res.json({
-            success: true,
-            message: "New OTP sent to your email.",
-        });
-    } catch (error) {
-        console.error("Resend OTP error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to resend OTP.",
-            error: error.message,
-        });
-    }
-});
+router.post("/email/resend-otp", 
+    validateRequest(["email"]),
+    asyncHandler(authController.resendOtp)
+);
 
 router.post("/email/login", async (req, res) => {
     try {
