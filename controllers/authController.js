@@ -326,3 +326,47 @@ exports.googleSignup = async (req, res) => {
         user: cleanUser(user),
     });
 };
+
+exports.googleLogin = async (req, res) => {
+    const firebaseUser = req.firebaseUser;
+
+    if(!firebaseUser) {
+        const error = new Error("Firebase authentication information is missing");
+        error.status = 401;
+        throw error;
+    }
+
+    const firebaseUid = firebaseUser.uid;
+    const email = String(firebaseUser.email || "").trim().toLowerCase();
+
+    if (!firebaseUid || !email) {
+        const error = new Error("Required Google account information is missing.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const user = await User.findOne({
+        $or: [
+            { firebaseUid },
+            { email },
+        ],
+    });
+
+    if (!user) {
+        const error = new Error("You don't have an account with RescueBase. Please sign up first.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (user.status == "disabled") {
+        const error = new Error("This account has been disabled.");
+        error.statusCode = 403;
+        throw error;
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Login successful.",
+        user: cleanUser(user),
+    });
+};
