@@ -1,12 +1,12 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/user");
 
-const generateOtp = require("../utils");
-const cleanUser = require("../utils");
+const generateOtp = require("../utils/generateOtp");
+const cleanUser = require("../utils/cleanUser");
 
 const {
     sendOtpEmail,
-} = require("../services");
+} = require("../services/emailService");
 
 exports.emailSignup = async (req, res) => {
     const username = String(req.body.username || "").trim();
