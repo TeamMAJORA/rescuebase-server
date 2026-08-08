@@ -1,7 +1,5 @@
 const express = require("express");
 const router = express.Router();
-
-const User = require("../models/User");
 // const LedgerEntry = require("../models/LedgerEntry"); // we will not use this one yet for now
 
 router.get("/", async (req, res) => {
