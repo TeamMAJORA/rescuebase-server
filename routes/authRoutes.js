@@ -53,90 +53,6 @@ async function sendOtpEmail(email, otp) {
 
 }
 
-router.post("/email/signup",
-    validateRequest(["username", "email", "password", "confirmPassword"]),
-    asyncHandler(authController.emailSignup)
-);
-
-router.post("/email/verify-otp",
-    validateRequest(["email", "otp"]),
-    asyncHandler(authController.verifyOtp)
-);
-
-router.post("/email/resend-otp", 
-    validateRequest(["email"]),
-    asyncHandler(authController.resendOtp)
-);
-
-router.post("/email/login", async (req, res) => {
-    try {
-        const email = String(req.body.email || "").trim().toLowerCase();
-        const password = String(req.body.password || "");
-
-        if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and password are required.",
-            });
-        }
-
-        const user = await User.findOne({ email }).select("+password");
-
-        if (!user) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid email or password.",
-            });
-        }
-
-        if (user.provider === "google" && !user.password) {
-            return res.status(400).json({
-                success: false,
-                message: "This account uses Google Sign-In.",
-            });
-        }
-
-        const passwordMatches = await bcrypt.compare(password, user.password || "");
-
-        if (!passwordMatches) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid email or password.",
-            });
-        }
-
-        if (!user.verified) {
-            return res.status(403).json({
-                success: false,
-                message: "Please verify your email OTP before logging in.",
-                needsVerification: true,
-                email: user.email,
-            });
-        }
-
-        if (user.status === "disabled") {
-            return res.status(403).json({
-                success: false,
-                message: "Your account has been disabled.",
-            });
-        }
-
-        res.json({
-            success: true,
-            message: "Login successful.",
-            user: cleanUser(user),
-        });
-    } catch (error) {
-        console.error("Email login error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to login with email.",
-            error: error.message,
-        });
-    }
-});
-
 async function verifyFirebaseToken(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
@@ -169,63 +85,27 @@ async function verifyFirebaseToken(req, res, next) {
     }
 }
 
-router.post("/google/signup", verifyFirebaseToken, async (req, res) => {
-    try {
-        console.log("Signup route reached");
+router.post("/email/signup",
+    validateRequest(["username", "email", "password", "confirmPassword"]),
+    asyncHandler(authController.emailSignup)
+);
 
-        const firebaseUser = req.firebaseUser;
+router.post("/email/verify-otp",
+    validateRequest(["email", "otp"]),
+    asyncHandler(authController.verifyOtp)
+);
 
-        const firebaseUid = firebaseUser.uid;
-        const email = firebaseUser.email;
-        const name = firebaseUser.name || "";
-        const profileImage = firebaseUser.picture || "";
+router.post("/email/resend-otp", 
+    validateRequest(["email"]),
+    asyncHandler(authController.resendOtp)
+);
 
-        console.log("Firebase user:", {
-            firebaseUid,
-            email,
-            name,
-        });
+router.post("/email/login",
+    validateRequest(["email", "password"]),
+    asyncHandler(authController.emailLogin)
+);
 
-        const existingUser = await User.findOne({
-            $or: [{ firebaseUid }, { email }],
-        });
-
-        console.log("Existing user:", existingUser);
-
-        if (existingUser) {
-            return res.status(409).json({
-                success: false,
-                message: "Account already registered. Please log in.",
-            });
-        }
-
-        const user = await User.create({
-            firebaseUid,
-            email,
-            name,
-            profileImage,
-            provider: "google",
-            role: "adopter",
-            status: "active",
-        });
-
-        console.log("User saved to MongoDB:", user);
-
-        return res.status(201).json({
-            success: true,
-            message: "Signup successful",
-            user,
-        });
-    } catch (error) {
-        console.error("Signup error FULL:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Signup failed",
-            error: error.message,
-        });
-    }
-});
+router.post("/google/signup", verifyFirebaseToken, asyncHandler(authController.googleSignup));
 
 router.post("/google/login", verifyFirebaseToken, async (req, res) => {
     try {
