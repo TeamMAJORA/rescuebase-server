@@ -7,245 +7,39 @@ const AdoptionApplication = require("../models/AdoptionApplication");
 const Animal = require("../models/Animal");
 const LedgerEntry = require("../models/LedgerEntry");
 
-async function createLedgerEntrySafely(data) {
-    try {
-        await LedgerEntry.create(data);
-    } catch (error) {
-        console.error("Adoption ledger error:", error);
-    }
-}
+const adoptionController = require("../controllers/adoptionController");
+const asyncHandler = require("../middleware/asyncHandler");
+const validateRequest = require("../middleware/validateRequest");
+const verifyToken = require("../middleware/verifyToken");
+const authoriseRoles = require("../middleware/authoriseRoles");
 
-router.post("/", async (req, res) => {
-    let reservedAnimal = null;
+router.post("/", 
+    verifyToken,
+    authoriseRoles("adopter"),
+    validateRequest([
+        "fullName",
+        "animalId",
+    ]),
+    asyncHandler(
+        adoptionController.submitApplication
+    )
+);
 
-    try {
-        const fullName = String(req.body.fullName || "").trim();
-        const email = String(req.body.email || "").trim().toLowerCase();
-        const animalId = String(req.body.animalId || "").trim();
+router.get("/", 
+    verifyToken,
+    authoriseRoles(
+        "admin",
+        "staff",
+    ),
+    asyncHandler(adoptionController.getAllApplications)
+);
 
-        if (!fullName || !email || !animalId) {
-            return res.status(400).json({
-                success: false,
-                message: "Full name, email, and animal are required.",
-            });
-        }
+router.get("/user/latest",
+    verifyToken,
+    authoriseRoles("adopter"),
 
-        if (!mongoose.isValidObjectId(animalId)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid animal ID.",
-            });
-        }
-
-        if (
-            req.body.applicantUserId &&
-            !mongoose.isValidObjectId(req.body.applicantUserId)
-        ) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid applicant user ID.",
-            });
-        }
-
-        const existingPendingApplication =
-            await AdoptionApplication.findOne({
-                email,
-                status: "pending",
-            });
-
-        if (existingPendingApplication) {
-            return res.status(409).json({
-                success: false,
-                message:
-                    "You already have a pending adoption application.",
-            });
-        }
-
-        const animalExists = await Animal.findById(animalId);
-
-        if (!animalExists) {
-            return res.status(404).json({
-                success: false,
-                message: "Animal not found.",
-            });
-        }
-
-        reservedAnimal = await Animal.findOneAndUpdate(
-            {
-                _id: animalId,
-                availabilityStatus: "available",
-                adoptionStatus: "available",
-            },
-            {
-                $set: {
-                    availabilityStatus: "unavailable",
-                    adoptionStatus: "pending",
-                },
-            },
-            {
-                new: true,
-                runValidators: true,
-            }
-        );
-
-        if (!reservedAnimal) {
-            return res.status(409).json({
-                success: false,
-                message:
-                    "This animal is no longer available for adoption.",
-            });
-        }
-
-        const documents = Array.isArray(req.body.documents)
-            ? req.body.documents.map((document) => ({
-                  documentName: String(
-                      document.documentName || ""
-                  ).trim(),
-                  documentUrl: String(document.documentUrl || ""),
-                  publicId: String(document.publicId || ""),
-                  status: "pending",
-              }))
-            : [];
-
-        const application = await AdoptionApplication.create({
-            applicantUserId: req.body.applicantUserId || null,
-
-            fullName,
-            email,
-            phone: String(req.body.phone || "").trim(),
-            address: String(req.body.address || "").trim(),
-
-            animalId: reservedAnimal._id,
-            petName: reservedAnimal.name,
-            petBreed: reservedAnimal.breed || "",
-            petImage: reservedAnimal.image || "",
-
-            homeType: String(req.body.homeType || "").trim(),
-            hasChildren: String(req.body.hasChildren || "").trim(),
-            hasOtherPets: String(req.body.hasOtherPets || "").trim(),
-
-            reason: String(req.body.reason || "").trim(),
-            experience: String(req.body.experience || "").trim(),
-
-            documents,
-            documentsVerified: false,
-
-            role: "adopter",
-            status: "pending",
-        });
-
-        await createLedgerEntrySafely({
-            type: "adoption",
-            action: "application_submitted",
-            actorName: application.fullName,
-            actorEmail: application.email,
-            targetType: "AdoptionApplication",
-            targetId: application._id.toString(),
-            description: `${application.fullName} submitted an adoption application for ${application.petName}.`,
-            status: "pending",
-            metadata: {
-                animalId: application.animalId.toString(),
-                petName: application.petName,
-                petBreed: application.petBreed,
-                applicantEmail: application.email,
-            },
-        });
-
-        res.status(201).json({
-            success: true,
-            message: "Adoption application submitted.",
-            application,
-        });
-    } catch (error) {
-        console.error("Adoption submit error:", error);
-
-        if (reservedAnimal?._id) {
-            try {
-                await Animal.findOneAndUpdate(
-                    {
-                        _id: reservedAnimal._id,
-                        adoptionStatus: "pending",
-                    },
-                    {
-                        $set: {
-                            adoptionStatus: "available",
-                            availabilityStatus: "available",
-                        },
-                    }
-                );
-            } catch (rollbackError) {
-                console.error(
-                    "Animal reservation rollback error:",
-                    rollbackError
-                );
-            }
-        }
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to submit adoption application.",
-            error: error.message,
-        });
-    }
-});
-
-router.get("/", async (req, res) => {
-    try {
-        const applications = await AdoptionApplication.find()
-            .populate(
-                "animalId",
-                "name type breed age gender size image availabilityStatus adoptionStatus"
-            )
-            .sort({
-                createdAt: -1,
-            });
-
-        res.json({
-            success: true,
-            applications,
-        });
-    } catch (error) {
-        console.error("Fetch adoptions error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch adoption applications.",
-            error: error.message,
-        });
-    }
-});
-
-router.get("/user/:email/latest", async (req, res) => {
-    try {
-        const email = decodeURIComponent(req.params.email)
-            .trim()
-            .toLowerCase();
-
-        const application = await AdoptionApplication.findOne({
-            email,
-        })
-            .populate(
-                "animalId",
-                "name type breed age gender size image availabilityStatus adoptionStatus"
-            )
-            .sort({
-                createdAt: -1,
-            });
-
-        res.json({
-            success: true,
-            application,
-        });
-    } catch (error) {
-        console.error("Fetch user adoption error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch adoption application.",
-            error: error.message,
-        });
-    }
-});
+    asyncHandler(adoptionController.getLatestUserApplication)
+);
 
 router.patch("/:id/status", async (req, res) => {
     try {

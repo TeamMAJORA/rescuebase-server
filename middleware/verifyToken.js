@@ -46,7 +46,7 @@ module.exports = function verifyToken(req, res, next) {
             }
         );
 
-        if (!decoded || !decoded.id || decoded.email || !decoded.role) {
+        if (!decoded || !decoded.id || !decoded.email || !decoded.role) {
             return res.status(401).json({
                 success: false,
                 message: "Invalid authentication payload.",
@@ -72,12 +72,15 @@ module.exports = function verifyToken(req, res, next) {
 
     } catch (error) {
 
-        if (error.name === "TokenExpiredError") {
+        console.error("JWT Verification Failed:", {
+            name: error.name,
+            message: error.message,
+        });
 
+        if (error.name === "TokenExpiredError") {
             return res.status(401).json({
                 success: false,
-                message:
-                    "Session has expired. Please log in again.",
+                message: "Session has expired. Please log in again.",
             });
         }
 
@@ -87,12 +90,14 @@ module.exports = function verifyToken(req, res, next) {
         ) {
             return res.status(401).json({
                 success: false,
-                message:
-                    "Invalid authentication token.",
+                message: "Invalid authentication token.",
             });
         }
 
-        console.error("JWT Verification Error:", error);
+        console.error(
+            "JWT Verification Error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,

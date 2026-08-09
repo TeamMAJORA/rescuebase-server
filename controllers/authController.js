@@ -3,7 +3,7 @@ const User = require("../models/User");
 const generateOtp = require("../utils/generateOtp");
 const cleanUser = require("../utils/cleanUser");
 const generateToken = require("../utils/generateToken");
-const token = generateToken;
+
 const {
     sendOtpEmail,
 } = require("../services/emailService");
@@ -115,8 +115,8 @@ exports.emailSignup = async (req, res) => {
 };
 
 exports.verifyOtp = async (req, res) => {
-    const email = String(req.body, email || "").trim().toLowerCase();
-    const otp = String(req.body.otpp || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const otp = String(req.body.otp || "").trim();
 
     if (!email) {
         const error = new Error("Email is required.");
@@ -152,7 +152,7 @@ exports.verifyOtp = async (req, res) => {
 
     if (!user.emailOtp || !user.emailOtpExpires) {
         const error = new Error("No OTP Found. Please request a new code.");
-        error.codeStatus = 400;
+        error.statusCode = 400;
         throw error;
     }
 
@@ -181,10 +181,12 @@ exports.verifyOtp = async (req, res) => {
     user.emailOtpExpires = null;
     user.emailOtpAttempts = 0;
     await user.save();
+    const token = generateToken(user);
 
     return res.json({
         success: true,
         message: "Email verified successfully.",
+        token,
         user: cleanUser(user),
     });
 };
@@ -223,7 +225,7 @@ exports.resendOtp = async (req, res) => {
     await user.save();
     await sendOtpEmail(email, otp);
 
-    return res.json({
+    return res.status(200).json({
         success: true,
         message: "New OTP send to your email.",
     });
@@ -270,7 +272,9 @@ exports.emailLogin = async (req, res) => {
         throw error;
     }
 
-    return res.json({
+    const token = generateToken(user);
+
+    return res.status(200).json({
         success: true,
         message: "Login successful.",
         token,
@@ -321,9 +325,12 @@ exports.googleSignup = async (req, res) => {
         status: "active",
     });
 
-    return res.status(201).json({
+    const token = generateToken(user);
+
+    return res.status(200).json({
         success: true,
         message: "Signup successful",
+        token,
         user: cleanUser(user),
     });
 };
@@ -364,6 +371,8 @@ exports.googleLogin = async (req, res) => {
         error.statusCode = 403;
         throw error;
     }
+
+    const token = generateToken(user);
 
     return res.status(200).json({
         success: true,
