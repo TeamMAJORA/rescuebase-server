@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const AdoptionApplication = require("../models/AdoptionApplication");
 const Animal = require("../models/Animal");
 const LedgerEntry = require("../models/LedgerEntry");
+const User = require("../models/User");
 
 async function createLedgerEntrySafely(data) {
     try {
@@ -174,7 +175,9 @@ exports.submitApplication = async (req, res) => {
 };
 
 exports.getAllApplications = async (req, res) => {
-    const applications = (await AdoptionApplication.find()).sort({ createdAt: -1 });
+    const applications = await AdoptionApplication.find()
+        .sort({ createdAt: -1 });
+
     return res.status(200).json({
         success: true,
         applications,
@@ -204,3 +207,166 @@ exports.getLatestUserApplication = async (req, res) => {
         application,
     });
 };
+
+exports.updateApplicationStatus = async (req, res) => {
+    const applicationId = String(req.params.id || "").trim();
+    const status = String(req.body.status || "").trim().toLowerCase();
+    const reviewNotes = String(req.body.reviewNotes || "").trim();
+
+    if (!mongoose.isValidObjectId(applicationId)) {
+        const eror = new Error("Invalid Application ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!["pending", "approved", "rejected"].includes(status)) {
+        const error = new Error("Invalid application status.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const adminId = req.user?.id;
+    const adminEmail = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!adminId || !adminEmail) {
+        const error = new Error("Authenticated administrator information is missing.");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const adminUser = await User.findById(adminId).select("name username email role");
+
+    if (!adminUser) {
+        const error = new Error("Authenticated administrator account was not found.");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const adminName = String(adminUser.name || adminUser.username || "Admin User").trim();
+
+    const application = await AdoptionApplication.findById(applicationId);
+
+    if (!application) {
+        const error = new Error("Application not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (!application.animalId) {
+        const error = new Error("This application is not connected to an animal record.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (application.status !== "pending" && application.status !== status) {
+        const error = new Error(`This application has already been ${application.status}`);
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const animal = await Animal.findById(application.animalId);
+
+    if (!animal) {
+        const error = new Error("Connect animal record not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (status === "approved") {
+        animal.adoptionStatus = "adopted";
+        animal.availabilityStatus = "unavailable";
+
+        await animal.save();
+
+        await AdoptionApplication.updateMany(
+            {
+                _id: {
+                    $ne: application._id,
+                },
+                animalId: application.animalId,
+                status: "pending",
+            },
+            {
+                $set: {
+                    status: "rejected",
+                    reviewedByName: adminName,
+                    reviewedByEmail: adminEmail,
+                    reviewNotes:
+                        "Another adoption application was approved.",
+                    reviewedAt: new Date(),
+                },
+            }
+        );
+    }
+
+    if (status === "rejected") {
+        const anotherPendingApplication = await AdoptionApplication.exists({
+            _id: {
+                $ne: application._id,
+            },
+            animalId: application.animalId,
+            status: "pending",
+        });
+
+        if (anotherPendingApplication) {
+            animal.adoptionStatus = "pending";
+            animal.availabilityStatus = "unavailable";
+        } else {
+            animal.adoptionStatus = "available";
+            animal.availabilityStatus = "available";
+        }
+
+        await animal.save();
+    }
+
+    if (status === "pending") {
+        animal.adoptionStatus = "pending";
+        animal.availabilityStatus = "unavailable";
+
+        await animal.save();
+    }
+
+    application.status = status;
+    application.reviewedByName = adminName;
+    application.reviewedByEmail = adminEmail;
+    application.reviewNotes = reviewNotes;
+    application.reviewedAt = status === "pending" ? null : new Date();
+    application.interviewSchedule = status === "approved" ? req.body.interviewSchedule || null : null;
+
+    await application.save();
+
+    await application.populate("animalId", "name type breed age gender size image availabilityStatus adoptionStatus");
+
+    await createLedgerEntrySafely({
+        type: "adoption",
+        action: `application_${status}`,
+        actorName: adminName,
+        actorEmail: adminEmail,
+        targetType: "AdoptionApplication",
+        targetId: application._id.toString(),
+        description:
+            `Admin ${status} the adoption application of ` +
+            `${application.fullName} for ${application.petName}.`,
+
+        status,
+        metadata: {
+            animalId: String(
+                application.animalId?._id || ""
+            ),
+            petName: application.petName,
+            petBreed: application.petBreed,
+            applicantEmail: application.email,
+            interviewSchedule:
+                status === "approved"
+                    ? application.interviewSchedule
+                    : null,
+        },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: `Application ${status} successfully.`,
+        application,
+        animal,
+    })
+}
