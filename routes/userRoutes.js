@@ -1,86 +1,33 @@
 const express = require("express");
 const router = express.Router();
-// const LedgerEntry = require("../models/LedgerEntry"); // we will not use this one yet for now
 
-router.get("/", async (req, res) => {
-    try {
-        const users = await User.find()
-            .select("-password")
-            .sort({ createdAt: -1 });
+const verifyToken = require("../middleware/verifyToken");
+const authorizeRoles = require("../middleware/authoriseRoles");
+const asyncHandler = require("../middleware/asyncHandler");
 
-        res.json({
-            success: true,
-            users,
-        });
-    } catch (error) {
-        console.log("Fetching users error: ", error);
+const userController = require(
+    "../controllers/userController"
+);
 
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch users",
-            error: error.message,
-        });
-    }
-});
 
-router.patch("/:id", async (req, res) => {
-    try {
+router.get(
+    "/",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(
+        userController.getAllUsers
+    )
+);
 
-        const allowedFields = [
-            "name",
-            "username",
-            "role",
-            "status",
-            "verified",
-            "profileImage",
-        ];
 
-        const allowedUpdates = {};
+router.patch(
+    "/:id",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(
+        userController.updateUser
+    )
+);
 
-        allowedFields.forEach((field) => {
-            if (req.body[field] !== undefined) {
-                allowedUpdates[field] = req.body[field];
-            }
-        });
-
-        if (Object.keys(allowedUpdates).length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "No valid fields provided for this update",
-            });
-        }
-
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            { $set: allowedUpdates },
-            {
-                new: true,
-                runValidators: true,
-            }
-        ).select("-password -emailOtp -emailOtpExpires -emailOtpAttempts");
-
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found."
-            });
-        }
-
-        res.json({
-            success: true,
-            message: "User updated successfully.",
-            user,
-        });
-
-    } catch (error) {
-        console.log("Update user error: ", error)
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to update user.",
-            error: error.message
-        })
-    }
-});
 
 module.exports = router;
