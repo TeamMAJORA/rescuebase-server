@@ -1,102 +1,53 @@
 const express = require("express");
 const router = express.Router();
 
-const MedicalRequest = require("../models/MedicalRequest");
+const verifyToken = require("../middleware/verifyToken");
+const authorizeRoles = require("../middleware/authoriseRoles");
+const asyncHandler = require("../middleware/asyncHandler");
 
-router.post("/", async (req, res) => {
-    try {
-        const request = await MedicalRequest.create({
-            assignmentId: req.body.assignmentId,
-            petId: req.body.petId,
-            petName: req.body.petName,
-            fosterEmail: String(
-                req.body.fosterEmail || ""
-            ).trim().toLowerCase(),
-            issueType: req.body.issueType,
-            priority: req.body.priority,
-            description: req.body.description,
-            photoUrl: req.body.photoUrl || "",
-        });
+const medicalRequestController = require(
+    "../controllers/medicalRequestController"
+);
 
-        res.json({
-            success: true,
-            request,
-        });
-    } catch (error) {
-        console.error(error);
 
-        res.status(500).json({
-            success: false,
-            message: "Unable to submit medical request.",
-        });
-    }
-});
+router.post(
+    "/",
+    verifyToken,
+    authorizeRoles("foster"),
+    asyncHandler(
+        medicalRequestController.createMedicalRequest
+    )
+);
 
-router.get("/", async (req, res) => {
-    try {
-        const requests = await MedicalRequest.find()
-            .sort({
-                createdAt: -1,
-            });
 
-        res.json({
-            success: true,
-            requests,
-        });
-    } catch (error) {
-        console.error(error);
+router.get(
+    "/",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(
+        medicalRequestController.getAllMedicalRequests
+    )
+);
 
-        res.status(500).json({
-            success : false,
-        });
-    }
-});
 
-router.get("/foster/:email", async (req, res) => {
-    try {
-        const requests = await MedicalRequest.find({
-            fosterEmail: String(req.params.email)
-                .trim()
-                .toLowerCase(),
-        }).sort({
-            createdAt: -1,
-        });
+router.get(
+    "/me",
+    verifyToken,
+    authorizeRoles("foster"),
+    asyncHandler(
+        medicalRequestController.getMyMedicalRequests
+    )
+);
 
-        res.json({
-            success: true,
-            requests,
-        });
-    } catch (error) {
-        console.error(error);
 
-        res.status(500).json({
-            success: false,
-        });
-    }
-});
+router.patch(
+    "/:id/resolve",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(
+        medicalRequestController.resolveMedicalRequest
+    )
+);
 
-router.patch("/:id/resolve", async (req, res) => {
-    try {
-        const request = await MedicalRequest.findByIdAndUpdate(req.params.id, {
-            status : "Resolved",
-            adminResponse:
-                req.body.adminResponse || "",
-            resolvedAt: new Date(),
-        },{
-            new: true,
-        });
-
-        res.json({
-            success: true,
-            request,
-        });
-    } catch (error) {
-        console.error(error);
-
-        res.status(500).json({
-            success: false,
-        });
-    }
-});
 
 module.exports = router;
