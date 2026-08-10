@@ -1,27 +1,19 @@
 const express = require("express");
 const router = express.Router();
-const LedgerEntry = require("../models/LedgerEntry");
 
-router.get("/", async (req, res) => {
-    try {
-        const limit = Number(req.query.limit) || 10;
+const verifyToken = require("../middleware/verifyToken");
+const authorizeRoles = require("../middleware/authoriseRoles");
+const asyncHandler = require("../middleware/asyncHandler");
 
-        const entries = await LedgerEntry.find()
-            .sort({ createdAt: -1 })
-            .limit(limit);
+const ledgerController = require("../controllers/ledgerController");
 
-        res.json({
-            success: true,
-            entries,
-        });
-    } catch (error) {
-        console.error("Fetch ledger error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch ledger entries",
-        });
-    }
-});
+router.get(
+    "/",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(
+        ledgerController.getLedgerEntries
+    )
+);
 
 module.exports = router;
