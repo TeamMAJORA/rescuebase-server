@@ -15,6 +15,10 @@ router.post("/email/verify-otp",
     asyncHandler(authController.verifyOtp)
 );
 
+router.post("/email/verify-login-otp",
+    asyncHandler(authController.verifyLoginOtp)
+)
+
 router.post("/email/resend-otp", 
     validateRequest(["email"]),
     asyncHandler(authController.resendOtp)
