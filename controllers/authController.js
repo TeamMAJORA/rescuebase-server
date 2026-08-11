@@ -236,7 +236,7 @@ exports.emailLogin = async (req, res) => {
     const password = String(req.body.password || "");
     const user = await User.findOne({
         email,
-    }).select("+password");
+    }).select("+password " + "+loginOtp " + "+loginOtpExpires " + "+loginOtpAttempts " + "+loginOtpLockedUntil ");
 
     if (!user) {
         const error = new Error("Invalid email or password.");
@@ -272,6 +272,101 @@ exports.emailLogin = async (req, res) => {
         throw error;
     }
 
+    const loginOtp = generateOtp();
+
+    user.loginOtp = loginOtp;
+    user.loginOtpExpires = new Date(Date.now() + 10 * 60 * 1000);
+    user.loginOtpAttempts = 0;
+    user.loginOtpLockedUntil = null;
+
+    await user.save();
+
+    await sendOtpEmail(user.email, loginOtp);
+
+    return res.status(200).json({
+        success: true,
+        message: "Login successful.",
+        requiresOtp: true,
+        user: cleanUser(user),
+    });
+};
+
+exports.verifyLoginOtp = async (req, res) => {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const otp = String(req.body.otp || "").trim();
+
+    if (!email || !otp) {
+        const e = new Error("Email and OTP are required.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const user = await User.findOne({ email, }).select("+loginOtp " + "+loginOtpExpires " + "+loginOtpAttempts " + "+loginOtpLockedUntil ");
+
+    if (!user) {
+        const e = new Error("Invalid OTP.");
+        e.statusCode = 401;
+        throw e;
+    }
+
+    if (user.loginOtpLockedUntil && user.loginOtpLockedUntil > new Date()) {
+        const e = new Error("Too many incorrect OTP attempts. Please try again later.");
+        e.statusCode = 429;
+        throw e;
+    }
+
+    if (user.loginOtpLockedUntil && user.loginOtpLockedUntil <= new Date()) {
+        user.loginOtpLockedUntil = null;
+        user.loginOtpAttempts = 0;
+    }
+
+    if (!user.loginOtp || !user.loginOtpExpires) {
+        const e = new Error("No active login OTP found. Please log in again.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (user.loginOtpExpires < new Date()) {
+        user.loginOtp = "";
+        user.loginOtpExpires = null;
+        user.loginOtpAttempts = 0;
+
+        await user.save();
+        const e = new Error("Login OTP has expired. Please login again.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (user.loginOtp !== otp) {
+        user.loginOtpAttempts += 1;
+
+        if (user.loginOtpAttempts >= 3) {
+            user.loginOtp = "";
+            user.loginOtpExpires = null;
+            user.loginOtpLockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+
+            await user.save();
+            const e = new Error("Too many incorrect OTP Attempts. Please try again later.");
+            e.statusCode = 429;
+            throw error;
+        }
+
+        await user.save();
+
+        const remainingAttempts = 3 - user.loginOtpAttempts;
+
+        const e = new Error(`Invalid OTP. ${remainingAttempts} attempt(s) remaining.`);
+        e.statusCode = 401;
+        throw e;
+    }
+
+    user.loginOtp = "";
+    user.loginOtpExpires = null;
+    user.loginOtpAttempts = 0;
+    user.loginOtpLockedUntil = null;
+
+    await user.save();
+
     const token = generateToken(user);
 
     return res.status(200).json({
@@ -279,8 +374,8 @@ exports.emailLogin = async (req, res) => {
         message: "Login successful.",
         token,
         user: cleanUser(user),
-    });
-};
+    })
+}
 
 exports.googleSignup = async (req, res) => {
     const firebaseUser = req.firebaseUser;
@@ -372,12 +467,29 @@ exports.googleLogin = async (req, res) => {
         throw error;
     }
 
-    const token = generateToken(user);
+    const loginOtp = generateOtp();
+
+    user.loginOtp = loginOtp;
+
+    user.loginOtpExpires = new Date(
+        Date.now() + 10 * 60 * 1000
+    );
+
+    user.loginOtpAttempts = 0;
+    user.loginOtpLockedUntil = null;
+
+    await user.save();
+
+    await sendOtpEmail(
+        user.email,
+        loginOtp
+    );
 
     return res.status(200).json({
         success: true,
-        message: "Login successful.",
-        token,
-        user: cleanUser(user),
+        message:
+            "A verification code has been sent to your email.",
+        requiresOtp: true,
+        email: user.email,
     });
 };
