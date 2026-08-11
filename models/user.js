@@ -79,6 +79,30 @@ const userSchema = new mongoose.Schema(
             default: 0,
             select: false,
         },
+        
+        loginOtp: {
+            type: String,
+            default: "",
+            select: false,
+        },
+
+        loginOtpExpires: {
+            type: Date,
+            default: null,
+            select: false,
+        },
+
+        loginOtpAttempts: {
+            type: Number,
+            default: 0,
+            select: false,
+        },
+
+        loginOtpLockedUntil: {
+            type: Date,
+            default: null,
+            select: false,
+        },
     },
     { timestamps: true }
 );
