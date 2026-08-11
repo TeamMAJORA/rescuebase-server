@@ -79,7 +79,7 @@ const userSchema = new mongoose.Schema(
             default: 0,
             select: false,
         },
-        
+
         loginOtp: {
             type: String,
             default: "",
@@ -99,6 +99,18 @@ const userSchema = new mongoose.Schema(
         },
 
         loginOtpLockedUntil: {
+            type: Date,
+            default: null,
+            select: false,
+        },
+
+        passwordResetToken: {
+            type: String,
+            default: "",
+            select: false,
+        },
+
+        passwordResetExpires: {
             type: Date,
             default: null,
             select: false,

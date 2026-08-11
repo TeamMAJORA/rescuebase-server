@@ -1,11 +1,12 @@
 const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 const User = require("../models/User");
 const generateOtp = require("../utils/generateOtp");
 const cleanUser = require("../utils/cleanUser");
 const generateToken = require("../utils/generateToken");
 
 const {
-    sendOtpEmail,
+    sendOtpEmail, sendPasswordResetEmail
 } = require("../services/emailService");
 
 exports.emailSignup = async (req, res) => {
@@ -376,6 +377,171 @@ exports.verifyLoginOtp = async (req, res) => {
         user: cleanUser(user),
     })
 }
+
+exports.forgotPassword = async (req, res) => {
+    const email = String(
+        req.body.email || ""
+    ).trim().toLowerCase();
+
+    if (!email) {
+        const e = new Error("Email is required.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const user = await User.findOne({ email }).select(
+        "+passwordResetToken +passwordResetExpires"
+    );
+
+    if (!user) {
+        return res.status(200).json({
+            success: true,
+            message:
+                "If an account is associated with this email, password reset instructions have been sent.",
+        });
+    }
+
+    if (user.provider === "google" && !user.password) {
+        return res.status(200).json({
+            success: true,
+            message:
+                "If an account is associated with this email, password reset instructions have been sent.",
+        });
+    }
+
+    // Generate a 6-digit password reset OTP
+    const resetOtp = String(
+        Math.floor(
+            100000 + Math.random() * 900000
+        )
+    );
+
+    user.passwordResetToken = resetOtp;
+
+    user.passwordResetExpires = new Date(
+        Date.now() + 15 * 60 * 1000
+    );
+
+    await user.save();
+
+    console.log(
+        "Sending password reset OTP:",
+        user.email,
+        resetOtp
+    );
+
+    await sendPasswordResetEmail(
+        user.email,
+        resetOtp
+    );
+
+    console.log(
+        "Password reset email sent successfully."
+    );
+
+    return res.status(200).json({
+        success: true,
+        message:
+            "If an account is associated with this email, password reset instructions have been sent.",
+    });
+};
+
+exports.resetPassword = async (req, res) => {
+    const otp = String(
+        req.body.otp || ""
+    ).trim();
+
+    const password = String(
+        req.body.password || ""
+    );
+
+    const confirmPassword = String(
+        req.body.confirmPassword || ""
+    );
+
+    if (!otp) {
+        const e = new Error(
+            "Password reset OTP is required."
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (!password) {
+        const e = new Error(
+            "Password is required."
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (!confirmPassword) {
+        const e = new Error(
+            "Please confirm your password."
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (password !== confirmPassword) {
+        const e = new Error(
+            "Passwords do not match."
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (password.length < 6) {
+        const e = new Error(
+            "Password must be at least 6 characters."
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const user = await User.findOne({
+        passwordResetToken: otp,
+        passwordResetExpires: {
+            $gt: new Date(),
+        },
+    }).select(
+        "+password " +
+        "+passwordResetToken " +
+        "+passwordResetExpires"
+    );
+
+    if (!user) {
+        const e = new Error(
+            "Invalid or expired password reset OTP."
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    user.password = await bcrypt.hash(
+        password,
+        10
+    );
+
+    user.provider = "local";
+    user.verified = true;
+
+    user.passwordResetToken = "";
+    user.passwordResetExpires = null;
+
+    user.loginOtp = "";
+    user.loginOtpExpires = null;
+    user.loginOtpAttempts = 0;
+    user.loginOtpLockedUntil = null;
+
+    await user.save();
+
+    return res.status(200).json({
+        success: true,
+        message:
+            "Password reset successfully. You can now login.",
+    });
+};
 
 exports.googleSignup = async (req, res) => {
     const firebaseUser = req.firebaseUser;

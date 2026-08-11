@@ -30,4 +30,37 @@ async function sendOtpEmail(email, otp) {
     })
 }
 
-module.exports = { sendOtpEmail, }
+async function sendPasswordResetEmail(email, otp) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase Password Reset OTP",
+
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>RescueBase Password Reset</h2>
+
+                <p>
+                    We received a request to reset your RescueBase password.
+                </p>
+
+                <p>Your password reset OTP is:</p>
+
+                <h1 style="letter-spacing: 6px;">
+                    ${otp}
+                </h1>
+
+                <p>
+                    This code will expire in 15 minutes.
+                </p>
+
+                <p>
+                    If you did not request a password reset,
+                    you can safely ignore this email.
+                </p>
+            </div>
+        `,
+    });
+}
+
+module.exports = { sendOtpEmail, sendPasswordResetEmail }

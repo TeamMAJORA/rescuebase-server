@@ -19,7 +19,15 @@ router.post("/email/verify-login-otp",
     asyncHandler(authController.verifyLoginOtp)
 )
 
-router.post("/email/resend-otp", 
+router.post("/forgot-password",
+    asyncHandler(authController.forgotPassword)
+);
+
+router.post("/reset-password",
+    asyncHandler(authController.resetPassword)
+);
+
+router.post("/email/resend-otp",
     validateRequest(["email"]),
     asyncHandler(authController.resendOtp)
 );
