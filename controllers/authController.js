@@ -424,21 +424,11 @@ exports.forgotPassword = async (req, res) => {
 
     await user.save();
 
-    console.log(
-        "Sending password reset OTP:",
-        user.email,
-        resetOtp
-    );
-
     await sendPasswordResetEmail(
         user.email,
         resetOtp
     );
-
-    console.log(
-        "Password reset email sent successfully."
-    );
-
+    
     return res.status(200).json({
         success: true,
         message:
