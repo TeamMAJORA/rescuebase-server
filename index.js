@@ -21,6 +21,7 @@ const donationRoutes = require("./routes/donationRoutes");
 const animalRoutes = require("./routes/animalRoutes");
 const fosterNotifications = require("./routes/fosterNotifications");
 const medicalRequests = require("./routes/medicalRequests");
+const lostFoundRoutes = require("./routes/lostFoundRoutes");
 
 //Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -66,6 +67,7 @@ app.use("/api/donations", donationRoutes);
 app.use("/api/animals", animalRoutes);
 app.use("/api/foster/notifications", fosterNotifications);
 app.use("/api/foster/medical", medicalRequests);
+app.use("/api/lost-found", lostFoundRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);
