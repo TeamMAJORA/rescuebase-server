@@ -6,7 +6,7 @@ const ledgerEntrySchema = new mongoose.Schema(
     {
         type: {
             type: String,
-            enum: ["adoption", "donation", "foster", "animal", "system"],
+            enum: ["adoption", "donation", "foster", "animal", "system", "lost_found"],
             default: "system",
         },
 
