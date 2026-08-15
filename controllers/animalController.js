@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Animal = require("../models/Animal");
 const User = require("../models/User");
+const Notification = require("../models/Notifications");
 
 exports.createAnimal = async (req, res) => {
     const name = String(req.body.name || "").trim();
@@ -32,7 +33,7 @@ exports.createAnimal = async (req, res) => {
     if (!adminId || !adminEmail) {
         const e = new Error("Auth admin info is missing.");
         e.statusCode = 401;
-        throw error;
+        throw e;
     }
 
     const adminUser = await User.findById(adminId).select("name username email role");
@@ -68,6 +69,23 @@ exports.createAnimal = async (req, res) => {
         createdByName: adminName,
         createdByEmail: adminEmail,
     });
+
+    if (animal.availabilityStatus === "available" && animal.adoptionStatus === "available") {
+        const adopters = await User.find({
+            role: "adopter",
+        }).select("_id");
+
+        if (adopters.length > 0) {
+            await Notification.insertMany(
+                adopters.map((adopter) => ({
+                    user: adopter._id,
+                    title: "New Pet Available for Adoption",
+                    message: `${animal.name} is now available for adoption at RescueBase.`,
+                    type: "adoption_update",
+                }))
+            )
+        }
+    }
 
     return res.status(201).json({
         success: true,
