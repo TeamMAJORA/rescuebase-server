@@ -159,7 +159,7 @@ exports.markAsRead = async (req, res) => {
     const notification =
         await Notification.findOneAndUpdate(
             {
-                id: notificationId,
+                _id: notificationId,
                 user: userId,
             },
             {
