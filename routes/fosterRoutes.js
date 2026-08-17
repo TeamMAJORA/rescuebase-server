@@ -63,7 +63,7 @@ router.post(
 router.get(
     "/assignments",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "volunteer"),
     asyncHandler(
         fosterController.getAllAssignments
     )
