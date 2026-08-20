@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const Donation = require("../models/Donations");
 const User = require("../models/User");
+const Notification = require("../models/Notifications");
 
 
 exports.createDonation = async (req, res) => {
@@ -110,6 +111,14 @@ exports.createDonation = async (req, res) => {
         createdByName: creatorName,
         createdByEmail: creatorEmail,
     });
+
+    await Notification.create({
+        user: creatorId,
+        title: "Thank You for Your Donation!",
+        message:
+            "Thank you for supporting RescueBase. Your donation has been successfully submitted and is currently pending review.",
+        type: "donation_update",
+    })
 
     return res.status(201).json({
         success: true,
