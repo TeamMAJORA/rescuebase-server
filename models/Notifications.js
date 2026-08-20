@@ -33,6 +33,7 @@ const notificationSchema = new mongoose.Schema(
                 "pet_available",
                 "interview",
                 "rescue_update",
+                "donation_update",
             ],
             default: "general",
         },
