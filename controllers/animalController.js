@@ -3,6 +3,26 @@ const Animal = require("../models/Animal");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
 
+async function notifyUsersAboutAnimal(animal) {
+    const users = await User.find({}).select("_id");
+
+    if (!users.length) {
+        return;
+    }
+
+    const notifications = users.map((user) => ({
+        user: user._id,
+        title: "New Animal Available",
+        message:
+            `${animal.name} is now available for adoption or fostering.`,
+        type: "adoption_update",
+    }));
+
+    await Notification.insertMany(
+        notifications
+    );
+}
+
 exports.createAnimal = async (req, res) => {
     const name = String(req.body.name || "").trim();
     const type = String(req.body.type || "").trim();
@@ -172,6 +192,17 @@ exports.updateAnimal = async (req, res) => {
         throw error;
     }
 
+    const existingAnimal = await Animal.findById(animalId);
+
+    if (!existingAnimal) {
+        const error = new Error("Animal profile not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const wasAvailable = existingAnimal.availabilityStatus === "available" &&
+        existingAnimal.adoptionStatus === "available";
+
     const allowedFields = [
         "name",
         "type",
@@ -266,6 +297,26 @@ exports.updateAnimal = async (req, res) => {
 
         error.statusCode = 404;
         throw error;
+    }
+
+    const isAvailable = animal.availabilityStatus === "available" && animal.adoptionStatus === "available";
+
+    if (!wasAvailable && isAvailable) {
+        const adopters = await User.find({
+            role: "adopter",
+        }).select("_id");
+
+        if (adopters.length > 0) {
+            await Notification.insertMany(
+                adopters.map((adopter) => ({
+                    user: adopter._id,
+                    title: "New Pet Available for Adoption",
+                    message:
+                        `${animal.name} is now available for adoption at RescueBase.`,
+                    type: "adoption_update",
+                }))
+            );
+        }
     }
 
     return res.status(200).json({
