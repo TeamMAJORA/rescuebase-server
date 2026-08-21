@@ -4,6 +4,12 @@ const AdoptionApplication = require("../models/AdoptionApplication");
 const Animal = require("../models/Animal");
 const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
+const Notification = require("../models/Notifications");
+
+const {
+    sendApplicationUpdateEmail,
+    sendInterviewScheduleEmail,
+} = require("../services/emailService");
 
 async function createLedgerEntrySafely(data) {
     try {
@@ -138,6 +144,20 @@ exports.submitApplication = async (req, res) => {
                 applicantEmail: application.email,
             },
         });
+
+        await Notification.create({
+            user: application.applicantUserId,
+            title: `Adoption Application ${status}`,
+            message:
+                `Your adoption application for ${application.petName} has been ${status}.`,
+            type: "application_update",
+        });
+
+        await sendApplicationUpdateEmail(
+            application.email,
+            "pending",
+            "adoption"
+        );
 
         return res.status(201).json({
             success: true,
@@ -362,6 +382,14 @@ exports.updateApplicationStatus = async (req, res) => {
                     : null,
         },
     });
+
+    if (["approved", "rejected"].includes(status)) {
+        await sendApplicationUpdateEmail(
+            application.email,
+            status,
+            "adoption"
+        );
+    }
 
     return res.status(200).json({
         success: true,
