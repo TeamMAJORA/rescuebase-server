@@ -233,6 +233,84 @@ async function sendPetAvailableEmail(email, petName, petType) {
     });
 }
 
+async function sendLostFoundClaimEmail(email, petName, claimStatus) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: `RescueBase Lost & Found Claim ${claimStatus}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Lost & Found Claim Update</h2>
+
+                <p>
+                    Your claim for
+                    <strong>${petName || "the reported pet"}</strong>
+                    has been
+                    <strong>${claimStatus}</strong>.
+                </p>
+
+                <p>
+                    Please log in to RescueBase to view the
+                    latest details.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
+async function sendLostFoundReunitedEmail(email, petName) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase Lost & Found Case Reunited",
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Pet Reunited</h2>
+
+                <p>
+                    We are happy to inform you that
+                    <strong>${petName || "the reported pet"}</strong>
+                    has been marked as reunited.
+                </p>
+
+                <p>
+                    Thank you for using RescueBase Lost & Found.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
+async function sendRescueAssignmentEmail(email, title, message) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: `RescueBase Rescue Assignment: ${title}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Rescue Assignment Update</h2>
+
+                <h3>${title}</h3>
+
+                <p>
+                    ${message}
+                </p>
+
+                <p>
+                    Please log in to RescueBase to view
+                    the latest assignment details.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
 module.exports = {
     sendOtpEmail,
     sendPasswordResetEmail,
@@ -242,4 +320,7 @@ module.exports = {
     sendVaccinationReminderEmail,
     sendInterviewScheduleEmail,
     sendPetAvailableEmail,
+    sendLostFoundClaimEmail,
+    sendLostFoundReunitedEmail,
+    sendRescueAssignmentEmail,
 };
