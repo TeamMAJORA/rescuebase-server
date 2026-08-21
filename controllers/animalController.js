@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 const Animal = require("../models/Animal");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
+const {
+    sendPetAvailableEmail,
+} = require("../services/emailService");
 
 async function notifyUsersAboutAnimal(animal) {
     const users = await User.find({}).select("_id");
@@ -93,7 +96,7 @@ exports.createAnimal = async (req, res) => {
     if (animal.availabilityStatus === "available" && animal.adoptionStatus === "available") {
         const adopters = await User.find({
             role: "adopter",
-        }).select("_id");
+        }).select("_id email");
 
         if (adopters.length > 0) {
             await Notification.insertMany(
@@ -103,6 +106,16 @@ exports.createAnimal = async (req, res) => {
                     message: `${animal.name} is now available for adoption at RescueBase.`,
                     type: "adoption_update",
                 }))
+            );
+
+            await Promise.all(
+                adopters.filter((adopter) => adopter.email)
+                    .map((adopter) =>
+                        sendPetAvailableEmail(
+                            adopter.email,
+                            animal.name,
+                            animal.type
+                        ))
             )
         }
     }
@@ -304,7 +317,7 @@ exports.updateAnimal = async (req, res) => {
     if (!wasAvailable && isAvailable) {
         const adopters = await User.find({
             role: "adopter",
-        }).select("_id");
+        }).select("_id email");
 
         if (adopters.length > 0) {
             await Notification.insertMany(
@@ -316,6 +329,17 @@ exports.updateAnimal = async (req, res) => {
                     type: "adoption_update",
                 }))
             );
+
+            await Promise.all(
+                adopters.filter((adopter) => adopter.email)
+                    .map((adopter) =>
+                        sendPetAvailableEmail(
+                            adopter.email,
+                            animal.name,
+                            animal.type
+                        )
+                    )
+            )
         }
     }
 
