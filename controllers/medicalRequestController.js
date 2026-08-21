@@ -1,5 +1,10 @@
 const MedicalRequest = require("../models/MedicalRequest");
 const User = require("../models/User");
+const Notification = require("../models/Notifications");
+
+const {
+    sendMedicalRequestEmail,
+} = require("../services/emailService");
 
 exports.createMedicalRequest = async (req, res) => {
     const fosterEmail = String(
@@ -73,6 +78,21 @@ exports.createMedicalRequest = async (req, res) => {
                 req.body.photoUrl || ""
             ).trim(),
         });
+
+    await Notification.create({
+        user: req.user.id,
+        title: "Medical Request Submitted",
+        message:
+            `Your medical request for ${petName} has been sumitted for review.`,
+        type: "medical_update",
+    });
+
+    await sendMedicalRequestEmail(
+        fosterEmail,
+        petName,
+        "submitted",
+        "You medical reqest has been submitted to the RescueBase admin team."
+    );
 
     return res.status(201).json({
         success: true,
@@ -196,6 +216,28 @@ exports.resolveMedicalRequest = async (
         error.statusCode = 404;
         throw error;
     }
+
+    const foster = await User.findOne({
+        email: request.fosterEmail,
+    }).select("_id email");
+
+    if (foster) {
+        await Notification.create({
+            user: foster._id,
+            title: "Medical Request Resolved",
+            message:
+                `You medical request for ${request.petName} has been resolved.`,
+            type: "medical_update",
+        });
+    }
+
+    await sendMedicalRequestEmail(
+        request.fosterEmail,
+        request.petName,
+        "resolved",
+        request.adminResponse ||
+        "Your medical request has been reviewed and resolved by the RescueBase administration team."
+    );
 
     return res.status(200).json({
         success: true,
