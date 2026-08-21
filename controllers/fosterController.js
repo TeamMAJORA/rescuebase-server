@@ -4,6 +4,7 @@ const FosterAssignment = require("../models/FosterAssignment");
 const FosterApplication = require("../models/FosterApplication");
 const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
+const { sendApplicationUpdateEmail, sendFosterUpdateEmail } = require("../services/emailService");
 
 async function createLedgerEntrySafely(data) {
     try {
@@ -268,6 +269,18 @@ exports.reviewApplication = async (req, res) => {
         },
     });
 
+    if (
+        ["approved", "rejected"].includes(
+            application.status
+        )
+    ) {
+        await sendApplicationUpdateEmail(
+            application.applicantEmail,
+            application.status,
+            "foster"
+        )
+    }
+
     return res.status(200).json({
         success: true,
         message:
@@ -433,6 +446,12 @@ exports.createAssignment = async (req, res) => {
                 approvedApplication.capacity,
         },
     });
+
+    await sendFosterUpdateEmail(
+        assignment.fosterEmail,
+        "New Foster Assignment.",
+        `You have been assigned to foster ${assignment.petName}. Please log in to RescueBase to view the care instructions and assignment details.`
+    );
 
     return res.status(201).json({
         success: true,
@@ -812,6 +831,12 @@ exports.updateAssignment = async (req, res) => {
                 assignment.fosterEmail,
         },
     });
+
+    await sendFosterUpdateEmail(
+        assignment.fosterEmail,
+        "Foster Assignment Updated",
+        `Your foster assignment for ${assignment.petName} has been updated. Please log in to RescueBase to view the latest details.`
+    );
 
     return res.status(200).json({
         success: true,
