@@ -34,6 +34,7 @@ const notificationSchema = new mongoose.Schema(
                 "interview",
                 "rescue_update",
                 "donation_update",
+                "medical_update",
             ],
             default: "general",
         },
