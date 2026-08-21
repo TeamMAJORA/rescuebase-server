@@ -1,5 +1,6 @@
 const LostFoundReport = require("../models/LostFoundReport");
 const LedgerEntry = require("../models/LedgerEntry");
+const { sendLostFoundClaimEmail, sendLostFoundReunitedEmail } = require("../services/emailService");
 
 function getActorName(req) {
     return String(req.user?.name || req.user?.username || "User").trim();
@@ -366,6 +367,12 @@ exports.reviewClaim = async (req, res) => {
         },
     });
 
+    await sendLostFoundClaimEmail(
+        report.claimedByEmail,
+        report.petName || report.species,
+        claimStatus
+    );
+
     return res.json({
         success: true,
         message:
@@ -443,6 +450,11 @@ exports.markReunited = async (req, res) => {
             reunitedAt: report.reunitedAt,
         },
     });
+
+    await sendLostFoundReunitedEmail(
+        report.reporterEmail,
+        report.petName || report.species
+    );
 
     return res.json({
         success: true,
