@@ -4,6 +4,7 @@ const RescueAssignment = require("../models/RescueAssignment");
 const User = require("../models/User");
 const Animal = require("../models/Animal");
 const Notification = require("../models/Notifications");
+const { sendRescueAssignmentEmail } = require("../services/emailService");
 
 async function createNotification({
     userId,
@@ -149,6 +150,12 @@ exports.createAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
+    await sendRescueAssignmentEmail(
+        volunteer.email,
+        "New Rescue Assignment.",
+        `You have been assigned a new rescue task: ${assignment.title}.`
+    );
+
     return res.status(201).json({
         success: true,
         message: "Rescue assignment created successfully.",
@@ -245,6 +252,20 @@ exports.acceptAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
+    await createNotification({
+        userId: assignment.adminId,
+        title: "Rescue Assignment Accepted.",
+        message:
+            `${assignment.volunteerName} accepted "${assignment.title}".`,
+        type: "rescue_update",
+    });
+
+    await sendRescueAssignmentEmail(
+        assignment.adminEmail,
+        "Rescue Assignment Accepted",
+        `${assignment.volunteerName} accepted "${assignment.title}".`,
+    );
+
     return res.status(200).json({
         success: true,
         message: "Rescue assignment accepted.",
@@ -301,6 +322,12 @@ exports.declineAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
+    await sendRescueAssignmentEmail(
+        assignment.adminEmail,
+        "Rescue Assignment Declined",
+        `${assignment.volunteerName} declined "${assignment.title}".`
+    );
+
     return res.status(200).json({
         success: true,
         message: "Rescue assignment declined.",
@@ -347,6 +374,12 @@ exports.startAssignment = async (req, res) => {
             `${assignment.volunteerName} started "${assignment.title}".`,
         type: "rescue_update",
     });
+
+    await sendRescueAssignmentEmail(
+        assignment.adminEmail,
+        "Rescue Assignment Started",
+        `${assignment.volunteerName} started "${assignment.title}".`
+    );
 
     return res.status(200).json({
         success: true,
@@ -398,6 +431,12 @@ exports.completeAssignment = async (req, res) => {
             `${assignment.volunteerName} completed "${assignment.title}".`,
         type: "rescue_update",
     });
+
+    await sendRescueAssignmentEmail(
+        assignment.adminEmail,
+        "Rescue Assignment Completed",
+        `${assignment.volunteerName} completed "${assignment.title}".`
+    );
 
     return res.status(200).json({
         success: true,
@@ -539,6 +578,12 @@ exports.updateAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
+    await sendRescueAssignmentEmail(
+        assignment.volunteerEmail,
+        "Rescue Assignment Updated",
+        `Your rescue assignment "${assignment.title}" has been updated.`
+    );
+
     return res.status(200).json({
         success: true,
         message:
@@ -597,6 +642,12 @@ exports.cancelAssignment = async (req, res) => {
             `Your rescue assignment "${assignment.title}" has been cancelled.`,
         type: "rescue_update",
     });
+
+    await sendRescueAssignmentEmail(
+        assignment.volunteerEmail,
+        "Rescue Assignment Cancelled",
+        `Your rescue assignment "${assignment.title}" has been cancelled.`
+    );
 
     return res.status(200).json({
         success: true,
