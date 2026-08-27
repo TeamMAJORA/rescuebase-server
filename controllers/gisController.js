@@ -9,7 +9,7 @@ exports.createLocation = async (req, res) => {
     const locationName = String(req.body.locationName || "").trim();
     const latitude = String(req.body.latitude || "").trim();
     const longitude = String(req.body.longitude || "").trim();
-    const description = String(req.bodu.description || "").trim();
+    const description = String(req.body.description || "").trim();
 
 
     if (!petName) {
