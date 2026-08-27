@@ -25,6 +25,7 @@ const lostFoundRoutes = require("./routes/lostFoundRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const rescueRoutes = require("./routes/rescueAssignmentRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
+const gisRoutes = require("./routes/gisRoutes");
 
 //Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -74,6 +75,7 @@ app.use("/api/lost-found", lostFoundRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/rescue-assignments", rescueRoutes);
 app.use("/api/feedback", feedbackRoutes);
+app.use("/api/gis", gisRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);
