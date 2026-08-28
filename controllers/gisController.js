@@ -129,6 +129,77 @@ exports.createLocation = async (req, res) => {
     });
 };
 
+exports.createStraySighting = async (req, res) => {
+    const petName = String(req.body.petName || "Unkown Stray").trim();
+    const species = String(req.body.species || "unknown").trim().toLowerCase();
+    const locationName = String(req.body.locationName || "").trim();
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+    const description = String(req.body.description || "").trim();
+
+    if (!locationName) {
+        const e = new Error("Location name is required.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (Number.isNaN(latitude) || latitude < -90 || latitude > 90) {
+        const e = new Error("Invalid latitude");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (Number.isNaN(longitude) || longitude < -180 || longitude > 180) {
+        const e = new Error("Invalid longitude")
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const userId = req.user?.id;
+
+    if (!userId) {
+        const e = new Error("Auth user is missing.");
+        e.statusCode = 401;
+        throw e;
+    }
+
+    const user = await User.findById(userId).select("_id name username email role");
+
+    if (!user) {
+        const e = new Error("Auth user account was not found.");
+        e.statusCode = 401;
+        throw e;
+    }
+
+    const sighting = await GISLocation.create({
+        petName,
+        reportType: "stray",
+        species,
+        locationName,
+        latitude,
+        longitude,
+        status: "open",
+        description,
+
+        createdBy: user._id,
+
+        createdByName:
+            user.name ||
+            user.username ||
+            "",
+
+        createdByEmail:
+            user.email || "",
+    });
+
+    return res.status(201).json({
+        uccess: true,
+        message:
+            "Stray sighting recorded successfully.",
+        location: sighting,
+    })
+}
+
 exports.getAllLocations = async (
     req,
     res
