@@ -17,6 +17,19 @@ router.get(
     )
 );
 
+router.post(
+    "/stray-sightings",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff",
+        "volunteer"
+    ),
+    asyncHandler(
+        gisController.createStraySighting
+    )
+);
+
 
 router.post(
     "/",
@@ -92,6 +105,19 @@ router.delete(
     ),
     asyncHandler(
         gisController.deleteLocation
+    )
+);
+
+router.post(
+    "/stray-sightings",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff",
+        "volunteer"
+    ),
+    asyncHandler(
+        gisController.createStraySighting
     )
 );
 
