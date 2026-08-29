@@ -193,7 +193,7 @@ exports.createStraySighting = async (req, res) => {
     });
 
     return res.status(201).json({
-        uccess: true,
+        success: true,
         message:
             "Stray sighting recorded successfully.",
         location: sighting,
