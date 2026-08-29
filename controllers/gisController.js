@@ -589,3 +589,108 @@ exports.deleteLocation = async (
             "GIS location deleted successfully.",
     });
 };
+
+exports.getHotspotAnalysis = async (req, res) => {
+    const locations = await GISLocation.find({
+        status: "open",
+        latitude: { $exists: true },
+        longitude: { $exists: true },
+    }).select(
+        "latitude longitude reportType species"
+    );
+
+    const GRID_SIZE = 0.01;
+
+    const grid = new Map();
+
+    for (const location of locations) {
+        const latitude =
+            Number(location.latitude);
+
+        const longitude =
+            Number(location.longitude);
+
+        if (
+            Number.isNaN(latitude) ||
+            Number.isNaN(longitude)
+        ) {
+            continue;
+        }
+
+        const latCell =
+            Math.floor(latitude / GRID_SIZE);
+
+        const lngCell =
+            Math.floor(longitude / GRID_SIZE);
+
+        const key =
+            `${latCell}:${lngCell}`;
+
+        if (!grid.has(key)) {
+            grid.set(key, {
+                latCell,
+                lngCell,
+
+                count: 0,
+
+                latitudeSum: 0,
+                longitudeSum: 0,
+
+                lost: 0,
+                found: 0,
+                stray: 0,
+            });
+        }
+
+        const cell =
+            grid.get(key);
+
+        cell.count++;
+
+        cell.latitudeSum += latitude;
+        cell.longitudeSum += longitude;
+
+        if (location.reportType === "lost") {
+            cell.lost++;
+        }
+
+        if (location.reportType === "found") {
+            cell.found++;
+        }
+
+        if (location.reportType === "stray") {
+            cell.stray++;
+        }
+    }
+
+    const hotspots =
+        Array.from(grid.values())
+            .map((cell) => ({
+                latCell: cell.latCell,
+                lngCell: cell.lngCell,
+
+                count: cell.count,
+
+                lost: cell.lost,
+                found: cell.found,
+                stray: cell.stray,
+
+                latitude:
+                    cell.latitudeSum /
+                    cell.count,
+
+                longitude:
+                    cell.longitudeSum /
+                    cell.count,
+            }))
+            .sort(
+                (a, b) =>
+                    b.count - a.count
+            );
+
+    return res.status(200).json({
+        success: true,
+        totalReports: locations.length,
+        hotspots,
+    });
+};
