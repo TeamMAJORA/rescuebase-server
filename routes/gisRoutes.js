@@ -2,13 +2,17 @@ const express = require("express");
 
 const router = express.Router();
 
-const verifyToken = require("../middleware/verifyToken");
-const authorizeRoles = require("../middleware/authoriseRoles");
-const asyncHandler = require("../middleware/asyncHandler");
+const verifyToken =
+    require("../middleware/verifyToken");
+
+const authorizeRoles =
+    require("../middleware/authoriseRoles");
+
+const asyncHandler =
+    require("../middleware/asyncHandler");
 
 const gisController =
     require("../controllers/gisController");
-
 
 router.get(
     "/public",
@@ -27,6 +31,18 @@ router.post(
     ),
     asyncHandler(
         gisController.createStraySighting
+    )
+);
+
+router.get(
+    "/hotspots",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff"
+    ),
+    asyncHandler(
+        gisController.getHotspotAnalysis
     )
 );
 
@@ -56,7 +72,6 @@ router.get(
     )
 );
 
-
 router.get(
     "/:id",
     verifyToken,
@@ -68,7 +83,6 @@ router.get(
         gisController.getLocationById
     )
 );
-
 
 router.patch(
     "/:id",
@@ -82,7 +96,6 @@ router.patch(
     )
 );
 
-
 router.patch(
     "/:id/resolve",
     verifyToken,
@@ -95,7 +108,6 @@ router.patch(
     )
 );
 
-
 router.delete(
     "/:id",
     verifyToken,
@@ -107,19 +119,5 @@ router.delete(
         gisController.deleteLocation
     )
 );
-
-router.post(
-    "/stray-sightings",
-    verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff",
-        "volunteer"
-    ),
-    asyncHandler(
-        gisController.createStraySighting
-    )
-);
-
 
 module.exports = router;
