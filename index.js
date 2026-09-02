@@ -27,6 +27,7 @@ const rescueRoutes = require("./routes/rescueAssignmentRoutes");
 const feedbackRoutes = require("./routes/feedbackRoutes");
 const gisRoutes = require("./routes/gisRoutes");
 const reportRoutes = require("./routes/reportsRoutes");
+const suppliesRoutes = require("./routes/neededSuppliesRoutes");
 
 //Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -78,6 +79,7 @@ app.use("/api/rescue-assignments", rescueRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/gis", gisRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/needed-supplies", suppliesRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);
