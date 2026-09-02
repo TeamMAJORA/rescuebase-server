@@ -25,6 +25,7 @@ const DonationSchema = new mongoose.Schema(
                 "Medical Supplies",
                 "Other Supplies",
                 "Other",
+                "Pet Food",
             ],
             required: true,
         },
