@@ -32,6 +32,12 @@ router.get(
     )
 );
 
+router.get(
+    "/my",
+    verifyToken,
+    authoriseRoles("adopter"),
+    asyncHandler(donationController.getMyDonations)
+)
 
 router.patch(
     "/:id",
@@ -51,6 +57,5 @@ router.delete(
         donationController.deleteDonation
     )
 );
-
 
 module.exports = router;

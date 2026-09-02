@@ -142,6 +142,28 @@ exports.getAllDonations = async (req, res) => {
     });
 };
 
+exports.getMyDonations = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({
+                message : "User not found"
+            });
+        }
+
+        const donations = await Donation.find({
+            donorEmail : user.email
+        }).sort({ createdAt : -1 });
+
+        return res.status(200).json(donations);
+    } catch (error) {
+        return res.status(500).json({
+            message : "Failed to fetch donation history",
+            error: error.message
+        });
+    }
+};
 
 exports.updateDonation = async (req, res) => {
     const donationId = String(
