@@ -12,7 +12,7 @@ const authoriseRoles =
     require("../middleware/authoriseRoles");
 
 const neededSuppliesController =
-    require("../controllers/neededSuppliesController");
+    require("../controllers/neededSupplyController");
 
 
 router.get(
