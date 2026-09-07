@@ -66,6 +66,54 @@ const animalSchema = new mongoose.Schema(
             trim: true,
         },
 
+        energyLevel: {
+            type: Number,
+            enum: [1, 2, 3, 4, 5, null],
+            default: null,
+        },
+
+        friendliness: {
+            type: Number,
+            enum: [1, 2, 3, 4, 5, null],
+            default: null,
+        },
+
+        humanSociability: {
+            type: Number,
+            enum: [1, 2, 3, 4, 5, null],
+            default: null,
+        },
+
+        animalSociability: {
+            type: Number,
+            enum: [1, 2, 3, 4, 5, null],
+            default: null,
+        },
+
+        trainability: {
+            type: Number,
+            enum: [1, 2, 3, 4, 5, null],
+            default: null,
+        },
+
+        anxietyLevel: {
+            type: Number,
+            enum: [1, 2, 3, 4, 5, null],
+            default: null,
+        },
+
+        aggressionLevel: {
+            type: Number,
+            enum: [1, 2, 3, 4, 5, null],
+            default: null,
+        },
+
+        activityLevel: {
+            type: Number,
+            enum: [1, 2, 3, 4, 5, null],
+            default: null,
+        },
+
         intakeDate: {
             type: Date,
             default: Date.now,
