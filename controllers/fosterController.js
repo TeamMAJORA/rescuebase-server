@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const FosterAssignment = require("../models/FosterAssignment");
 const FosterApplication = require("../models/FosterApplication");
+const Animal = require("../models/Animal");
 const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
 const { sendApplicationUpdateEmail, sendFosterUpdateEmail } = require("../services/emailService");
@@ -613,6 +614,276 @@ exports.submitAssignmentUpdate = async (req, res) => {
     });
 };
 
+exports.submitBehaviorEvaluation = async (req, res) => {
+    const assignmentId = String(req.params.id || "").trim();
+    const email = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!email) {
+        const error = new Error("Auth foster email is missing");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const assignment = await FosterAssignment.findOne({
+        _id: assignmentId,
+        fosterEmail: email,
+        status: "active",
+    });
+
+    if (!assignment) {
+        const err = new Error("Active foster assignment not found.");
+        err.statusCode = 404;
+        throw err;
+    }
+
+    const factors = [
+        "energyLevel",
+        "friendliness",
+        "humanSociability",
+        "animalSociability",
+        "trainability",
+        "anxietyLevel",
+        "aggressionLevel",
+        "activityLevel",
+    ];
+
+    const evaluation = {};
+
+    for (const factor of factors) {
+        const value = Number(req.body[factor]);
+
+        if (!Number.isInteger(value) || value < 1 || value > 5) {
+            const err = new Error(`${factor} must be a value from 1 to 5`);
+            err.statusCode = 400;
+            throw err;
+        }
+
+        evaluation[factor] = value;
+    }
+
+    evaluation.notes = String(req.body.notes || "").trim();
+
+    evaluation.submittedBy = String(req.user?.name || req.user?.username || assignment.fosterName || "Foster User").trim();
+    evaluation.submittedByEmail = email;
+    evaluation.submittedAt = new Date();
+    evaluation.reviewedAt = null;
+
+    assignment.behaviorEvaluation = evaluation;
+
+    await assignment.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_behavior_evaluation_submitted",
+
+        actorName:
+            evaluation.submittedBy,
+
+        actorEmail:
+            email,
+
+        targetType: "FosterAssignment",
+
+        targetId:
+            assignment._id.toString(),
+
+        description:
+            `${assignment.fosterName} submitted a behavioral evaluation for ${assignment.petName}.`,
+
+        status: "pending",
+
+        metadata: {
+            petName:
+                assignment.petName,
+
+            fosterEmail:
+                assignment.fosterEmail,
+        },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: "Behavioral evaluation submitted for review.",
+        assignment,
+    });
+};
+
+exports.acceptBehaviorEvaluation = async (req, res) => {
+    const adminId = req.user?.id;
+
+    const adminEmail = String(
+        req.user?.email || ""
+    )
+        .trim()
+        .toLowerCase();
+
+    if (!adminId || !adminEmail) {
+        const error = new Error(
+            "Authenticated administrator information is missing."
+        );
+
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const admin = await User.findById(
+        adminId
+    ).select("name username email");
+
+    if (!admin) {
+        const error = new Error(
+            "Administrator account was not found."
+        );
+
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const adminName = String(
+        admin.name ||
+        admin.username ||
+        "Admin User"
+    ).trim();
+
+    const assignment =
+        await FosterAssignment.findById(
+            req.params.id
+        );
+
+    if (!assignment) {
+        const error = new Error(
+            "Foster assignment not found."
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (assignment.status !== "active") {
+        const error = new Error(
+            "Only active foster assignments can be reviewed."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const evaluation =
+        assignment.behaviorEvaluation;
+
+    if (
+        !evaluation ||
+        evaluation.status !== "pending"
+    ) {
+        const error = new Error(
+            "There is no pending behavioral evaluation to accept."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const animal =
+        await Animal.findOne({
+            name: assignment.petName,
+        });
+
+    if (!animal) {
+        const error = new Error(
+            `Animal "${assignment.petName}" was not found.`
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const behavioralFields = [
+        "energyLevel",
+        "friendliness",
+        "humanSociability",
+        "animalSociability",
+        "trainability",
+        "anxietyLevel",
+        "aggressionLevel",
+        "activityLevel",
+    ];
+
+    const animalUpdates = {};
+
+    for (const field of behavioralFields) {
+        animalUpdates[field] =
+            evaluation[field];
+    }
+
+    const updatedAnimal =
+        await Animal.findByIdAndUpdate(
+            animal._id,
+            {
+                $set: animalUpdates,
+            },
+            {
+                new: true,
+                runValidators: true,
+            }
+        );
+
+    evaluation.status = "accepted";
+    evaluation.reviewedAt = new Date();
+
+    assignment.status = "completed";
+    assignment.endDate = new Date();
+
+    await assignment.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_behavior_evaluation_accepted",
+
+        actorName:
+            adminName,
+
+        actorEmail:
+            adminEmail,
+
+        targetType:
+            "FosterAssignment",
+
+        targetId:
+            assignment._id.toString(),
+
+        description:
+            `${adminName} accepted the behavioral evaluation for ${assignment.petName} and completed the foster assignment.`,
+
+        status:
+            "completed",
+
+        metadata: {
+            petName:
+                assignment.petName,
+
+            fosterEmail:
+                assignment.fosterEmail,
+
+            animalId:
+                updatedAnimal._id.toString(),
+        },
+    });
+
+    await sendFosterUpdateEmail(
+        assignment.fosterEmail,
+        "Foster Assignment Completed",
+        `Your foster assignment for ${assignment.petName} has been completed after the behavioral evaluation was reviewed and accepted.`
+    );
+
+    return res.status(200).json({
+        success: true,
+        message:
+            "Behavioral evaluation accepted and foster assignment completed.",
+        assignment,
+        animal: updatedAnimal,
+    });
+};
+
 exports.completeAssignment = async (req, res) => {
     const adminId = req.user?.id;
 
@@ -651,18 +922,8 @@ exports.completeAssignment = async (req, res) => {
     ).trim();
 
     const assignment =
-        await FosterAssignment.findByIdAndUpdate(
-            req.params.id,
-            {
-                $set: {
-                    status: "completed",
-                    endDate: new Date(),
-                },
-            },
-            {
-                new: true,
-                runValidators: true,
-            }
+        await FosterAssignment.findById(
+            req.params.id
         );
 
     if (!assignment) {
@@ -673,6 +934,32 @@ exports.completeAssignment = async (req, res) => {
         error.statusCode = 404;
         throw error;
     }
+
+    if (assignment.status !== "active") {
+        const error = new Error(
+            "Only active foster assignments can be completed."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (
+        !assignment.behaviorEvaluation ||
+        assignment.behaviorEvaluation.status !== "accepted"
+    ) {
+        const error = new Error(
+            "The behavioral evaluation must be accepted before completing the foster assignment."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+    assignment.status = "completed";
+    assignment.endDate = new Date();
+
+    await assignment.save();
 
     await createLedgerEntrySafely({
         type: "foster",
