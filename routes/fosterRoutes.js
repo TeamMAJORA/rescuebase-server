@@ -89,6 +89,23 @@ router.post(
     )
 );
 
+router.post(
+    "/assignments/:id/behavior-evaluation",
+    verifyToken,
+    authoriseRoles("foster"),
+    asyncHandler(
+        fosterController.submitBehaviorEvaluation
+    )
+);
+
+router.patch(
+    "/assignments/:id/behavior-evaluation/accept",
+    verifyToken,
+    authoriseRoles("admin"),
+    asyncHandler(
+        fosterController.acceptBehaviorEvaluation
+    )
+);
 
 router.patch(
     "/assignments/:id/complete",
