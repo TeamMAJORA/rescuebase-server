@@ -665,6 +665,7 @@ exports.submitBehaviorEvaluation = async (req, res) => {
 
     evaluation.submittedBy = String(req.user?.name || req.user?.username || assignment.fosterName || "Foster User").trim();
     evaluation.submittedByEmail = email;
+    evaluation.status = "pending";
     evaluation.submittedAt = new Date();
     evaluation.reviewedAt = null;
 
