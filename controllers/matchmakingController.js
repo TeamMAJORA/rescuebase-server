@@ -1,6 +1,6 @@
 const QuizResponse = require("../models/QuizResponse");
 const Animal = require("../models/Animal");
-const { generateMatch } = require("../services/matchmakingService");
+const { generateMatches } = require("../services/matchmakingService");
 
 exports.submitMatchmakingQuiz = async (req, res) => {
     try {
@@ -53,7 +53,7 @@ exports.submitMatchmakingQuiz = async (req, res) => {
             adoptionStatus: "available",
         }).lean();
 
-        const matches = generateMatch(animals, quizResponse)
+        const matches = generateMatches(animals, quizResponse)
 
         return res.status(201).json({
             success: true,
@@ -112,7 +112,7 @@ exports.getMatchmakingResults = async (req, res) => {
                 "available",
         }).lean();
 
-        const matches = generateMatch(animals, quizResponse);
+        const matches = generateMatches(animals, quizResponse);
 
         return res.status(200).json({
             success: true,
