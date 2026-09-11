@@ -53,7 +53,7 @@ exports.submitMatchmakingQuiz = async (req, res) => {
             adoptionStatus: "available",
         }).lean();
 
-        const matches = generateMatches(animals, quizResponse)
+        const matches = await generateMatches(animals, quizResponse)
 
         return res.status(201).json({
             success: true,
@@ -112,7 +112,7 @@ exports.getMatchmakingResults = async (req, res) => {
                 "available",
         }).lean();
 
-        const matches = generateMatches(animals, quizResponse);
+        const matches = await generateMatches(animals, quizResponse);
 
         return res.status(200).json({
             success: true,
