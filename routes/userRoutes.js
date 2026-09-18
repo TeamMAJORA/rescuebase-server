@@ -29,5 +29,19 @@ router.patch(
     )
 );
 
+router.post(
+    "/",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(userController.adminCreateUser)
+);
+
+router.patch(
+    "/:id/deactivate",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(userController.deactivateUser)
+);
+
 
 module.exports = router;
