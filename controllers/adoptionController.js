@@ -32,7 +32,7 @@ exports.submitApplication = async (req, res) => {
     const email = String(req.user?.email || "").trim().toLowerCase();
 
     if (!applicantUserId || !email) {
-        const error = new Error("Authenticated applicant inform is missing.");
+        const error = new Error("Authenticated applicant information is missing.");
         error.statusCode = 401;
         throw error;
     }
@@ -83,7 +83,7 @@ exports.submitApplication = async (req, res) => {
     );
 
     if (!reservedAnimal) {
-        const error = new Error("This animal is no longer available for option.");
+        const error = new Error("This animal is no longer available for adoption.");
         error.statusCode = 409;
         throw error;
     }
@@ -147,9 +147,9 @@ exports.submitApplication = async (req, res) => {
 
         await Notification.create({
             user: application.applicantUserId,
-            title: `Adoption Application ${status}`,
+            title: "Adoption Application Submitted",
             message:
-                `Your adoption application for ${application.petName} has been ${status}.`,
+                `Your adoption application for ${application.petName} has been submitted and is pending review.`,
             type: "application_update",
         });
 
@@ -233,13 +233,22 @@ exports.updateApplicationStatus = async (req, res) => {
     const status = String(req.body.status || "").trim().toLowerCase();
     const reviewNotes = String(req.body.reviewNotes || "").trim();
 
-    if (!mongoose.isValidObjectId(applicationId)) {
-        const eror = new Error("Invalid Application ID.");
+    if (status === "rejected" && !reviewNotes) {
+        const error = new Error(
+            "A rejection reason is required."
+        );
+
         error.statusCode = 400;
         throw error;
     }
 
-    if (!["pending", "approved", "rejected"].includes(status)) {
+    if (!mongoose.isValidObjectId(applicationId)) {
+        const error = new Error("Invalid Application ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!["approved", "rejected"].includes(status)) {
         const error = new Error("Invalid application status.");
         error.statusCode = 400;
         throw error;
@@ -278,8 +287,11 @@ exports.updateApplicationStatus = async (req, res) => {
         throw error;
     }
 
-    if (application.status !== "pending" && application.status !== status) {
-        const error = new Error(`This application has already been ${application.status}`);
+    if (application.status !== "pending") {
+        const error = new Error(
+            `This application has already been ${application.status}.`
+        );
+
         error.statusCode = 409;
         throw error;
     }
@@ -297,6 +309,15 @@ exports.updateApplicationStatus = async (req, res) => {
         animal.availabilityStatus = "unavailable";
 
         await animal.save();
+
+        const otherPendingApplications =
+            await AdoptionApplication.find({
+                _id: {
+                    $ne: application._id,
+                },
+                animalId: application.animalId,
+                status: "pending",
+            });
 
         await AdoptionApplication.updateMany(
             {
@@ -317,6 +338,23 @@ exports.updateApplicationStatus = async (req, res) => {
                 },
             }
         );
+
+        for (const otherApplication of otherPendingApplications) {
+            await Notification.create({
+                user: otherApplication.applicantUserId,
+                title: "Adoption Application Update",
+                message:
+                    `Your application for ${otherApplication.petName} ` +
+                    "was rejected because another application was approved.",
+                type: "application_update",
+            });
+
+            await sendApplicationUpdateEmail(
+                otherApplication.email,
+                "rejected",
+                "adoption"
+            );
+        }
     }
 
     if (status === "rejected") {
@@ -354,6 +392,16 @@ exports.updateApplicationStatus = async (req, res) => {
     application.interviewSchedule = status === "approved" ? req.body.interviewSchedule || null : null;
 
     await application.save();
+
+    await Notification.create({
+        user: application.applicantUserId,
+        title: "Adoption Application Update",
+        message:
+            `Your adoption application for ${application.petName} ` +
+            `has been ${status}.` +
+            (status === "rejected" ? ` Reason: ${reviewNotes}` : ""),
+        type: "application_update",
+    });
 
     await application.populate("animalId", "name type breed age gender size image availabilityStatus adoptionStatus");
 
