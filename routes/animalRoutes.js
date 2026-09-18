@@ -1,4 +1,5 @@
 const express = require("express");
+
 const router = express.Router();
 
 const asyncHandler = require("../middleware/asyncHandler");
@@ -7,42 +8,57 @@ const authoriseRoles = require("../middleware/authoriseRoles");
 const validateRequest = require("../middleware/validateRequest");
 
 const animalController = require("../controllers/animalController");
+-
+    router.post(
+        "/",
+        verifyToken,
+        authoriseRoles("admin"),
+        validateRequest(["name", "type"]),
+        asyncHandler(animalController.createAnimal)
+    );
 
-router.post("/",
+router.get(
+    "/",
+    asyncHandler(animalController.getAllAnimals)
+);
+
+router.get(
+    "/intakes",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(animalController.getPendingIntakes)
+);
+
+router.patch(
+    "/:id/approve-intake",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(animalController.approveIntake)
+);
+
+router.patch(
+    "/:id/reject-intake",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(animalController.rejectIntake)
+);
+router.get(
+    "/:id",
+    asyncHandler(animalController.getAnimalById)
+);
+
+router.patch(
+    "/:id",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(animalController.updateAnimal)
+);
+
+router.delete(
+    "/:id",
     verifyToken,
     authoriseRoles("admin"),
-    validateRequest(["name", "type"]),
-    asyncHandler(
-        animalController.createAnimal
-    )
-);
-
-router.get("/",
-    asyncHandler(
-        animalController.getAllAnimals
-    )
-);
-
-router.get("/:id",
-    asyncHandler(
-        animalController.getAnimalById
-    )
-);
-
-router.patch("/:id",
-    verifyToken,
-    authoriseRoles("admin"),
-    asyncHandler(
-        animalController.updateAnimal
-    )
-);
-
-router.delete("/:id",
-    verifyToken,
-    authoriseRoles("admin"),
-    asyncHandler(
-        animalController.deleteAnimal
-    )
+    asyncHandler(animalController.deleteAnimal)
 );
 
 module.exports = router;
