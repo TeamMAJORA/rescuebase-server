@@ -649,3 +649,69 @@ exports.googleLogin = async (req, res) => {
         email: user.email,
     });
 };
+
+exports.adminCreateUser = async (req, res) => {
+    const username = String(req.body.username || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "");
+    const role = String(req.body.role || "adopter").trim();
+
+    const allowedRoles = [
+        "admin",
+        "adopter",
+        "foster",
+        "volunteer",
+        "staff",
+    ];
+
+    if (!username || !email || !password) {
+        const error = new Error(
+            "Username, email, and password are required."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (password.length < 6) {
+        const error = new Error(
+            "Password must be at least 6 characters."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!allowedRoles.includes(role)) {
+        const error = new Error("Invalid user role.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+        const error = new Error(
+            "An account with this email already exists."
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+        username,
+        name: username,
+        email,
+        password: hashedPassword,
+        provider: "local",
+        role,
+        status: "active",
+        verified: true,
+    });
+
+    return res.status(201).json({
+        success: true,
+        message: "User created successfully.",
+        user: cleanUser(user),
+    });
+};
