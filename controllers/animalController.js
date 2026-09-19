@@ -6,23 +6,35 @@ const {
     sendPetAvailableEmail,
 } = require("../services/emailService");
 
-async function notifyUsersAboutAnimal(animal) {
-    const users = await User.find({}).select("_id");
+async function notifyAdoptersAboutAnimal(animal) {
+    const adopters = await User.find({
+        role: "adopter",
+    }).select("_id email");
 
-    if (!users.length) {
+    if (!adopters.length) {
         return;
     }
 
-    const notifications = users.map((user) => ({
-        user: user._id,
-        title: "New Animal Available",
-        message:
-            `${animal.name} is now available for adoption or fostering.`,
-        type: "adoption_update",
-    }));
-
     await Notification.insertMany(
-        notifications
+        adopters.map((adopter) => ({
+            user: adopter._id,
+            title: "New Pet Available for Adoption",
+            message:
+                `${animal.name} is now available for adoption at RescueBase.`,
+            type: "adoption_update",
+        }))
+    );
+
+    await Promise.all(
+        adopters
+            .filter((adopter) => adopter.email)
+            .map((adopter) =>
+                sendPetAvailableEmail(
+                    adopter.email,
+                    animal.name,
+                    animal.type
+                )
+            )
     );
 }
 
@@ -45,84 +57,118 @@ exports.createAnimal = async (req, res) => {
     const age = Number(req.body.age || 0);
 
     if (Number.isNaN(age) || age < 0) {
-        const e = new Error("Invalid animal age.");
-        e.statusCode = 400;
-        throw e;
+        const error = new Error("Invalid animal age.");
+        error.statusCode = 400;
+        throw error;
     }
 
     const adminId = req.user?.id;
-    const adminEmail = String(req.user?.email || "").trim().toLowerCase();
+    const adminEmail = String(
+        req.user?.email || ""
+    ).trim().toLowerCase();
 
     if (!adminId || !adminEmail) {
-        const e = new Error("Auth admin info is missing.");
-        e.statusCode = 401;
-        throw e;
+        const error = new Error("Auth admin info is missing.");
+        error.statusCode = 401;
+        throw error;
     }
 
-    const adminUser = await User.findById(adminId).select("name username email role");
+    const adminUser = await User.findById(adminId).select(
+        "name username email role"
+    );
 
     if (!adminUser) {
-        const e = new Error("Auth admin account was not found");
-        e.statusCode = 401;
-        throw e;
+        const error = new Error(
+            "Auth admin account was not found."
+        );
+        error.statusCode = 401;
+        throw error;
     }
 
-    const adminName = String(adminUser.name || adminUser.username || "Admin User").trim();
+    const adminName = String(
+        adminUser.name ||
+        adminUser.username ||
+        "Admin User"
+    ).trim();
 
     const animal = await Animal.create({
         name,
         type,
 
         breed: String(req.body.breed || "").trim(),
-
         age,
-        gender: String(req.body.gender || "Unknown").trim(),
-        size: String(req.body.size || "Unknown").trim(),
+
+        gender: String(
+            req.body.gender || "Unknown"
+        ).trim(),
+
+        size: String(
+            req.body.size || "Unknown"
+        ).trim(),
+
         color: String(req.body.color || "").trim(),
         image: String(req.body.image || "").trim(),
-        description: String(req.body.description || "").trim(),
-        medicalStatus: String(req.body.medicalStatus || "").trim(),
-        behaviorNotes: String(req.body.behaviorNotes || "").trim(),
+
+        description: String(
+            req.body.description || ""
+        ).trim(),
+
+        medicalStatus: String(
+            req.body.medicalStatus || ""
+        ).trim(),
+
+        behaviorNotes: String(
+            req.body.behaviorNotes || ""
+        ).trim(),
+
+        energyLevel: req.body.energyLevel ?? null,
+        friendliness: req.body.friendliness ?? null,
+        humanSociability: req.body.humanSociability ?? null,
+        animalSociability: req.body.animalSociability ?? null,
+        trainability: req.body.trainability ?? null,
+        anxietyLevel: req.body.anxietyLevel ?? null,
+        aggressionLevel: req.body.aggressionLevel ?? null,
+        activityLevel: req.body.activityLevel ?? null,
+
         intakeDate: req.body.intakeDate || Date.now(),
-        intakeCondition: String(req.body.intakeCondition || "Unknown").trim(),
-        availabilityStatus: req.body.availabilityStatus || "available",
-        adoptionStatus: req.body.adoptionStatus || "available",
-        fosterStatus: req.body.fosterStatus || "none",
-        location: String(req.body.location || "RescueBase Shelter").trim(),
+
+        intakeCondition: String(
+            req.body.intakeCondition || "Unknown"
+        ).trim(),
+
+        intakeType: String(
+            req.body.intakeType || "Rescued"
+        ).trim(),
+
+        rescuedBy: String(
+            req.body.rescuedBy || ""
+        ).trim(),
+
+        // All newly created records require review.
+        intakeStatus: "pending",
+
+        // Pending animals must not be publicly available.
+        availabilityStatus: "unavailable",
+        adoptionStatus: "available",
+
+        fosterStatus: String(
+            req.body.fosterStatus || "none"
+        ).trim(),
+
+        location: String(
+            req.body.location || "RescueBase Shelter"
+        ).trim(),
+
+        rejectionReason: "",
+
         createdByName: adminName,
         createdByEmail: adminEmail,
     });
 
-    if (animal.availabilityStatus === "available" && animal.adoptionStatus === "available") {
-        const adopters = await User.find({
-            role: "adopter",
-        }).select("_id email");
-
-        if (adopters.length > 0) {
-            await Notification.insertMany(
-                adopters.map((adopter) => ({
-                    user: adopter._id,
-                    title: "New Pet Available for Adoption",
-                    message: `${animal.name} is now available for adoption at RescueBase.`,
-                    type: "adoption_update",
-                }))
-            );
-
-            await Promise.all(
-                adopters.filter((adopter) => adopter.email)
-                    .map((adopter) =>
-                        sendPetAvailableEmail(
-                            adopter.email,
-                            animal.name,
-                            animal.type
-                        ))
-            )
-        }
-    }
-
     return res.status(201).json({
         success: true,
-        message: "Animal profile created successfully.",
+        message:
+            "Animal intake record created and submitted for review.",
         animal,
     });
 };
@@ -135,26 +181,62 @@ exports.getAllAnimals = async (req, res) => {
     }
 
     if (req.query.availabilityStatus) {
-        filter.availabilityStatus =
-            String(req.query.availabilityStatus).trim();
+        filter.availabilityStatus = String(
+            req.query.availabilityStatus
+        ).trim();
     }
 
     if (req.query.adoptionStatus) {
-        filter.adoptionStatus =
-            String(req.query.adoptionStatus).trim();
+        filter.adoptionStatus = String(
+            req.query.adoptionStatus
+        ).trim();
     }
 
     if (req.query.fosterStatus) {
-        filter.fosterStatus =
-            String(req.query.fosterStatus).trim();
+        filter.fosterStatus = String(
+            req.query.fosterStatus
+        ).trim();
     }
 
-    const animals = await Animal.find(filter)
-        .sort({ createdAt: -1 });
+    if (req.query.intakeStatus) {
+        filter.intakeStatus = String(
+            req.query.intakeStatus
+        ).trim();
+    } else {
+        // Hide pending and rejected records from public browsing.
+        // Existing records without intakeStatus remain visible.
+        filter.$or = [
+            {
+                intakeStatus: "approved",
+            },
+            {
+                intakeStatus: {
+                    $exists: false,
+                },
+            },
+        ];
+    }
+
+    const animals = await Animal.find(filter).sort({
+        createdAt: -1,
+    });
 
     return res.status(200).json({
         success: true,
         animals,
+    });
+};
+
+exports.getPendingIntakes = async (req, res) => {
+    const intakes = await Animal.find({
+        intakeStatus: "pending",
+    }).sort({
+        createdAt: -1,
+    });
+
+    return res.status(200).json({
+        success: true,
+        intakes,
     });
 };
 
@@ -164,23 +246,17 @@ exports.getAnimalById = async (req, res) => {
     ).trim();
 
     if (!mongoose.isValidObjectId(animalId)) {
-        const error = new Error(
-            "Invalid animal ID."
-        );
-
+        const error = new Error("Invalid animal ID.");
         error.statusCode = 400;
         throw error;
     }
 
-    const animal = await Animal.findById(
-        animalId
-    );
+    const animal = await Animal.findById(animalId);
 
     if (!animal) {
         const error = new Error(
             "Animal profile not found."
         );
-
         error.statusCode = 404;
         throw error;
     }
@@ -191,16 +267,107 @@ exports.getAnimalById = async (req, res) => {
     });
 };
 
+exports.approveIntake = async (req, res) => {
+    const animalId = String(
+        req.params.id || ""
+    ).trim();
+
+    if (!mongoose.isValidObjectId(animalId)) {
+        const error = new Error("Invalid animal ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const animal = await Animal.findById(animalId);
+
+    if (!animal) {
+        const error = new Error(
+            "Animal profile not found."
+        );
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (animal.intakeStatus === "approved") {
+        const error = new Error(
+            "This intake is already approved."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    animal.intakeStatus = "approved";
+    animal.availabilityStatus = "available";
+    animal.adoptionStatus = "available";
+    animal.rejectionReason = "";
+
+    await animal.save();
+
+    await notifyAdoptersAboutAnimal(animal);
+
+    return res.status(200).json({
+        success: true,
+        message:
+            "Animal intake approved successfully.",
+        animal,
+    });
+};
+
+exports.rejectIntake = async (req, res) => {
+    const animalId = String(
+        req.params.id || ""
+    ).trim();
+
+    if (!mongoose.isValidObjectId(animalId)) {
+        const error = new Error("Invalid animal ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const reason = String(
+        req.body.reason ||
+        req.body.rejectionReason ||
+        ""
+    ).trim();
+
+    if (!reason) {
+        const error = new Error(
+            "A rejection reason is required."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const animal = await Animal.findById(animalId);
+
+    if (!animal) {
+        const error = new Error(
+            "Animal profile not found."
+        );
+        error.statusCode = 404;
+        throw error;
+    }
+
+    animal.intakeStatus = "rejected";
+    animal.availabilityStatus = "unavailable";
+    animal.rejectionReason = reason;
+
+    await animal.save();
+
+    return res.status(200).json({
+        success: true,
+        message: "Animal intake rejected.",
+        animal,
+    });
+};
+
 exports.updateAnimal = async (req, res) => {
     const animalId = String(
         req.params.id || ""
     ).trim();
 
     if (!mongoose.isValidObjectId(animalId)) {
-        const error = new Error(
-            "Invalid animal ID."
-        );
-
+        const error = new Error("Invalid animal ID.");
         error.statusCode = 400;
         throw error;
     }
@@ -208,12 +375,16 @@ exports.updateAnimal = async (req, res) => {
     const existingAnimal = await Animal.findById(animalId);
 
     if (!existingAnimal) {
-        const error = new Error("Animal profile not found.");
+        const error = new Error(
+            "Animal profile not found."
+        );
         error.statusCode = 404;
         throw error;
     }
 
-    const wasAvailable = existingAnimal.availabilityStatus === "available" &&
+    const wasAvailable =
+        existingAnimal.intakeStatus === "approved" &&
+        existingAnimal.availabilityStatus === "available" &&
         existingAnimal.adoptionStatus === "available";
 
     const allowedFields = [
@@ -238,6 +409,8 @@ exports.updateAnimal = async (req, res) => {
         "activityLevel",
         "intakeDate",
         "intakeCondition",
+        "intakeType",
+        "rescuedBy",
         "availabilityStatus",
         "adoptionStatus",
         "fosterStatus",
@@ -248,21 +421,17 @@ exports.updateAnimal = async (req, res) => {
 
     for (const field of allowedFields) {
         if (req.body[field] !== undefined) {
-            allowedUpdates[field] =
-                req.body[field];
+            allowedUpdates[field] = req.body[field];
         }
     }
 
     if (allowedUpdates.age !== undefined) {
-        const age = Number(
-            allowedUpdates.age
-        );
+        const age = Number(allowedUpdates.age);
 
         if (Number.isNaN(age) || age < 0) {
             const error = new Error(
                 "Invalid animal age."
             );
-
             error.statusCode = 400;
             throw error;
         }
@@ -270,85 +439,64 @@ exports.updateAnimal = async (req, res) => {
         allowedUpdates.age = age;
     }
 
-    if (
-        allowedUpdates.name !== undefined
-    ) {
-        allowedUpdates.name =
-            String(
-                allowedUpdates.name
-            ).trim();
+    if (allowedUpdates.name !== undefined) {
+        allowedUpdates.name = String(
+            allowedUpdates.name
+        ).trim();
     }
 
-    if (
-        allowedUpdates.type !== undefined
-    ) {
-        allowedUpdates.type =
-            String(
-                allowedUpdates.type
-            ).trim();
+    if (allowedUpdates.type !== undefined) {
+        allowedUpdates.type = String(
+            allowedUpdates.type
+        ).trim();
     }
 
-    if (
-        Object.keys(allowedUpdates).length === 0
-    ) {
+    if (allowedUpdates.intakeType !== undefined) {
+        allowedUpdates.intakeType = String(
+            allowedUpdates.intakeType
+        ).trim();
+    }
+
+    if (allowedUpdates.rescuedBy !== undefined) {
+        allowedUpdates.rescuedBy = String(
+            allowedUpdates.rescuedBy
+        ).trim();
+    }
+
+    if (Object.keys(allowedUpdates).length === 0) {
         const error = new Error(
             "No valid fields provided for this update."
         );
-
         error.statusCode = 400;
         throw error;
     }
 
-    const animal =
-        await Animal.findByIdAndUpdate(
-            animalId,
-            {
-                $set: allowedUpdates,
-            },
-            {
-                new: true,
-                runValidators: true,
-            }
-        );
+    const animal = await Animal.findByIdAndUpdate(
+        animalId,
+        {
+            $set: allowedUpdates,
+        },
+        {
+            new: true,
+            runValidators: true,
+        }
+    );
 
     if (!animal) {
         const error = new Error(
             "Animal profile not found."
         );
-
         error.statusCode = 404;
         throw error;
     }
 
-    const isAvailable = animal.availabilityStatus === "available" && animal.adoptionStatus === "available";
+    const isAvailable =
+        animal.intakeStatus === "approved" &&
+        animal.availabilityStatus === "available" &&
+        animal.adoptionStatus === "available";
 
     if (!wasAvailable && isAvailable) {
-        const adopters = await User.find({
-            role: "adopter",
-        }).select("_id email");
-
-        if (adopters.length > 0) {
-            await Notification.insertMany(
-                adopters.map((adopter) => ({
-                    user: adopter._id,
-                    title: "New Pet Available for Adoption",
-                    message:
-                        `${animal.name} is now available for adoption at RescueBase.`,
-                    type: "adoption_update",
-                }))
-            );
-
-            await Promise.all(
-                adopters.filter((adopter) => adopter.email)
-                    .map((adopter) =>
-                        sendPetAvailableEmail(
-                            adopter.email,
-                            animal.name,
-                            animal.type
-                        )
-                    )
-            )
-        }
+        await notifyAdoptersAboutAnimal(animal);
     }
 
     return res.status(200).json({
@@ -365,24 +513,19 @@ exports.deleteAnimal = async (req, res) => {
     ).trim();
 
     if (!mongoose.isValidObjectId(animalId)) {
-        const error = new Error(
-            "Invalid animal ID."
-        );
-
+        const error = new Error("Invalid animal ID.");
         error.statusCode = 400;
         throw error;
     }
 
-    const animal =
-        await Animal.findByIdAndDelete(
-            animalId
-        );
+    const animal = await Animal.findByIdAndDelete(
+        animalId
+    );
 
     if (!animal) {
         const error = new Error(
             "Animal profile not found."
         );
-
         error.statusCode = 404;
         throw error;
     }

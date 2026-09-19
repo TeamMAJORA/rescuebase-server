@@ -158,6 +158,35 @@ const animalSchema = new mongoose.Schema(
             type: String,
             default: "admin",
         },
+
+        intakeStatus: {
+            type: String,
+            enum: ["pending", "approved", "rejected"],
+            default: "pending",
+        },
+
+        intakeType: {
+            type: String,
+            enum: [
+                "Rescued",
+                "Owner Surrender",
+                "Transferred",
+                "Stray",
+            ],
+            default: "Rescued",
+        },
+
+        rescuedBy: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        rejectionReason: {
+            type: String,
+            default: "",
+            trim: true,
+        },
     },
     {
         timestamps: true,
