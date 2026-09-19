@@ -94,6 +94,56 @@ const fosterBehaviorEvaluationSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const medicalRequestSchema = new mongoose.Schema(
+    {
+        issue: {
+            type: String,
+            required: true,
+            trim: true,
+        },
+
+        urgency: {
+            type: String,
+            enum: ["Low", "Medium", "High", "Emergency"],
+            default: "Medium",
+        },
+
+        status: {
+            type: String,
+            enum: ["pending", "in_progress", "resolved"],
+            default: "pending",
+        },
+
+        submittedBy: {
+            type: String,
+            default: "",
+        },
+
+        submittedByEmail: {
+            type: String,
+            default: "",
+        },
+
+        reviewedBy: {
+            type: String,
+            default: "",
+        },
+
+        resolutionNotes: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        resolvedAt: {
+            type: Date,
+            default: null,
+        },
+    },
+    { timestamps: true }
+);
+
+
 const fosterAssignmentSchema = new mongoose.Schema(
     {
         petName: {
@@ -149,6 +199,11 @@ const fosterAssignmentSchema = new mongoose.Schema(
         },
 
         updates: [fosterUpdateSchema],
+        
+        medicalRequests: {
+            type: [medicalRequestSchema],
+            default: [],
+        },
     },
     { timestamps: true }
 );

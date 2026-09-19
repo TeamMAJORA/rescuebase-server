@@ -1252,3 +1252,234 @@ exports.getMyAssignmentHistory = async (req, res) => {
         history: assignments,
     });
 };
+
+exports.submitMedicalRequest = async (req, res) => {
+    const assignmentId = String(req.params.id || "").trim();
+
+    const email = String(req.user?.email || "")
+        .trim()
+        .toLowerCase();
+
+    const issue = String(req.body.issue || "").trim();
+
+    const urgency = String(req.body.urgency || "Medium").trim();
+
+    const allowedUrgencies = [
+        "Low",
+        "Medium",
+        "High",
+        "Emergency",
+    ];
+
+    if (!issue) {
+        const error = new Error("Medical issue is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!allowedUrgencies.includes(urgency)) {
+        const error = new Error("Invalid urgency level.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const assignment = await FosterAssignment.findOne({
+        _id: assignmentId,
+        fosterEmail: email,
+        status: "active",
+    });
+
+    if (!assignment) {
+        const error = new Error(
+            "Active foster assignment not found."
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    assignment.medicalRequests.push({
+        issue,
+        urgency,
+        status: "pending",
+        submittedBy:
+            String(
+                req.user?.name ||
+                req.user?.username ||
+                assignment.fosterName ||
+                "Foster User"
+            ).trim(),
+        submittedByEmail: email,
+    });
+
+    await assignment.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "medical_assistance_requested",
+
+        actorName: assignment.fosterName,
+        actorEmail: email,
+
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+
+        description:
+            `${assignment.fosterName} requested medical assistance for ${assignment.petName}.`,
+
+        status: "pending",
+
+        metadata: {
+            petName: assignment.petName,
+            urgency,
+            issue,
+        },
+    });
+
+    return res.status(201).json({
+        success: true,
+        message: "Medical assistance request submitted.",
+        assignment,
+    });
+};
+
+exports.getMedicalRequests = async (req, res) => {
+    const assignments = await FosterAssignment.find({
+        "medicalRequests.0": {
+            $exists: true,
+        },
+    }).sort({
+        updatedAt: -1,
+    });
+
+    const requests = [];
+
+    for (const assignment of assignments) {
+        for (const request of assignment.medicalRequests) {
+            requests.push({
+                ...request.toObject(),
+
+                assignmentId: assignment._id,
+                petName: assignment.petName,
+                petBreed: assignment.petBreed,
+                fosterName: assignment.fosterName,
+                fosterEmail: assignment.fosterEmail,
+            });
+        }
+    }
+
+    requests.sort(
+        (a, b) =>
+            new Date(b.createdAt) -
+            new Date(a.createdAt)
+    );
+
+    return res.status(200).json({
+        success: true,
+        requests,
+    });
+};
+
+exports.updateMedicalRequest = async (req, res) => {
+    const assignmentId = String(
+        req.params.assignmentId || ""
+    ).trim();
+
+    const requestId = String(
+        req.params.requestId || ""
+    ).trim();
+
+    const status = String(
+        req.body.status || ""
+    ).trim();
+
+    const allowedStatuses = [
+        "pending",
+        "in_progress",
+        "resolved",
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+        const error = new Error(
+            "Invalid medical request status."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const assignment =
+        await FosterAssignment.findById(assignmentId);
+
+    if (!assignment) {
+        const error = new Error(
+            "Foster assignment not found."
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const request =
+        assignment.medicalRequests.id(requestId);
+
+    if (!request) {
+        const error = new Error(
+            "Medical assistance request not found."
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    request.status = status;
+
+    request.reviewedBy =
+        String(
+            req.user?.name ||
+            req.user?.username ||
+            req.user?.email ||
+            "Staff User"
+        ).trim();
+
+    request.resolutionNotes =
+        String(
+            req.body.resolutionNotes || ""
+        ).trim();
+
+    if (status === "resolved") {
+        request.resolvedAt = new Date();
+    } else {
+        request.resolvedAt = null;
+    }
+
+    await assignment.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "medical_assistance_updated",
+
+        actorName: request.reviewedBy,
+        actorEmail: req.user?.email || "",
+
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+
+        description:
+            `Medical assistance request for ${assignment.petName} was updated to ${status}.`,
+
+        status,
+
+        metadata: {
+            petName: assignment.petName,
+            requestId,
+            resolutionNotes: request.resolutionNotes,
+        },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: "Medical assistance request updated.",
+        assignment,
+    });
+};

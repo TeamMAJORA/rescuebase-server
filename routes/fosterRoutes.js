@@ -146,4 +146,31 @@ router.get(
     )
 );
 
+router.post(
+    "/assignments/:id/medical-requests",
+    verifyToken,
+    authoriseRoles("foster"),
+    asyncHandler(
+        fosterController.submitMedicalRequest
+    )
+);
+
+router.get(
+    "/medical-requests",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.getMedicalRequests
+    )
+);
+
+router.patch(
+    "/medical-requests/:assignmentId/:requestId",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.updateMedicalRequest
+    )
+);
+
 module.exports = router;
