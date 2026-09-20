@@ -72,6 +72,12 @@ const DonationSchema = new mongoose.Schema(
             type: String,
             default: "admin",
         },
+
+        neededSupplyId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "NeededSupply",
+            default: null,
+        },
     },
     {
         timestamps: true,
