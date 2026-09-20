@@ -80,7 +80,7 @@ app.use("/api/rescue-assignments", rescueRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/gis", gisRoutes);
 app.use("/api/reports", reportRoutes);
-app.use("/api/needed-supplies", suppliesRoutes);
+app.use("/api/supplies", suppliesRoutes);
 app.use("/api/matchmaking", matchmakingRoutes);
 
 // Image route

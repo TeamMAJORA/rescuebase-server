@@ -2,77 +2,48 @@ const express = require("express");
 
 const router = express.Router();
 
-const asyncHandler =
-    require("../middleware/asyncHandler");
+const asyncHandler = require("../middleware/asyncHandler");
+const verifyToken = require("../middleware/verifyToken");
+const authoriseRoles = require("../middleware/authoriseRoles");
 
-const verifyToken =
-    require("../middleware/verifyToken");
-
-const authoriseRoles =
-    require("../middleware/authoriseRoles");
-
-const neededSuppliesController =
-    require("../controllers/neededSupplyController");
-
-
-router.get(
-    "/public",
-    asyncHandler(
-        neededSuppliesController.getPublicNeededSupplies
-    )
+const neededSupplyController = require(
+    "../controllers/neededSupplyController"
 );
 
+router.get(
+    "/",
+    verifyToken,
+    authoriseRoles("admin", "staff", "foster", "adopter", "volunteer"),
+    asyncHandler(
+        neededSupplyController.getAllSupplies
+    )
+);
 
 router.post(
     "/",
     verifyToken,
-    authoriseRoles(
-        "admin",
-        "staff"
-    ),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
-        neededSuppliesController.createNeededSupply
+        neededSupplyController.createSupply
     )
 );
-
-
-router.get(
-    "/",
-    verifyToken,
-    authoriseRoles(
-        "admin",
-        "staff"
-    ),
-    asyncHandler(
-        neededSuppliesController.getAllNeededSupplies
-    )
-);
-
 
 router.patch(
     "/:id",
     verifyToken,
-    authoriseRoles(
-        "admin",
-        "staff"
-    ),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
-        neededSuppliesController.updateNeededSupply
+        neededSupplyController.updateSupply
     )
 );
-
 
 router.delete(
     "/:id",
     verifyToken,
-    authoriseRoles(
-        "admin",
-        "staff"
-    ),
+    authoriseRoles("admin"),
     asyncHandler(
-        neededSuppliesController.deleteNeededSupply
+        neededSupplyController.deleteSupply
     )
 );
-
 
 module.exports = router;
