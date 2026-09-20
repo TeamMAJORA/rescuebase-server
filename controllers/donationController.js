@@ -4,6 +4,7 @@ const Donation = require("../models/Donations");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
 const sendDonationConfirmationEmail = require("../services/emailService");
+const NeededSupply = require("../models/NeededSupply.js")
 
 
 exports.createDonation = async (req, res) => {
@@ -111,6 +112,7 @@ exports.createDonation = async (req, res) => {
 
         createdByName: creatorName,
         createdByEmail: creatorEmail,
+        neededSupplyId: req.body.neededSupplyId || null,
     });
 
     await Notification.create({
@@ -148,22 +150,23 @@ exports.getMyDonations = async (req, res) => {
 
         if (!user) {
             return res.status(404).json({
-                message : "User not found"
+                message: "User not found"
             });
         }
 
         const donations = await Donation.find({
-            donorEmail : user.email
-        }).sort({ createdAt : -1 });
+            donorEmail: user.email
+        }).sort({ createdAt: -1 });
 
         return res.status(200).json(donations);
     } catch (error) {
         return res.status(500).json({
-            message : "Failed to fetch donation history",
+            message: "Failed to fetch donation history",
             error: error.message
         });
     }
 };
+
 
 exports.updateDonation = async (req, res) => {
     const donationId = String(
@@ -171,10 +174,7 @@ exports.updateDonation = async (req, res) => {
     ).trim();
 
     if (!mongoose.isValidObjectId(donationId)) {
-        const error = new Error(
-            "Invalid donation ID."
-        );
-
+        const error = new Error("Invalid donation ID.");
         error.statusCode = 400;
         throw error;
     }
@@ -188,43 +188,41 @@ exports.updateDonation = async (req, res) => {
         "quantity",
         "notes",
         "status",
+        "neededSupplyId",
     ];
 
     const allowedUpdates = {};
 
     for (const field of allowedFields) {
         if (req.body[field] !== undefined) {
-            allowedUpdates[field] =
-                req.body[field];
+            allowedUpdates[field] = req.body[field];
         }
     }
 
-    if (
-        allowedUpdates.donorEmail !== undefined
-    ) {
-        allowedUpdates.donorEmail =
-            String(
-                allowedUpdates.donorEmail
-            )
-                .trim()
-                .toLowerCase();
+    const existingDonation =
+        await Donation.findById(donationId);
+
+    if (!existingDonation) {
+        const error = new Error(
+            "Donation record not found."
+        );
+        error.statusCode = 404;
+        throw error;
     }
 
-    if (
-        allowedUpdates.amount !== undefined
-    ) {
-        const amount = Number(
-            allowedUpdates.amount
-        );
+    if (allowedUpdates.donorEmail !== undefined) {
+        allowedUpdates.donorEmail = String(
+            allowedUpdates.donorEmail
+        ).trim().toLowerCase();
+    }
 
-        if (
-            Number.isNaN(amount) ||
-            amount < 0
-        ) {
+    if (allowedUpdates.amount !== undefined) {
+        const amount = Number(allowedUpdates.amount);
+
+        if (Number.isNaN(amount) || amount < 0) {
             const error = new Error(
                 "Invalid donation amount."
             );
-
             error.statusCode = 400;
             throw error;
         }
@@ -232,21 +230,13 @@ exports.updateDonation = async (req, res) => {
         allowedUpdates.amount = amount;
     }
 
-    if (
-        allowedUpdates.quantity !== undefined
-    ) {
-        const quantity = Number(
-            allowedUpdates.quantity
-        );
+    if (allowedUpdates.quantity !== undefined) {
+        const quantity = Number(allowedUpdates.quantity);
 
-        if (
-            Number.isNaN(quantity) ||
-            quantity < 1
-        ) {
+        if (Number.isNaN(quantity) || quantity < 1) {
             const error = new Error(
                 "Invalid donation quantity."
             );
-
             error.statusCode = 400;
             throw error;
         }
@@ -254,57 +244,101 @@ exports.updateDonation = async (req, res) => {
         allowedUpdates.quantity = quantity;
     }
 
-    if (
-        allowedUpdates.status !== undefined
-    ) {
-        const status = String(
+    if (allowedUpdates.status !== undefined) {
+        allowedUpdates.status = String(
             allowedUpdates.status
-        )
-            .trim()
-            .toLowerCase();
+        ).trim().toLowerCase();
+    }
 
-        allowedUpdates.status = status;
+    const oldStatus = existingDonation.status;
+    const newStatus =
+        allowedUpdates.status || oldStatus;
 
-        if (status === "received") {
-            allowedUpdates.receivedDate =
-                new Date();
-        } else {
-            allowedUpdates.receivedDate =
-                null;
+    const oldQuantity = Number(
+        existingDonation.quantity || 0
+    );
+
+    const newQuantity = Number(
+        allowedUpdates.quantity ??
+        existingDonation.quantity ??
+        0
+    );
+
+    const oldSupplyId =
+        existingDonation.neededSupplyId?.toString() || null;
+
+    const newSupplyId =
+        allowedUpdates.neededSupplyId !== undefined
+            ? allowedUpdates.neededSupplyId
+                ? String(allowedUpdates.neededSupplyId)
+                : null
+            : oldSupplyId;
+
+    if (newStatus === "received") {
+        allowedUpdates.receivedDate =
+            existingDonation.receivedDate || new Date();
+    } else {
+        allowedUpdates.receivedDate = null;
+    }
+
+    if (oldStatus === "received" && oldSupplyId) {
+        const shouldRemoveOldQuantity =
+            newStatus !== "received" ||
+            newSupplyId !== oldSupplyId;
+
+        if (shouldRemoveOldQuantity) {
+            await NeededSupply.findByIdAndUpdate(
+                oldSupplyId,
+                {
+                    $inc: {
+                        quantityReceived: -oldQuantity,
+                    },
+                }
+            );
+        } else if (newQuantity !== oldQuantity) {
+            await NeededSupply.findByIdAndUpdate(
+                oldSupplyId,
+                {
+                    $inc: {
+                        quantityReceived:
+                            newQuantity - oldQuantity,
+                    },
+                }
+            );
         }
     }
 
-    if (
-        Object.keys(allowedUpdates).length === 0
-    ) {
-        const error = new Error(
-            "No valid fields provided for this update."
-        );
+    if (newStatus === "received" && newSupplyId) {
+        const shouldAddNewQuantity =
+            oldStatus !== "received" ||
+            newSupplyId !== oldSupplyId;
 
-        error.statusCode = 400;
-        throw error;
+        if (shouldAddNewQuantity) {
+            await NeededSupply.findByIdAndUpdate(
+                newSupplyId,
+                {
+                    $inc: {
+                        quantityReceived: newQuantity,
+                    },
+                }
+            );
+        }
     }
 
     const donation =
         await Donation.findByIdAndUpdate(
             donationId,
             {
-                $set: allowedUpdates,
+                $set: {
+                    ...allowedUpdates,
+                    neededSupplyId: newSupplyId,
+                },
             },
             {
                 new: true,
                 runValidators: true,
             }
         );
-
-    if (!donation) {
-        const error = new Error(
-            "Donation record not found."
-        );
-
-        error.statusCode = 404;
-        throw error;
-    }
 
     return res.status(200).json({
         success: true,
@@ -313,7 +347,6 @@ exports.updateDonation = async (req, res) => {
         donation,
     });
 };
-
 
 exports.deleteDonation = async (req, res) => {
     const donationId = String(
