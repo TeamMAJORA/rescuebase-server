@@ -33,6 +33,7 @@ const DonationSchema = new mongoose.Schema(
         amount: {
             type: Number,
             default: 0,
+            min: 0,
         },
 
         itemName: {
@@ -44,6 +45,7 @@ const DonationSchema = new mongoose.Schema(
         quantity: {
             type: Number,
             default: 1,
+            min: 1,
         },
 
         notes: {
@@ -56,6 +58,35 @@ const DonationSchema = new mongoose.Schema(
             type: String,
             enum: ["pending", "received", "cancelled"],
             default: "pending",
+        },
+
+        paymentMethod: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        paymentStatus: {
+            type: String,
+            enum: [
+                "not_required",
+                "pending",
+                "verified",
+                "rejected",
+            ],
+            default: "not_required",
+        },
+
+        paymentReference: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        proofOfPayment: {
+            type: String,
+            trim: true,
+            default: "",
         },
 
         receivedDate: {
@@ -84,4 +115,4 @@ const DonationSchema = new mongoose.Schema(
     }
 );
 
-module.exports = mongoose.model("Donation", DonationSchema);
+module.exports = mongoose.models.Donation || mongoose.model("Donation", DonationSchema);
