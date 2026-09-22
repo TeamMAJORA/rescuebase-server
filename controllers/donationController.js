@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const Donation = require("../models/Donations");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
-const sendDonationConfirmationEmail = require("../services/emailService");
+const { sendDonationConfirmationEmail }= require("../services/emailService");
 const NeededSupply = require("../models/NeededSupply.js")
 
 
@@ -103,13 +103,13 @@ exports.createDonation = async (req, res) => {
         notes: String(
             req.body.notes || ""
         ).trim(),
-        status:
-            String(
-                req.body.status || "pending"
-            )
-                .trim()
-                .toLowerCase(),
-
+        paymentMethod: String(req.body.paymentMethod || "").trim(),
+        paymentStatus: donationType === "Money" ? "pending" : "not_required",
+        paymentReference: String(req.body.paymentReference || "").trim(),
+        proofOfPayment: String(req.body.proofOfPayment || "").trim(),
+        status: String(req.body.status || "pending")
+            .trim()
+            .toLowerCase(),
         createdByName: creatorName,
         createdByEmail: creatorEmail,
         neededSupplyId: req.body.neededSupplyId || null,
@@ -189,6 +189,10 @@ exports.updateDonation = async (req, res) => {
         "notes",
         "status",
         "neededSupplyId",
+        "paymentMethod",
+        "paymentStatus",
+        "paymentReference",
+        "proofOfPayment",
     ];
 
     const allowedUpdates = {};
