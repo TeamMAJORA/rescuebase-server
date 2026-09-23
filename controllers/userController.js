@@ -178,3 +178,163 @@ exports.deactivateUser = async (req, res) => {
         message: "User deactivated successfully.",
     });
 };
+
+exports.submitRoleApplication = async (req, res) => {
+    try {
+        const userId = req.user.id || req.user._id;
+        const { targetRole, reason } = req.body;
+
+        if (!["volunteer", "staff"].includes(targetRole)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid application role.",
+            });
+        }
+
+        if (!reason || !reason.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "Application reason is required.",
+            });
+        }
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found.",
+            });
+        }
+
+        if (user.role !== "adopter") {
+            return res.status(403).json({
+                success: false,
+                message: "Only adopters can submit role applications.",
+            });
+        }
+
+        if (user.roleApplication?.status === "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "You already have a pending application.",
+            });
+        }
+
+        user.roleApplication = {
+            targetRole,
+            status: "pending",
+            reason: reason.trim(),
+            rejectionReason: "",
+            submittedAt: new Date(),
+            reviewedAt: null,
+            reviewedBy: null,
+        };
+
+        await user.save();
+
+        return res.status(201).json({
+            success: true,
+            message: "Role application submitted successfully.",
+            application: user.roleApplication,
+        });
+    } catch (error) {
+        console.error("Submit role application error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to submit role application.",
+        });
+    }
+};
+
+exports.getMyRoleApplication = async (req, res) => {
+    try {
+        const userId = req.user.id || req.user._id;
+
+        const user = await User.findById(userId).select(
+            "role roleApplication"
+        );
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found.",
+            });
+        }
+
+        return res.json({
+            success: true,
+            application: user.roleApplication || null,
+        });
+    } catch (error) {
+        console.error("Get role application error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to load role application.",
+        });
+    }
+};
+
+exports.reviewRoleApplication = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { decision, rejectionReason = "" } = req.body;
+
+        if (!["approved", "rejected"].includes(decision)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid review decision.",
+            });
+        }
+
+        const user = await User.findById(id);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found.",
+            });
+        }
+
+        if (user.roleApplication?.status !== "pending") {
+            return res.status(400).json({
+                success: false,
+                message: "This application is not pending.",
+            });
+        }
+
+        const applicationRole = user.roleApplication.targetRole;
+
+        if (decision === "approved") {
+            user.role = applicationRole;
+            user.roleApplication.status = "approved";
+            user.roleApplication.rejectionReason = "";
+        } else {
+            user.roleApplication.status = "rejected";
+            user.roleApplication.rejectionReason =
+                String(rejectionReason).trim();
+        }
+
+        user.roleApplication.reviewedAt = new Date();
+        user.roleApplication.reviewedBy =
+            req.user.id || req.user._id;
+
+        await user.save();
+
+        return res.json({
+            success: true,
+            message: `Application ${decision} successfully.`,
+            application: user.roleApplication,
+            role: user.role,
+        });
+    } catch (error) {
+        console.error("Review role application error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to review role application.",
+        });
+    }
+};
