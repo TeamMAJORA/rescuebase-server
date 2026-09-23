@@ -149,6 +149,16 @@ const animalSchema = new mongoose.Schema(
             trim: true,
         },
 
+        latitude: {
+            type: Number,
+            default: null,
+        },
+
+        longitude: {
+            type: Number,
+            default: null,
+        },
+
         createdByName: {
             type: String,
             default: "Admin User",
