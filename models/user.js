@@ -57,6 +57,48 @@ const userSchema = new mongoose.Schema(
             default: "active",
         },
 
+        roleApplication: {
+            targetRole: {
+                type: String,
+                enum: ["volunteer", "staff", null],
+                default: null,
+            },
+
+            status: {
+                type: String,
+                enum: ["none", "pending", "approved", "rejected"],
+                default: "none",
+            },
+
+            reason: {
+                type: String,
+                default: "",
+                trim: true,
+            },
+
+            rejectionReason: {
+                type: String,
+                default: "",
+                trim: true,
+            },
+
+            submittedAt: {
+                type: Date,
+                default: null,
+            },
+
+            reviewedAt: {
+                type: Date,
+                default: null,
+            },
+
+            reviewedBy: {
+                type: mongoose.Schema.Types.ObjectId,
+                ref: "User",
+                default: null,
+            },
+        },
+
         verified: {
             type: Boolean,
             default: true,
