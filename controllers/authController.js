@@ -6,7 +6,7 @@ const cleanUser = require("../utils/cleanUser");
 const generateToken = require("../utils/generateToken");
 
 const {
-     sendOtpEmail, sendPasswordResetEmail
+    sendOtpEmail, sendPasswordResetEmail
 } = require("../services/emailService");
 
 exports.emailSignup = async (req, res) => {
