@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const GISLocation = require("../models/GISLocation");
 const User = require("../models/User");
+const Shelter = require("../models/Shelter");
 
 exports.createLocation = async (req, res) => {
     const petName = String(req.body.petName || "").trim();
@@ -692,5 +693,18 @@ exports.getHotspotAnalysis = async (req, res) => {
         success: true,
         totalReports: locations.length,
         hotspots,
+    });
+};
+
+exports.getShelters = async (req, res) => {
+    const shelters = await Shelter.find({
+        status: "active",
+    }).sort({
+        name: 1,
+    });
+
+    return res.status(200).json({
+        success: true,
+        shelters,
     });
 };
