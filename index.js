@@ -30,6 +30,7 @@ const reportRoutes = require("./routes/reportsRoutes");
 const suppliesRoutes = require("./routes/neededSuppliesRoutes");
 const matchmakingRoutes = require("./routes/matchmakingRoutes");
 const paymentMethodRoutes = require("./routes/paymentMethodRoutes");
+const qrTagRoutes = require("./routes/qrTagRoutes");
 
 //Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -84,6 +85,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/supplies", suppliesRoutes);
 app.use("/api/matchmaking", matchmakingRoutes);
 app.use("/api/payment-methods", paymentMethodRoutes);
+app.use("/api/qr-tags", qrTagRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);
