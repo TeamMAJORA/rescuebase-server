@@ -184,7 +184,7 @@ exports.submitRoleApplication = async (req, res) => {
         const userId = req.user.id || req.user._id;
         const { targetRole, reason } = req.body;
 
-        if (!["volunteer", "staff"].includes(targetRole)) {
+        if (!["volunteer", "foster"].includes(targetRole)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid application role.",
