@@ -43,5 +43,26 @@ router.patch(
     asyncHandler(userController.deactivateUser)
 );
 
+router.post(
+    "/role-application",
+    verifyToken,
+    authorizeRoles("adopter"),
+    asyncHandler(userController.submitRoleApplication)
+);
+
+router.get(
+    "/role-application/me",
+    verifyToken,
+    authorizeRoles("adopter"),
+    asyncHandler(userController.getMyRoleApplication)
+);
+
+router.patch(
+    "/:id/role-application",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(userController.reviewRoleApplication)
+);
+
 
 module.exports = router;

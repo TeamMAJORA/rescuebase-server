@@ -2,221 +2,175 @@ const mongoose = require("mongoose");
 
 const NeededSupply = require("../models/NeededSupply");
 
-exports.createNeededSupply = async (req, res) => {
-    try {
-        const {
-            name, category, quantityNeeded, quantityReceived, priority, descriptiom, status
-        } = req.body;
-
-        if (!name || !category || quantityNeeded === undefined) {
-            return res.status(400).json({
-                message: "Name, category, and quantity needed are required."
-            });
-        }
-
-        if (Number(quantityNeeded) < 1) {
-            return res.status(400).json({
-                message: "Quantity needed must be at least 1."
-            });
-        }
-
-        if (quantityNeeded !== undefined && Number(quantityReceived) < 0) {
-            return res.status(400).json({
-                message: "Quantity received cannot be negative."
-            });
-        }
-
-        const received = quantityReceived !== undefined ? Number(quantityReceived) : 0;
-
-        const finalStatus = received >= needed ? "fulfilled" : status || "active";
-
-        const supply = await NeededSupply.create({
-            name,
-            category,
-            quantityNeeded: needed,
-            quantityReceived: received,
-            priority,
-            description,
-            status: finalStatus
-        });
-
-        return res.status(201).json({
-            message: "Needed supply created successfully."
-        });
-    } catch (error) {
-        return res.status(500).json({
-            message: "Failed to create needed supply.",
-            error: error.message
-        });
+function updateSupplyStatus(supply) {
+    if (supply.quantityReceived >= supply.quantityNeeded) {
+        supply.status = "fulfilled";
+    } else if (supply.quantityReceived > 0) {
+        supply.status = "partially_fulfilled";
+    } else {
+        supply.status = "needed";
     }
 }
 
-exports.getPublicNeededSupplies = async (req, res) => {
-    try {
-        const supplies = await NeededSupply.find({
-            status: {
-                $in: ["active", "fulfilled"]
-            }
-        }).sort({
-            priority: -1,
-            createdAt: -1
-        });
+exports.getAllSupplies = async (req, res) => {
+    const supplies = await NeededSupply.find()
+        .sort({ createdAt: -1 });
 
-        return res.status(200).json(supplies);
-    } catch (error) {
-        return res.status(500).json({
-            message: "Failed to fetch needed supplies.",
-            error: error.message
-        });
-    }
+    return res.status(200).json({
+        success: true,
+        supplies,
+    });
 };
 
-exports.getAllNeededSupplies = async (req, res) => {
-    try {
-        const supplies = await NeededSupply.find()
-            .sort({ createdAt: -1 });
+exports.createSupply = async (req, res) => {
+    const {
+        name,
+        item,
+        category,
+        quantityNeeded,
+        quantityReceived,
+        priority,
+        description,
+        notes,
+        status,
+    } = req.body;
 
-        return res.status(200).json(supplies);
-    } catch (error) {
-        return res.status(500).json({
-            message: "Failed to fetch needed supplies.",
-            error: error.message
+    const supplyName = name || item;
+
+    const supplyCategory =
+        category || req.body.donationType;
+
+    const supplyStatus =
+        status === "needed"
+            ? "active"
+            : status === "fulfilled"
+                ? "fulfilled"
+                : status === "inactive"
+                    ? "inactive"
+                    : "active";
+
+    if (!supplyName) {
+        return res.status(400).json({
+            success: false,
+            message: "Supply name is required",
         });
     }
+
+    if (!supplyCategory) {
+        return res.status(400).json({
+            success: false,
+            message: "Supply category is required",
+        });
+    }
+
+    const supply = await NeededSupply.create({
+        name: supplyName,
+        category: supplyCategory,
+        quantityNeeded,
+        quantityReceived: quantityReceived || 0,
+        priority: priority || "Medium",
+        description: description || notes || "",
+        status: supplyStatus,
+        createdByName: req.user?.name || "",
+        createdByEmail: req.user?.email || "",
+    });
+
+    res.status(201).json({
+        success: true,
+        message: "Needed supply created successfully",
+        supply,
+    });
 };
 
-exports.updateNeededSupply = async (req, res) => {
-    try {
-        const { id } = req.params;
+exports.updateSupply = async (req, res) => {
+    const supplyId = String(
+        req.params.id || ""
+    ).trim();
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                message: "Invalid needed supply ID."
-            });
-        }
-
-        const allowedFields = [
-            "name",
-            "category",
-            "quantityNeeded",
-            "quantityReceived",
-            "priority",
-            "description",
-            "status"
-        ];
-
-        const updates = {};
-
-        allowedFields.forEach((field) => {
-            if (req.body[field] !== undefined) {
-                updates[field] = req.body[field];
-            }
-        });
-
-        if (
-            updates.quantityNeeded !== undefined &&
-            Number(updates.quantityNeeded) < 1
-        ) {
-            return res.status(400).json({
-                message: "Quantity needed must be at least 1."
-            });
-        }
-
-        if (
-            updates.quantityReceived !== undefined &&
-            Number(updates.quantityReceived) < 0
-        ) {
-            return res.status(400).json({
-                message: "Quantity received cannot be negative."
-            });
-        }
-
-        if (updates.quantityNeeded !== undefined) {
-            updates.quantityNeeded = Number(
-                updates.quantityNeeded
-            );
-        }
-
-        if (updates.quantityReceived !== undefined) {
-            updates.quantityReceived = Number(
-                updates.quantityReceived
-            );
-        }
-
-        const currentSupply =
-            await NeededSupply.findById(id);
-
-        if (!currentSupply) {
-            return res.status(404).json({
-                message: "Needed supply not found."
-            });
-        }
-
-        const finalNeeded =
-            updates.quantityNeeded !== undefined
-                ? updates.quantityNeeded
-                : currentSupply.quantityNeeded;
-
-        const finalReceived =
-            updates.quantityReceived !== undefined
-                ? updates.quantityReceived
-                : currentSupply.quantityReceived;
-
-        if (
-            updates.status === undefined &&
-            finalReceived >= finalNeeded
-        ) {
-            updates.status = "fulfilled";
-        }
-
-        const supply =
-            await NeededSupply.findByIdAndUpdate(
-                id,
-                updates,
-                {
-                    new: true,
-                    runValidators: true
-                }
-            );
-
-        return res.status(200).json({
-            message: "Needed supply updated successfully.",
-            supply
-        });
-    } catch (error) {
-        return res.status(500).json({
-            message: "Failed to update needed supply.",
-            error: error.message
+    if (!mongoose.isValidObjectId(supplyId)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid supply ID.",
         });
     }
+
+    const supply = await NeededSupply.findById(
+        supplyId
+    );
+
+    if (!supply) {
+        return res.status(404).json({
+            success: false,
+            message: "Supply requirement not found.",
+        });
+    }
+
+    const allowedFields = [
+        "shelter",
+        "item",
+        "quantityNeeded",
+        "quantityReceived",
+        "notes",
+        "status",
+    ];
+
+    for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+            supply[field] = req.body[field];
+        }
+    }
+
+    if (
+        supply.quantityNeeded < 1 ||
+        supply.quantityReceived < 0
+    ) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid supply quantities.",
+        });
+    }
+
+    if (
+        req.body.status === undefined ||
+        req.body.status !== "cancelled"
+    ) {
+        updateSupplyStatus(supply);
+    }
+
+    await supply.save();
+
+    return res.status(200).json({
+        success: true,
+        message: "Supply requirement updated successfully.",
+        supply,
+    });
 };
 
-exports.deleteNeededSupply = async (req, res) => {
-    try {
-        const { id } = req.params;
+exports.deleteSupply = async (req, res) => {
+    const supplyId = String(
+        req.params.id || ""
+    ).trim();
 
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).json({
-                message: "Invalid needed supply ID."
-            });
-        }
-
-        const supply =
-            await NeededSupply.findByIdAndDelete(id);
-
-        if (!supply) {
-            return res.status(404).json({
-                message: "Needed supply not found."
-            });
-        }
-
-        return res.status(200).json({
-            message: "Needed supply deleted successfully."
-        });
-    } catch (error) {
-        return res.status(500).json({
-            message: "Failed to delete needed supply.",
-            error: error.message
+    if (!mongoose.isValidObjectId(supplyId)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid supply ID.",
         });
     }
-}
+
+    const supply = await NeededSupply.findByIdAndDelete(
+        supplyId
+    );
+
+    if (!supply) {
+        return res.status(404).json({
+            success: false,
+            message: "Supply requirement not found.",
+        });
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Supply requirement deleted successfully.",
+    });
+};

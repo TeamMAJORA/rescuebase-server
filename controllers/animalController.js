@@ -94,33 +94,25 @@ exports.createAnimal = async (req, res) => {
     const animal = await Animal.create({
         name,
         type,
-
         breed: String(req.body.breed || "").trim(),
         age,
-
         gender: String(
             req.body.gender || "Unknown"
         ).trim(),
-
         size: String(
             req.body.size || "Unknown"
         ).trim(),
-
         color: String(req.body.color || "").trim(),
         image: String(req.body.image || "").trim(),
-
         description: String(
             req.body.description || ""
         ).trim(),
-
         medicalStatus: String(
             req.body.medicalStatus || ""
         ).trim(),
-
         behaviorNotes: String(
             req.body.behaviorNotes || ""
         ).trim(),
-
         energyLevel: req.body.energyLevel ?? null,
         friendliness: req.body.friendliness ?? null,
         humanSociability: req.body.humanSociability ?? null,
@@ -129,38 +121,28 @@ exports.createAnimal = async (req, res) => {
         anxietyLevel: req.body.anxietyLevel ?? null,
         aggressionLevel: req.body.aggressionLevel ?? null,
         activityLevel: req.body.activityLevel ?? null,
-
         intakeDate: req.body.intakeDate || Date.now(),
-
         intakeCondition: String(
             req.body.intakeCondition || "Unknown"
         ).trim(),
-
         intakeType: String(
             req.body.intakeType || "Rescued"
         ).trim(),
-
         rescuedBy: String(
             req.body.rescuedBy || ""
         ).trim(),
-
-        // All newly created records require review.
         intakeStatus: "pending",
-
-        // Pending animals must not be publicly available.
         availabilityStatus: "unavailable",
         adoptionStatus: "available",
-
         fosterStatus: String(
             req.body.fosterStatus || "none"
         ).trim(),
-
         location: String(
             req.body.location || "RescueBase Shelter"
         ).trim(),
-
+        latitude: req.body.latitude ?? null,
+        longitude: req.body.longitude ?? null,
         rejectionReason: "",
-
         createdByName: adminName,
         createdByEmail: adminEmail,
     });
@@ -203,8 +185,6 @@ exports.getAllAnimals = async (req, res) => {
             req.query.intakeStatus
         ).trim();
     } else {
-        // Hide pending and rejected records from public browsing.
-        // Existing records without intakeStatus remain visible.
         filter.$or = [
             {
                 intakeStatus: "approved",

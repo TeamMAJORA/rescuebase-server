@@ -1,30 +1,36 @@
+
 const express = require("express");
 
 const router = express.Router();
-
+const paymentMethodController = require("../controllers/paymentMethodController");
 const asyncHandler = require("../middleware/asyncHandler");
 const verifyToken = require("../middleware/verifyToken");
 const authoriseRoles = require("../middleware/authoriseRoles");
 
-const neededSupplyController = require(
-    "../controllers/neededSupplyController"
-);
-
 router.get(
     "/",
     verifyToken,
-    authoriseRoles("admin", "staff", "foster", "adopter", "volunteer"),
+    authoriseRoles("admin", "staff","adopter"),
     asyncHandler(
-        neededSupplyController.getAllSupplies
+        paymentMethodController.getPaymentMethods
+    )
+);
+
+router.get(
+    "/all",
+    verifyToken,
+    authoriseRoles("admin", "staff", "adopter"),
+    asyncHandler(
+        paymentMethodController.getAllPaymentMethods
     )
 );
 
 router.post(
     "/",
     verifyToken,
-    authoriseRoles("admin", "staff"),
+    authoriseRoles("admin", "staff", "adopter"),
     asyncHandler(
-        neededSupplyController.createSupply
+        paymentMethodController.createPaymentMethod
     )
 );
 
@@ -33,7 +39,7 @@ router.patch(
     verifyToken,
     authoriseRoles("admin", "staff"),
     asyncHandler(
-        neededSupplyController.updateSupply
+        paymentMethodController.updatePaymentMethod
     )
 );
 
@@ -42,7 +48,7 @@ router.delete(
     verifyToken,
     authoriseRoles("admin"),
     asyncHandler(
-        neededSupplyController.deleteSupply
+        paymentMethodController.deletePaymentMethod
     )
 );
 

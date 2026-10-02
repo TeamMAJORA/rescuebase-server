@@ -311,6 +311,56 @@ async function sendRescueAssignmentEmail(email, title, message) {
     });
 }
 
+async function sendDonationConfirmationEmail({
+    donorName,
+    donorEmail,
+    donation,
+}) {
+    if (!donorEmail) {
+        console.log(
+            "No donor email provided. Skipping confirmation email."
+        );
+        return;
+    }
+
+    await transporter.sendMail({
+        from: `"RescueBase" <${process.env.EMAIL_USER}>`,
+        to: donorEmail,
+        subject: "RescueBase Donation Confirmation",
+        html: `
+            <h2>Thank you, ${donorName}!</h2>
+
+            <p>
+                Your donation request has been submitted
+                successfully.
+            </p>
+
+            <p>
+                <strong>Donation Type:</strong>
+                ${donation.donationType}
+            </p>
+
+            <p>
+                <strong>Item/Purpose:</strong>
+                ${donation.itemName}
+            </p>
+
+            <p>
+                <strong>Quantity/Amount:</strong>
+                ${donation.quantity}
+            </p>
+
+            <p>
+                Our shelter staff will review your donation.
+            </p>
+
+            <p>
+                Thank you for supporting RescueBase!
+            </p>
+        `,
+    });
+}
+
 module.exports = {
     sendOtpEmail,
     sendPasswordResetEmail,
@@ -323,4 +373,5 @@ module.exports = {
     sendLostFoundClaimEmail,
     sendLostFoundReunitedEmail,
     sendRescueAssignmentEmail,
+    sendDonationConfirmationEmail
 };

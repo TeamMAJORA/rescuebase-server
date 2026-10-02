@@ -428,7 +428,7 @@ exports.forgotPassword = async (req, res) => {
         user.email,
         resetOtp
     );
-    
+
     return res.status(200).json({
         success: true,
         message:
