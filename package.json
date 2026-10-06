@@ -7,7 +7,7 @@
     "express": "^5.2.1",
     "firebase": "^12.19.0",
     "firebase-admin": "^14.1.0",
-    "mongoose": "^9.7.3",
+    "mongoose": "^9.11.0",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
     "qrcode": "^1.5.4",
