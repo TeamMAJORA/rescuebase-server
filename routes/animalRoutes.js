@@ -12,7 +12,7 @@ const animalController = require("../controllers/animalController");
     router.post(
         "/",
         verifyToken,
-        authoriseRoles("admin"),
+        authoriseRoles("admin", "staff", "volunteer"),
         validateRequest(["name", "type"]),
         asyncHandler(animalController.createAnimal)
     );
