@@ -31,6 +31,8 @@ const suppliesRoutes = require("./routes/neededSuppliesRoutes");
 const matchmakingRoutes = require("./routes/matchmakingRoutes");
 const paymentMethodRoutes = require("./routes/paymentMethodRoutes");
 const qrTagRoutes = require("./routes/qrTagRoutes");
+const vaccinationRoutes = require("./routes/vaccinationRoutes");
+const startVaccinationReminders = require("./jobs/vaccinationReminders");
 
 //Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -86,6 +88,7 @@ app.use("/api/supplies", suppliesRoutes);
 app.use("/api/matchmaking", matchmakingRoutes);
 app.use("/api/payment-methods", paymentMethodRoutes);
 app.use("/api/qr-tags", qrTagRoutes);
+app.use("/api/vaccinations", vaccinationRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);
