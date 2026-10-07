@@ -148,6 +148,12 @@ exports.createAnimal = async (req, res) => {
             : String(
                 req.body.fosterStatus || "none"
             ).trim(), //forda foster status of the animal new status is none, in_foster, completed
+        intakeStatus: "pending_review",
+        availabilityStatus: "unavailable",
+        adoptionStatus: "available",
+        fosterStatus: String(
+            req.body.fosterStatus || "none"
+        ).trim(),
         location: String(
             req.body.location || "RescueBase Shelter"
         ).trim(),
@@ -225,7 +231,7 @@ exports.getAllAnimals = async (req, res) => {
 
 exports.getPendingIntakes = async (req, res) => {
     const intakes = await Animal.find({
-        intakeStatus: "pending",
+        intakeStatus: "pending_review",
     }).sort({
         createdAt: -1,
     });
@@ -292,6 +298,17 @@ exports.approveIntake = async (req, res) => {
         throw error;
     }
 
+    if (animal.intakeStatus !== "pending_review") {
+        const error = new Error(
+            "This intake is not awaiting review."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    animal.intakeStatus = "rejected";
+    animal.availabilityStatus = "unavailable";
+    animal.rejectionReason = reason;
     animal.intakeStatus = "approved";
     animal.availabilityStatus = "available";
     animal.adoptionStatus = "available";

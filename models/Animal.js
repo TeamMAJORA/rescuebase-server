@@ -171,8 +171,8 @@ const animalSchema = new mongoose.Schema(
 
         intakeStatus: {
             type: String,
-            enum: ["pending", "approved", "rejected"],
-            default: "pending",
+            enum: ["pending_review", "approved", "rejected"],
+            default: "pending_review",
         },
 
         intakeType: {
