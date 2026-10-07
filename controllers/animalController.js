@@ -138,24 +138,14 @@ exports.createAnimal = async (req, res) => {
         rescuedBy: String(
             req.body.rescuedBy || ""
         ).trim(),
-                intakeStatus: autoApprove ? "approved" : "pending",
+        intakeStatus: autoApprove ? "approved" : "pending_review",
         availabilityStatus: autoApprove
             ? String(req.body.availabilityStatus || "available").trim()
             : "unavailable",
         adoptionStatus: autoApprove
             ? String(req.body.adoptionStatus || "available").trim()
             : "available",
-        fosterStatus: autoApprove
-            ? String(req.body.fosterStatus || "none").trim()
-            : String(
-                req.body.fosterStatus || "none"
-            ).trim(), //forda foster status of the animal new status is none, in_foster, completed
-        intakeStatus: "pending_review",
-        availabilityStatus: "unavailable",
-        adoptionStatus: "available",
-        fosterStatus: String(
-            req.body.fosterStatus || "none"
-        ).trim(),
+        fosterStatus: String(req.body.fosterStatus || "none").trim(),
         location: String(
             req.body.location || "RescueBase Shelter"
         ).trim(),
