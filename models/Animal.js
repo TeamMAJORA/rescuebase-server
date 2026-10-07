@@ -185,6 +185,17 @@ const animalSchema = new mongoose.Schema(
             ],
             default: "Rescued",
         },
+                sourceLocation: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        intakeNotes: {
+            type: String,
+            default: "",
+            trim: true,
+        },
 
         rescuedBy: {
             type: String,

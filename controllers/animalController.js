@@ -84,6 +84,9 @@ exports.createAnimal = async (req, res) => {
         error.statusCode = 401;
         throw error;
     }
+        // Admin and staff entries are approved right awayalso the volunteer entries wait for reviewz
+    const creatorRole = String(adminUser.role || "").toLowerCase();
+    const autoApprove = ["admin", "staff"].includes(creatorRole);
 
     const adminName = String(
         adminUser.name ||
@@ -128,9 +131,23 @@ exports.createAnimal = async (req, res) => {
         intakeType: String(
             req.body.intakeType || "Rescued"
         ).trim(),
+        sourceLocation: String(req.body.sourceLocation || "").trim(),//forda source location of the animal if available
+        intakeNotes: String(req.body.intakeNotes || "").trim(),
         rescuedBy: String(
             req.body.rescuedBy || ""
         ).trim(),
+                intakeStatus: autoApprove ? "approved" : "pending",
+        availabilityStatus: autoApprove
+            ? String(req.body.availabilityStatus || "available").trim()
+            : "unavailable",
+        adoptionStatus: autoApprove
+            ? String(req.body.adoptionStatus || "available").trim()
+            : "available",
+        fosterStatus: autoApprove
+            ? String(req.body.fosterStatus || "none").trim()
+            : String(
+                req.body.fosterStatus || "none"
+            ).trim(), //forda foster status of the animal new status is none, in_foster, completed
         intakeStatus: "pending_review",
         availabilityStatus: "unavailable",
         adoptionStatus: "available",
@@ -147,10 +164,15 @@ exports.createAnimal = async (req, res) => {
         createdByEmail: adminEmail,
     });
 
+        if (autoApprove && animal.availabilityStatus === "available") {
+        await notifyAdoptersAboutAnimal(animal);
+    }
+
     return res.status(201).json({
         success: true,
-        message:
-            "Animal intake record created and submitted for review.",
+        message: autoApprove
+            ? "Animal profile created."
+            : "Animal intake record created and submitted for review.",// forda message to show that the animal intake record has been created and submitted for review
         animal,
     });
 };
@@ -401,6 +423,8 @@ exports.updateAnimal = async (req, res) => {
         "intakeDate",
         "intakeCondition",
         "intakeType",
+        "sourceLocation",//new
+        "intakeNotes",
         "rescuedBy",
         "availabilityStatus",
         "adoptionStatus",

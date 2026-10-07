@@ -8,6 +8,13 @@ const authoriseRoles = require("../middleware/authoriseRoles");
 const validateRequest = require("../middleware/validateRequest");
 
 const animalController = require("../controllers/animalController");
+
+    router.post(//new route for creating an animal profile or intake record forda volunteeru
+    "/",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    validateRequest(["name", "type"]),
+    asyncHandler(animalController.createAnimal)
 -
     router.post(
         "/",
