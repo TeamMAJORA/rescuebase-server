@@ -5,6 +5,8 @@ const Notification = require("../models/Notifications");
 const {
     sendPetAvailableEmail,
 } = require("../services/emailService");
+//new route for personality service to get the personality traits of the animal
+const { withPersonality } = require("../services/personalityService");
 
 async function notifyAdoptersAboutAnimal(animal) {
     const adopters = await User.find({
@@ -173,7 +175,7 @@ exports.createAnimal = async (req, res) => {
         message: autoApprove
             ? "Animal profile created."
             : "Animal intake record created and submitted for review.",// forda message to show that the animal intake record has been created and submitted for review
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -225,7 +227,7 @@ exports.getAllAnimals = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        animals,
+        animals: animals.map(withPersonality),
     });
 };
 
@@ -238,7 +240,7 @@ exports.getPendingIntakes = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        intakes,
+        intakes: intakes.map(withPersonality),
     });
 };
 
@@ -265,7 +267,7 @@ exports.getAnimalById = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -322,7 +324,7 @@ exports.approveIntake = async (req, res) => {
         success: true,
         message:
             "Animal intake approved successfully.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -370,7 +372,7 @@ exports.rejectIntake = async (req, res) => {
     return res.status(200).json({
         success: true,
         message: "Animal intake rejected.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -518,7 +520,7 @@ exports.updateAnimal = async (req, res) => {
         success: true,
         message:
             "Animal profile updated successfully.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
