@@ -7,115 +7,82 @@ const gisController = require("../controllers/gisController");
 
 router.get(
     "/public",
-    asyncHandler(
-        gisController.getPublicLocations
-    )
+    asyncHandler(gisController.getPublicLocations)
+);
+
+router.get(
+    "/shelters",
+    asyncHandler(gisController.getShelters)
 );
 
 router.post(
     "/stray-sightings",
     verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff",
-        "volunteer"
-    ),
-    asyncHandler(
-        gisController.createStraySighting
-    )
+    authorizeRoles("admin", "staff", "volunteer"),
+    asyncHandler(gisController.createStraySighting)
 );
 
 router.get(
     "/hotspots",
     verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff"
-    ),
-    asyncHandler(
-        gisController.getHotspotAnalysis
-    )
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.getHotspotAnalysis)
 );
 
+router.post(
+    "/shelters",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.createShelter)
+);
+
+router.patch(
+    "/shelters/:id",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.updateShelter)
+);
 
 router.post(
     "/",
     verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff"
-    ),
-    asyncHandler(
-        gisController.createLocation
-    )
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.createLocation)
 );
-
 
 router.get(
     "/",
     verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff"
-    ),
-    asyncHandler(
-        gisController.getAllLocations
-    )
-);
-
-router.get(
-    "/:id",
-    verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff"
-    ),
-    asyncHandler(
-        gisController.getLocationById
-    )
-);
-
-router.patch(
-    "/:id",
-    verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff"
-    ),
-    asyncHandler(
-        gisController.updateLocation
-    )
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.getAllLocations)
 );
 
 router.patch(
     "/:id/resolve",
     verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff"
-    ),
-    asyncHandler(
-        gisController.resolveLocation
-    )
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.resolveLocation)
 );
 
 router.get(
-    "/shelters",
-    asyncHandler(
-        gisController.getShelters
-    )
+    "/:id",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.getLocationById)
+);
+
+router.patch(
+    "/:id",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.updateLocation)
 );
 
 router.delete(
     "/:id",
     verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff"
-    ),
-    asyncHandler(
-        gisController.deleteLocation
-    )
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.deleteLocation)
 );
 
 module.exports = router;
