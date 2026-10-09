@@ -708,3 +708,209 @@ exports.getShelters = async (req, res) => {
         shelters,
     });
 };
+
+
+exports.createShelter = async (req, res) => {
+    const name = String(req.body.name || "").trim();
+    const address = String(req.body.address || "").trim();
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+
+    const contact = String(req.body.contact || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const description = String(req.body.description || "").trim();
+
+    if (!name) {
+        const error = new Error("Shelter name is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!address) {
+        const error = new Error("Shelter address is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (
+        req.body.latitude === undefined ||
+        req.body.latitude === "" ||
+        !Number.isFinite(latitude) ||
+        latitude < -90 ||
+        latitude > 90
+    ) {
+        const error = new Error("Invalid shelter latitude.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (
+        req.body.longitude === undefined ||
+        req.body.longitude === "" ||
+        !Number.isFinite(longitude) ||
+        longitude < -180 ||
+        longitude > 180
+    ) {
+        const error = new Error("Invalid shelter longitude.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const shelter = await Shelter.create({
+        name,
+        address,
+        latitude,
+        longitude,
+        contact,
+        email,
+        description,
+        status: "active",
+    });
+
+    return res.status(201).json({
+        success: true,
+        message: "Shelter created successfully.",
+        shelter,
+    });
+};
+
+
+exports.updateShelter = async (req, res) => {
+    const shelterId = String(req.params.id || "").trim();
+
+    if (!mongoose.isValidObjectId(shelterId)) {
+        const error = new Error("Invalid shelter ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const allowedFields = [
+        "name",
+        "address",
+        "latitude",
+        "longitude",
+        "contact",
+        "email",
+        "description",
+        "status",
+    ];
+
+    const updates = {};
+
+    for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+            updates[field] = req.body[field];
+        }
+    }
+
+    if (Object.keys(updates).length === 0) {
+        const error = new Error("No valid fields provided for update.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (updates.name !== undefined) {
+        updates.name = String(updates.name).trim();
+
+        if (!updates.name) {
+            const error = new Error("Shelter name cannot be empty.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.address !== undefined) {
+        updates.address = String(updates.address).trim();
+
+        if (!updates.address) {
+            const error = new Error("Shelter address cannot be empty.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.latitude !== undefined) {
+        if (updates.latitude === "") {
+            const error = new Error("Shelter latitude is required.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        updates.latitude = Number(updates.latitude);
+
+        if (
+            !Number.isFinite(updates.latitude) ||
+            updates.latitude < -90 ||
+            updates.latitude > 90
+        ) {
+            const error = new Error("Invalid shelter latitude.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.longitude !== undefined) {
+        if (updates.longitude === "") {
+            const error = new Error("Shelter longitude is required.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        updates.longitude = Number(updates.longitude);
+
+        if (
+            !Number.isFinite(updates.longitude) ||
+            updates.longitude < -180 ||
+            updates.longitude > 180
+        ) {
+            const error = new Error("Invalid shelter longitude.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.contact !== undefined) {
+        updates.contact = String(updates.contact).trim();
+    }
+
+    if (updates.email !== undefined) {
+        updates.email = String(updates.email).trim().toLowerCase();
+    }
+
+    if (updates.description !== undefined) {
+        updates.description = String(updates.description).trim();
+    }
+
+    if (updates.status !== undefined) {
+        updates.status = String(updates.status).trim().toLowerCase();
+
+        if (!["active", "inactive"].includes(updates.status)) {
+            const error = new Error(
+                "Shelter status must be active or inactive."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const shelter = await Shelter.findByIdAndUpdate(
+        shelterId,
+        { $set: updates },
+        {
+            new: true,
+            runValidators: true,
+        }
+    );
+
+    if (!shelter) {
+        const error = new Error("Shelter not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Shelter updated successfully.",
+        shelter,
+    });
+};
