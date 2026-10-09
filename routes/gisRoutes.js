@@ -85,4 +85,11 @@ router.delete(
     asyncHandler(gisController.deleteLocation)
 );
 
+router.get(
+    "/shelters/manage",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(gisController.getAllShelters)
+);
+
 module.exports = router;

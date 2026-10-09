@@ -914,3 +914,13 @@ exports.updateShelter = async (req, res) => {
         shelter,
     });
 };
+
+exports.getAllShelters = async (req, res) => {
+    const shelters = await Shelter.find({})
+        .sort({ name: 1 });
+
+    return res.status(200).json({
+        success: true,
+        shelters,
+    });
+};
