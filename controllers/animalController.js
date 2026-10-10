@@ -404,6 +404,8 @@ exports.updateAnimal = async (req, res) => {
         "description",
         "medicalStatus",
         "behaviorNotes",
+        "behaviorAssessedBy",
+        "behaviorAssessedAt",
         "energyLevel",
         "friendliness",
         "humanSociability",

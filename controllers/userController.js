@@ -23,6 +23,25 @@ exports.getAllUsers = async (req, res) => {
 };
 
 
+// Only returns name + role, so staff can see it without exposing account details.
+exports.getStaffList = async (req, res) => {
+    const staff = await User.find({
+        role: { $in: ["staff", "admin"] },
+        status: "active",
+    })
+        .select("name username role")
+        .sort({ role: -1, name: 1 });
+
+    return res.status(200).json({
+        success: true,
+        staff: staff.map((user) => ({
+            _id: user._id,
+            name: user.name || user.username || "Unnamed",
+            role: user.role,
+        })),
+    });
+};
+
 exports.updateUser = async (req, res) => {
     const allowedFields = [
         "name",
