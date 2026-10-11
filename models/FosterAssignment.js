@@ -4,6 +4,13 @@ const fosterUpdateSchema = new mongoose.Schema(
     {
         note: String,
         photoUrl: String,
+        // Weekly care report details
+        healthStatus: { type: String, default: "", trim: true },
+        appetite: { type: String, default: "", trim: true },
+        behavior: { type: String, default: "", trim: true },
+        weight: { type: Number, default: null },
+        medication: { type: Boolean, default: false },
+        exercise: { type: Boolean, default: false },
         submittedBy: String,
         submittedByEmail: String,
     },
@@ -106,6 +113,18 @@ const medicalRequestSchema = new mongoose.Schema(
             type: String,
             enum: ["Low", "Medium", "High", "Emergency"],
             default: "Medium",
+        },
+
+        issueType: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        photoUrl: {
+            type: String,
+            default: "",
+            trim: true,
         },
 
         status: {
