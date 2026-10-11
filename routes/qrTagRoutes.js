@@ -11,7 +11,7 @@ const qrTagController = require(
 router.get(
     "/",
     verifyToken,
-    authorizeRoles("admin"),
+    authorizeRoles("admin", "staff"),//updated to allow staff to view qr tags
     asyncHandler(
         qrTagController.getAllQRTags
     )
@@ -20,7 +20,7 @@ router.get(
 router.post(
     "/generate",
     verifyToken,
-    authorizeRoles("admin"),
+    authorizeRoles("admin", "staff"),
     asyncHandler(
         qrTagController.generateQRTag
     )
@@ -36,7 +36,7 @@ router.get(
 router.post(
     "/:id/regenerate",
     verifyToken,
-    authorizeRoles("admin"),
+    authorizeRoles("admin", "staff"),
     asyncHandler(
         qrTagController.regenerateQRTag
     )
@@ -45,7 +45,7 @@ router.post(
 router.delete(
     "/:id",
     verifyToken,
-    authorizeRoles("admin"),
+    authorizeRoles("admin", "staff"),
     asyncHandler(
         qrTagController.deleteQRTag
     )

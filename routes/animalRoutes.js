@@ -8,11 +8,18 @@ const authoriseRoles = require("../middleware/authoriseRoles");
 const validateRequest = require("../middleware/validateRequest");
 
 const animalController = require("../controllers/animalController");
--
+
+    router.post(
+    "/",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    validateRequest(["name", "type"]),
+    asyncHandler(animalController.createAnimal)
+    );
     router.post(
         "/",
         verifyToken,
-        authoriseRoles("admin"),
+        authoriseRoles("admin", "staff", "volunteer"),
         validateRequest(["name", "type"]),
         asyncHandler(animalController.createAnimal)
     );

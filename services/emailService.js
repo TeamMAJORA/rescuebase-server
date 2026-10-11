@@ -361,10 +361,58 @@ async function sendDonationConfirmationEmail({
     });
 }
 
+async function sendRoleApplicationEmail(
+    email,
+    status,
+    targetRole,
+    rejectionReason = ""
+) {
+    const approved = status === "approved";
+
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: approved
+            ? "RescueBase Role Application Approved"
+            : "RescueBase Role Application Rejected",
+
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>RescueBase Role Application Update</h2>
+
+                <p>
+                    Your application to become a
+                    <strong>${targetRole}</strong> has been
+                    <strong>${status}</strong>.
+                </p>
+
+                ${
+                    !approved && rejectionReason
+                        ? `
+                            <p>
+                                <strong>Reason:</strong>
+                                ${rejectionReason}
+                            </p>
+                        `
+                        : ""
+                }
+
+                <p>
+                    Please log in to RescueBase to view
+                    the latest details.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
 module.exports = {
     sendOtpEmail,
     sendPasswordResetEmail,
     sendApplicationUpdateEmail,
+    sendRoleApplicationEmail,
     sendDonationConfirmationEmail,
     sendFosterUpdateEmail,
     sendVaccinationReminderEmail,
@@ -373,5 +421,4 @@ module.exports = {
     sendLostFoundClaimEmail,
     sendLostFoundReunitedEmail,
     sendRescueAssignmentEmail,
-    sendDonationConfirmationEmail
 };

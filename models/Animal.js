@@ -66,6 +66,17 @@ const animalSchema = new mongoose.Schema(
             trim: true,
         },
 
+        behaviorAssessedBy: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        behaviorAssessedAt: {
+            type: Date,
+            default: null,
+        },
+
         energyLevel: {
             type: Number,
             enum: [1, 2, 3, 4, 5, null],
@@ -171,8 +182,8 @@ const animalSchema = new mongoose.Schema(
 
         intakeStatus: {
             type: String,
-            enum: ["pending", "approved", "rejected"],
-            default: "pending",
+            enum: ["pending_review", "approved", "rejected"],
+            default: "pending_review",
         },
 
         intakeType: {
@@ -184,6 +195,17 @@ const animalSchema = new mongoose.Schema(
                 "Stray",
             ],
             default: "Rescued",
+        },
+                sourceLocation: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        intakeNotes: {
+            type: String,
+            default: "",
+            trim: true,
         },
 
         rescuedBy: {

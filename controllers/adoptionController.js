@@ -51,147 +51,99 @@ exports.submitApplication = async (req, res) => {
     });
 
     if (existingPendingApplication) {
-        const error = new Error("You already have a pending adoption application.");
+        const error = new Error(
+            "You already have a pending adoption application."
+        );
         error.statusCode = 409;
         throw error;
     }
 
-    const animalExists = await Animal.exists({ _id: animalId, });
+    const animal = await Animal.findOne({
+        _id: animalId,
+        availabilityStatus: "available",
+        adoptionStatus: "available",
+    }).lean();
 
-    if (!animalExists) {
-        const error = new Error("Animal not found.");
-        error.statusCode = 404;
-        throw error;
-    }
+    if (!animal) {
+        const animalExists = await Animal.exists({ _id: animalId });
 
-    const reservedAnimal = await Animal.findOneAndUpdate(
-        {
-            _id: animalId,
-            availabilityStatus: "available",
-            adoptionStatus: "available",
-        },
-        {
-            $set: {
-                availabilityStatus: "unavailable",
-                adoptionStatus: "pending",
-            },
-        },
-        {
-            new: true,
-            runValidators: true,
-        }
-    );
-
-    if (!reservedAnimal) {
-        const error = new Error("This animal is no longer available for adoption.");
-        error.statusCode = 409;
-        throw error;
-    }
-
-    let applicationCreated = false;
-
-    try {
-        const documents = Array.isArray(req.body.documents)
-            ? req.body.documents.map(
-                (document) => ({
-                    documentName: String(document?.documentName || "").trim(),
-
-                    documentUrl: String(document?.documentUrl || ""),
-
-                    publicId: String(document?.publicId || ""),
-
-                    status: "pending",
-                })
-            )
-            : [];
-
-        const application = await AdoptionApplication.create({
-            applicantUserId,
-            fullName,
-            email,
-            phone: String(req.body.phone || "").trim(),
-            address: String(req.body.address || "").trim(),
-            animalId: reservedAnimal._id,
-            petName: reservedAnimal.name,
-            petBreed: reservedAnimal.breed || "",
-            petImage: reservedAnimal.image || "",
-            homeType: String(req.body.homeType || "").trim(),
-            hasChildren: String(req.body.hasChildren || "").trim(),
-            hasOtherPets: String(req.body.hasOtherPets || "").trim(),
-            reason: String(req.body.reason || "").trim(),
-            experience: String(req.body.experience || "").trim(),
-            documents,
-            documentsVerified: false,
-            role: "adopter",
-            status: "pending",
-        });
-
-        applicationCreated = true;
-
-        await createLedgerEntrySafely({
-            type: "adoption",
-            action: "application_submitted",
-            actorName: application.fullName,
-            actorEmail: application.email,
-            targetType: "AdoptionApplication",
-            targetId: application._id.toString(),
-            description: `${application.fullName} submitted an adoption application for ${application.petName}.`,
-            status: "pending",
-            metadata: {
-                animalId: application.animalId.toString(),
-                petName: application.petName,
-                petBreed: application.petBreed,
-                applicantEmail: application.email,
-            },
-        });
-
-        await Notification.create({
-            user: application.applicantUserId,
-            title: "Adoption Application Submitted",
-            message:
-                `Your adoption application for ${application.petName} has been submitted and is pending review.`,
-            type: "application_update",
-        });
-
-        await sendApplicationUpdateEmail(
-            application.email,
-            "pending",
-            "adoption"
+        const error = new Error(
+            animalExists
+                ? "This animal is no longer available for adoption."
+                : "Animal not found."
         );
 
-        return res.status(201).json({
-            success: true,
-            message: "Adoption application submitted.",
-            application,
-        });
-    } catch (error) {
-        if (!applicationCreated) {
-            try {
-                await Animal.findOneAndUpdate(
-                    {
-                        _id:
-                            reservedAnimal._id,
-
-                        adoptionStatus:
-                            "pending",
-                    },
-                    {
-                        $set: {
-                            adoptionStatus:
-                                "available",
-
-                            availabilityStatus:
-                                "available",
-                        },
-                    },
-                );
-            } catch (rollbackError) {
-                console.error("Animal reservation rollback error.");
-                rollbackError
-            }
-        }
+        error.statusCode = animalExists ? 409 : 404;
         throw error;
     }
+
+    const documents = Array.isArray(req.body.documents)
+        ? req.body.documents.map((document) => ({
+            documentName: String(document?.documentName || "").trim(),
+            documentUrl: String(document?.documentUrl || ""),
+            publicId: String(document?.publicId || ""),
+            status: "pending",
+        }))
+        : [];
+
+    const application = await AdoptionApplication.create({
+        applicantUserId,
+        fullName,
+        email,
+        phone: String(req.body.phone || "").trim(),
+        address: String(req.body.address || "").trim(),
+        animalId: animal._id,
+        petName: animal.name,
+        petBreed: animal.breed || "",
+        petImage: animal.image || "",
+        homeType: String(req.body.homeType || "").trim(),
+        hasChildren: String(req.body.hasChildren || "").trim(),
+        hasOtherPets: String(req.body.hasOtherPets || "").trim(),
+        reason: String(req.body.reason || "").trim(),
+        experience: String(req.body.experience || "").trim(),
+        documents,
+        documentsVerified: false,
+        role: "adopter",
+        status: "pending",
+    });
+
+    await createLedgerEntrySafely({
+        type: "adoption",
+        action: "application_submitted",
+        actorName: application.fullName,
+        actorEmail: application.email,
+        targetType: "AdoptionApplication",
+        targetId: application._id.toString(),
+        description:
+            `${application.fullName} submitted an adoption application for ${application.petName}.`,
+        status: "pending",
+        metadata: {
+            animalId: application.animalId.toString(),
+            petName: application.petName,
+            petBreed: application.petBreed,
+            applicantEmail: application.email,
+        },
+    });
+
+    await Notification.create({
+        user: application.applicantUserId,
+        title: "Adoption Application Submitted",
+        message:
+            `Your adoption application for ${application.petName} has been submitted and is pending review.`,
+        type: "application_update",
+    });
+
+    await sendApplicationUpdateEmail(
+        application.email,
+        "pending",
+        "adoption"
+    );
+
+    return res.status(201).json({
+        success: true,
+        message: "Adoption application submitted.",
+        application,
+    });
 };
 
 exports.getAllApplications = async (req, res) => {
@@ -228,19 +180,19 @@ exports.getLatestUserApplication = async (req, res) => {
     });
 };
 
+
+
 exports.updateApplicationStatus = async (req, res) => {
     const applicationId = String(req.params.id || "").trim();
     const status = String(req.body.status || "").trim().toLowerCase();
     const reviewNotes = String(req.body.reviewNotes || "").trim();
 
-    if (status === "rejected" && !reviewNotes) {
-        const error = new Error(
-            "A rejection reason is required."
-        );
-
-        error.statusCode = 400;
-        throw error;
-    }
+    const allowedStatuses = [
+        "interview_scheduled",
+        "interview_completed",
+        "approved",
+        "rejected",
+    ];
 
     if (!mongoose.isValidObjectId(applicationId)) {
         const error = new Error("Invalid Application ID.");
@@ -248,30 +200,64 @@ exports.updateApplicationStatus = async (req, res) => {
         throw error;
     }
 
-    if (!["approved", "rejected"].includes(status)) {
-        const error = new Error("Invalid application status.");
+    if (!allowedStatuses.includes(status)) {
+        const error = new Error(
+            `Invalid application status: "${status || "(empty)"}".`
+        );
         error.statusCode = 400;
         throw error;
+    }
+
+    if (status === "rejected" && !reviewNotes) {
+        const error = new Error("A rejection reason is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    let interviewDate = null;
+
+    if (status === "interview_scheduled") {
+        if (!req.body.interviewSchedule) {
+            const error = new Error("An interview date and time are required.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        interviewDate = new Date(req.body.interviewSchedule);
+
+        if (
+            Number.isNaN(interviewDate.getTime()) ||
+            interviewDate <= new Date()
+        ) {
+            const error = new Error(
+                "Interview date and time must be a valid future date."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
     }
 
     const adminId = req.user?.id;
     const adminEmail = String(req.user?.email || "").trim().toLowerCase();
 
     if (!adminId || !adminEmail) {
-        const error = new Error("Authenticated administrator information is missing.");
+        const error = new Error("Authenticated staff information is missing.");
         error.statusCode = 401;
         throw error;
     }
 
-    const adminUser = await User.findById(adminId).select("name username email role");
+    const adminUser = await User.findById(adminId)
+        .select("name username email role");
 
     if (!adminUser) {
-        const error = new Error("Authenticated administrator account was not found.");
+        const error = new Error("Staff account was not found.");
         error.statusCode = 401;
         throw error;
     }
 
-    const adminName = String(adminUser.name || adminUser.username || "Admin User").trim();
+    const adminName = String(
+        adminUser.name || adminUser.username || "Staff User"
+    ).trim();
 
     const application = await AdoptionApplication.findById(applicationId);
 
@@ -282,50 +268,146 @@ exports.updateApplicationStatus = async (req, res) => {
     }
 
     if (!application.animalId) {
-        const error = new Error("This application is not connected to an animal record.");
+        const error = new Error("Application is not connected to an animal.");
         error.statusCode = 400;
         throw error;
     }
 
-    if (application.status !== "pending") {
-        const error = new Error(
-            `This application has already been ${application.status}.`
-        );
 
+    const allowedTransitions = {
+        pending: ["interview_scheduled", "rejected"],
+        interview_scheduled: [
+            "interview_scheduled", // Allow rescheduling
+            "interview_completed",
+            "rejected",
+        ],
+        interview_completed: ["approved", "rejected"],
+    };
+
+    if (!allowedTransitions[application.status]?.includes(status)) {
+        const error = new Error(
+            `Cannot change application from ${application.status} to ${status}.`
+        );
         error.statusCode = 409;
         throw error;
     }
 
-    const animal = await Animal.findById(application.animalId);
+    const animalExists = await Animal.exists({
+        _id: application.animalId,
+    });
 
-    if (!animal) {
-        const error = new Error("Connect animal record not found.");
+    if (!animalExists) {
+        const error = new Error("Animal record not found.");
         error.statusCode = 404;
         throw error;
     }
 
+    const previousStatus = application.status;
+    const previousReview = {
+        reviewedByName: application.reviewedByName,
+        reviewedByEmail: application.reviewedByEmail,
+        reviewNotes: application.reviewNotes,
+        rejectionReason: application.rejectionReason,
+        reviewedAt: application.reviewedAt,
+        interviewSchedule: application.interviewSchedule,
+    };
+
+    let adoptedAnimal = null;
+
     if (status === "approved") {
-        animal.adoptionStatus = "adopted";
-        animal.availabilityStatus = "unavailable";
-
-        await animal.save();
-
-        const otherPendingApplications =
-            await AdoptionApplication.find({
-                _id: {
-                    $ne: application._id,
+        adoptedAnimal = await Animal.findOneAndUpdate(
+            {
+                _id: application.animalId,
+                availabilityStatus: "available",
+                adoptionStatus: "available",
+            },
+            {
+                $set: {
+                    adoptionStatus: "adopted",
+                    availabilityStatus: "unavailable",
                 },
-                animalId: application.animalId,
-                status: "pending",
-            });
+            },
+            {
+                new: true,
+                runValidators: true,
+            }
+        );
+
+        if (!adoptedAnimal) {
+            const error = new Error(
+                "This pet is no longer available for adoption."
+            );
+            error.statusCode = 409;
+            throw error;
+        }
+    }
+
+    application.status = status;
+    application.reviewedByName = adminName;
+    application.reviewedByEmail = adminEmail;
+    application.reviewNotes = reviewNotes;
+
+    if (status === "interview_scheduled") {
+        application.interviewSchedule = interviewDate;
+    }
+
+    if (status === "rejected") {
+        application.rejectionReason = reviewNotes;
+        application.reviewedAt = new Date();
+    }
+
+    if (status === "approved") {
+        application.reviewedAt = new Date();
+        application.rejectionReason = "";
+    }
+
+    try {
+        await application.save();
+    } catch (saveError) {
+        if (adoptedAnimal) {
+            try {
+                await Animal.updateOne(
+                    {
+                        _id: application.animalId,
+                        adoptionStatus: "adopted",
+                        availabilityStatus: "unavailable",
+                    },
+                    {
+                        $set: {
+                            adoptionStatus: "available",
+                            availabilityStatus: "available",
+                        },
+                    }
+                );
+            } catch (rollbackError) {
+                console.error(
+                    "CRITICAL: Failed to restore animal availability:",
+                    rollbackError
+                );
+            }
+        }
+
+        throw saveError;
+    }
+
+    if (status === "approved") {
+        const activeStatuses = [
+            "pending",
+            "interview_scheduled",
+            "interview_completed",
+        ];
+
+        const otherApplications = await AdoptionApplication.find({
+            _id: { $ne: application._id },
+            animalId: application.animalId,
+            status: { $in: activeStatuses },
+        });
 
         await AdoptionApplication.updateMany(
             {
-                _id: {
-                    $ne: application._id,
-                },
+                _id: { $ne: application._id },
                 animalId: application.animalId,
-                status: "pending",
+                status: { $in: activeStatuses },
             },
             {
                 $set: {
@@ -334,76 +416,93 @@ exports.updateApplicationStatus = async (req, res) => {
                     reviewedByEmail: adminEmail,
                     reviewNotes:
                         "Another adoption application was approved.",
+                    rejectionReason:
+                        "Another adoption application was approved.",
                     reviewedAt: new Date(),
                 },
             }
         );
 
-        for (const otherApplication of otherPendingApplications) {
-            await Notification.create({
-                user: otherApplication.applicantUserId,
-                title: "Adoption Application Update",
-                message:
-                    `Your application for ${otherApplication.petName} ` +
-                    "was rejected because another application was approved.",
-                type: "application_update",
-            });
+        for (const other of otherApplications) {
+            try {
+                await Notification.create({
+                    user: other.applicantUserId,
+                    title: "Adoption Application Update",
+                    message:
+                        `Your application for ${other.petName} was closed ` +
+                        "because another application was approved.",
+                    type: "application_update",
+                });
 
+                await sendApplicationUpdateEmail(
+                    other.email,
+                    "rejected",
+                    "adoption"
+                );
+            } catch (notificationError) {
+                console.error(
+                    "Failed to notify another applicant:",
+                    notificationError
+                );
+            }
+        }
+    }
+
+    let notificationMessage;
+
+    switch (status) {
+        case "interview_scheduled":
+            notificationMessage =
+                `Your interview for ${application.petName} is scheduled for ` +
+                `${application.interviewSchedule.toLocaleString()}.`;
+            break;
+
+        case "interview_completed":
+            notificationMessage =
+                `Your interview for ${application.petName} has been completed. ` +
+                "The final decision is pending.";
+            break;
+
+        case "approved":
+            notificationMessage =
+                `Your adoption application for ${application.petName} ` +
+                "has been approved.";
+            break;
+
+        case "rejected":
+            notificationMessage =
+                `Your adoption application for ${application.petName} ` +
+                `was rejected. Reason: ${reviewNotes}`;
+            break;
+    }
+
+    try {
+        await Notification.create({
+            user: application.applicantUserId,
+            title: "Adoption Application Update",
+            message: notificationMessage,
+            type: "application_update",
+        });
+
+        if (status === "interview_scheduled") {
+            await sendInterviewScheduleEmail(
+                application.email,
+                application.interviewSchedule.toLocaleDateString(),
+                application.interviewSchedule.toLocaleTimeString()
+            );
+        } else if (status === "approved" || status === "rejected") {
             await sendApplicationUpdateEmail(
-                otherApplication.email,
-                "rejected",
+                application.email,
+                status,
                 "adoption"
             );
         }
+    } catch (notificationError) {
+        console.error(
+            "Failed to notify adoption applicant:",
+            notificationError
+        );
     }
-
-    if (status === "rejected") {
-        const anotherPendingApplication = await AdoptionApplication.exists({
-            _id: {
-                $ne: application._id,
-            },
-            animalId: application.animalId,
-            status: "pending",
-        });
-
-        if (anotherPendingApplication) {
-            animal.adoptionStatus = "pending";
-            animal.availabilityStatus = "unavailable";
-        } else {
-            animal.adoptionStatus = "available";
-            animal.availabilityStatus = "available";
-        }
-
-        await animal.save();
-    }
-
-    if (status === "pending") {
-        animal.adoptionStatus = "pending";
-        animal.availabilityStatus = "unavailable";
-
-        await animal.save();
-    }
-
-    application.status = status;
-    application.reviewedByName = adminName;
-    application.reviewedByEmail = adminEmail;
-    application.reviewNotes = reviewNotes;
-    application.reviewedAt = status === "pending" ? null : new Date();
-    application.interviewSchedule = status === "approved" ? req.body.interviewSchedule || null : null;
-
-    await application.save();
-
-    await Notification.create({
-        user: application.applicantUserId,
-        title: "Adoption Application Update",
-        message:
-            `Your adoption application for ${application.petName} ` +
-            `has been ${status}.` +
-            (status === "rejected" ? ` Reason: ${reviewNotes}` : ""),
-        type: "application_update",
-    });
-
-    await application.populate("animalId", "name type breed age gender size image availabilityStatus adoptionStatus");
 
     await createLedgerEntrySafely({
         type: "adoption",
@@ -413,36 +512,26 @@ exports.updateApplicationStatus = async (req, res) => {
         targetType: "AdoptionApplication",
         targetId: application._id.toString(),
         description:
-            `Admin ${status} the adoption application of ` +
-            `${application.fullName} for ${application.petName}.`,
-
+            `${adminName} changed the application for ` +
+            `${application.petName} to ${status}.`,
         status,
         metadata: {
-            animalId: String(
-                application.animalId?._id || ""
-            ),
+            animalId: application.animalId.toString(),
             petName: application.petName,
-            petBreed: application.petBreed,
             applicantEmail: application.email,
-            interviewSchedule:
-                status === "approved"
-                    ? application.interviewSchedule
-                    : null,
+            interviewSchedule: application.interviewSchedule,
         },
     });
 
-    if (["approved", "rejected"].includes(status)) {
-        await sendApplicationUpdateEmail(
-            application.email,
-            status,
-            "adoption"
-        );
-    }
+    await application.populate(
+        "animalId",
+        "name type breed age gender size image availabilityStatus adoptionStatus"
+    );
 
     return res.status(200).json({
         success: true,
-        message: `Application ${status} successfully.`,
+        message: `Application updated to ${status}.`,
         application,
-        animal,
-    })
-}
+        animal: application.animalId,
+    });
+};

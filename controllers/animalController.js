@@ -5,6 +5,8 @@ const Notification = require("../models/Notifications");
 const {
     sendPetAvailableEmail,
 } = require("../services/emailService");
+//new route for personality service to get the personality traits of the animal
+const { withPersonality } = require("../services/personalityService");
 
 async function notifyAdoptersAboutAnimal(animal) {
     const adopters = await User.find({
@@ -84,6 +86,9 @@ exports.createAnimal = async (req, res) => {
         error.statusCode = 401;
         throw error;
     }
+        // Admin and staff entries are approved right awayalso the volunteer entries wait for reviewz
+    const creatorRole = String(adminUser.role || "").toLowerCase();
+    const autoApprove = ["admin", "staff"].includes(creatorRole);
 
     const adminName = String(
         adminUser.name ||
@@ -128,15 +133,19 @@ exports.createAnimal = async (req, res) => {
         intakeType: String(
             req.body.intakeType || "Rescued"
         ).trim(),
+        sourceLocation: String(req.body.sourceLocation || "").trim(),//forda source location of the animal if available
+        intakeNotes: String(req.body.intakeNotes || "").trim(),
         rescuedBy: String(
             req.body.rescuedBy || ""
         ).trim(),
-        intakeStatus: "pending",
-        availabilityStatus: "unavailable",
-        adoptionStatus: "available",
-        fosterStatus: String(
-            req.body.fosterStatus || "none"
-        ).trim(),
+        intakeStatus: autoApprove ? "approved" : "pending_review",
+        availabilityStatus: autoApprove
+            ? String(req.body.availabilityStatus || "available").trim()
+            : "unavailable",
+        adoptionStatus: autoApprove
+            ? String(req.body.adoptionStatus || "available").trim()
+            : "available",
+        fosterStatus: String(req.body.fosterStatus || "none").trim(),
         location: String(
             req.body.location || "RescueBase Shelter"
         ).trim(),
@@ -147,11 +156,16 @@ exports.createAnimal = async (req, res) => {
         createdByEmail: adminEmail,
     });
 
+        if (autoApprove && animal.availabilityStatus === "available") {
+        await notifyAdoptersAboutAnimal(animal);
+    }
+
     return res.status(201).json({
         success: true,
-        message:
-            "Animal intake record created and submitted for review.",
-        animal,
+        message: autoApprove
+            ? "Animal profile created."
+            : "Animal intake record created and submitted for review.",// forda message to show that the animal intake record has been created and submitted for review
+        animal: withPersonality(animal),
     });
 };
 
@@ -203,20 +217,20 @@ exports.getAllAnimals = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        animals,
+        animals: animals.map(withPersonality),
     });
 };
 
 exports.getPendingIntakes = async (req, res) => {
     const intakes = await Animal.find({
-        intakeStatus: "pending",
+        intakeStatus: "pending_review",
     }).sort({
         createdAt: -1,
     });
 
     return res.status(200).json({
         success: true,
-        intakes,
+        intakes: intakes.map(withPersonality),
     });
 };
 
@@ -243,7 +257,7 @@ exports.getAnimalById = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -276,6 +290,17 @@ exports.approveIntake = async (req, res) => {
         throw error;
     }
 
+    if (animal.intakeStatus !== "pending_review") {
+        const error = new Error(
+            "This intake is not awaiting review."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    animal.intakeStatus = "rejected";
+    animal.availabilityStatus = "unavailable";
+    animal.rejectionReason = reason;
     animal.intakeStatus = "approved";
     animal.availabilityStatus = "available";
     animal.adoptionStatus = "available";
@@ -289,7 +314,7 @@ exports.approveIntake = async (req, res) => {
         success: true,
         message:
             "Animal intake approved successfully.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -337,7 +362,7 @@ exports.rejectIntake = async (req, res) => {
     return res.status(200).json({
         success: true,
         message: "Animal intake rejected.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -379,6 +404,8 @@ exports.updateAnimal = async (req, res) => {
         "description",
         "medicalStatus",
         "behaviorNotes",
+        "behaviorAssessedBy",
+        "behaviorAssessedAt",
         "energyLevel",
         "friendliness",
         "humanSociability",
@@ -390,6 +417,8 @@ exports.updateAnimal = async (req, res) => {
         "intakeDate",
         "intakeCondition",
         "intakeType",
+        "sourceLocation",//new
+        "intakeNotes",
         "rescuedBy",
         "availabilityStatus",
         "adoptionStatus",
@@ -483,7 +512,7 @@ exports.updateAnimal = async (req, res) => {
         success: true,
         message:
             "Animal profile updated successfully.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 

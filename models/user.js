@@ -60,7 +60,7 @@ const userSchema = new mongoose.Schema(
         roleApplication: {
             targetRole: {
                 type: String,
-                enum: ["volunteer", "foster", null],
+                enum: ["adopter", "volunteer", "foster", "staff", "admin"],
                 default: null,
             },
 

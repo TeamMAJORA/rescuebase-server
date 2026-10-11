@@ -1,6 +1,11 @@
 const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const cleanUser = require("../utils/cleanUser");
+const Notification = require("../models/Notifications");
+
+const {
+    sendRoleApplicationEmail,
+} = require("../services/emailService");
 
 exports.getAllUsers = async (req, res) => {
     const users = await User.find()
@@ -17,6 +22,25 @@ exports.getAllUsers = async (req, res) => {
     });
 };
 
+
+// Only returns name + role, so staff can see it without exposing account details.
+exports.getStaffList = async (req, res) => {
+    const staff = await User.find({
+        role: { $in: ["staff", "admin"] },
+        status: "active",
+    })
+        .select("name username role")
+        .sort({ role: -1, name: 1 });
+
+    return res.status(200).json({
+        success: true,
+        staff: staff.map((user) => ({
+            _id: user._id,
+            name: user.name || user.username || "Unnamed",
+            role: user.role,
+        })),
+    });
+};
 
 exports.updateUser = async (req, res) => {
     const allowedFields = [
@@ -289,6 +313,16 @@ exports.reviewRoleApplication = async (req, res) => {
             });
         }
 
+        if (
+            decision === "rejected" &&
+            !String(rejectionReason).trim()
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "A rejection reason is required.",
+            });
+        }
+
         const user = await User.findById(id);
 
         if (!user) {
@@ -305,7 +339,8 @@ exports.reviewRoleApplication = async (req, res) => {
             });
         }
 
-        const applicationRole = user.roleApplication.targetRole;
+        const applicationRole =
+            user.roleApplication.targetRole;
 
         if (decision === "approved") {
             user.role = applicationRole;
@@ -323,6 +358,32 @@ exports.reviewRoleApplication = async (req, res) => {
 
         await user.save();
 
+        // Create in-app notification
+        await Notification.create({
+            user: user._id,
+            title:
+                decision === "approved"
+                    ? "Role Application Approved"
+                    : "Role Application Rejected",
+            message:
+                decision === "approved"
+                    ? `Your application to become a ${applicationRole} has been approved.`
+                    : `Your application to become a ${applicationRole} was rejected. Reason: ${String(
+                          rejectionReason
+                      ).trim()}`,
+            type: "application_update",
+        });
+
+        // Send email notification
+        if (user.email) {
+            await sendRoleApplicationEmail(
+                user.email,
+                decision,
+                applicationRole,
+                rejectionReason
+            );
+        }
+
         return res.json({
             success: true,
             message: `Application ${decision} successfully.`,
@@ -330,7 +391,10 @@ exports.reviewRoleApplication = async (req, res) => {
             role: user.role,
         });
     } catch (error) {
-        console.error("Review role application error:", error);
+        console.error(
+            "Review role application error:",
+            error
+        );
 
         return res.status(500).json({
             success: false,
