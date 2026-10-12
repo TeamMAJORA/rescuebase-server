@@ -561,6 +561,19 @@ exports.submitAssignmentUpdate = async (req, res) => {
             req.body.photoUrl || ""
         ).trim(),
 
+        // Weekly care report details (optional)
+        healthStatus: String(req.body.healthStatus || "").trim(),
+        appetite: String(req.body.appetite || "").trim(),
+        behavior: String(req.body.behavior || "").trim(),
+        weight:
+            req.body.weight === "" ||
+            req.body.weight === undefined ||
+            Number.isNaN(Number(req.body.weight))
+                ? null
+                : Number(req.body.weight),
+        medication: Boolean(req.body.medication),
+        exercise: Boolean(req.body.exercise),
+
         submittedBy:
             String(
                 req.user?.email || ""
@@ -1301,6 +1314,8 @@ exports.submitMedicalRequest = async (req, res) => {
     assignment.medicalRequests.push({
         issue,
         urgency,
+        issueType: String(req.body.issueType || "").trim(),
+        photoUrl: String(req.body.photoUrl || "").trim(),
         status: "pending",
         submittedBy:
             String(

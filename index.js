@@ -32,6 +32,8 @@ const matchmakingRoutes = require("./routes/matchmakingRoutes");
 const paymentMethodRoutes = require("./routes/paymentMethodRoutes");
 const qrTagRoutes = require("./routes/qrTagRoutes");
 const vaccinationRoutes = require("./routes/vaccinationRoutes");
+const medicalRecordRoutes = require("./routes/medicalRecordRoutes");
+const animalTransferRoutes = require("./routes/animalTransferRoutes");
 const startVaccinationReminders = require("./jobs/vaccinationReminders");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const activityLogRoutes = require("./routes/activityLogRoutes");
@@ -92,7 +94,6 @@ app.use("/api/payment-methods", paymentMethodRoutes);
 app.use("/api/qr-tags", qrTagRoutes);
 app.use("/api/vaccinations", vaccinationRoutes);
 app.use("/api/analytics", analyticsRoutes);
-app.use("/api/activity-logs", activityLogRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);

@@ -19,6 +19,16 @@ router.get(
     )
 );
 
+// Names of active staff/admin accounts (used by "Assessed By" dropdowns)
+router.get(
+    "/staff",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        userController.getStaffList
+    )
+);
+
 
 router.patch(
     "/:id",
