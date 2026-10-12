@@ -47,12 +47,12 @@ exports.submitApplication = async (req, res) => {
 
     const existingPendingApplication = await AdoptionApplication.findOne({
         email,
-        status: "pending",
+        status: { $in: ["pending", "interview_scheduled", "interview_completed"] },
     });
 
     if (existingPendingApplication) {
         const error = new Error(
-            "You already have a pending adoption application."
+            "You already have an active adoption application."
         );
         error.statusCode = 409;
         throw error;
@@ -533,5 +533,77 @@ exports.updateApplicationStatus = async (req, res) => {
         message: `Application updated to ${status}.`,
         application,
         animal: application.animalId,
+    });
+};
+
+exports.withdrawApplication = async (req, res) => {
+    const applicationId = String(req.params.id || "").trim();
+    const email = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!mongoose.isValidObjectId(applicationId)) {
+        const error = new Error("Invalid Application ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    // Only the adopter who owns the application can withdraw it
+    const application = await AdoptionApplication.findOne({
+        _id: applicationId,
+        email,
+    });
+
+    if (!application) {
+        const error = new Error("Application not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const withdrawableStatuses = [
+        "pending",
+        "interview_scheduled",
+        "interview_completed",
+    ];
+
+    if (!withdrawableStatuses.includes(application.status)) {
+        const error = new Error(
+            `This application is already ${application.status} and can no longer be withdrawn.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const previousStatus = application.status;
+
+    application.status = "withdrawn";
+    application.withdrawnFromStatus = previousStatus;
+    application.withdrawnAt = new Date();
+    application.withdrawalReason = String(req.body?.reason || "")
+        .trim()
+        .slice(0, 300);
+
+    await application.save();
+
+    await createLedgerEntrySafely({
+        type: "adoption",
+        action: "application_withdrawn",
+        actorName: application.fullName,
+        actorEmail: application.email,
+        targetType: "AdoptionApplication",
+        targetId: application._id.toString(),
+        description:
+            `${application.fullName} withdrew their adoption application for ${application.petName}.`,
+        status: "withdrawn",
+        metadata: {
+            animalId: application.animalId.toString(),
+            petName: application.petName,
+            previousStatus,
+            reason: application.withdrawalReason,
+        },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: "Your application has been withdrawn.",
+        application,
     });
 };

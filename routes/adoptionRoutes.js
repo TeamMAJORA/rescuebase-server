@@ -48,4 +48,10 @@ router.patch("/:id/status",
     asyncHandler(adoptionController.updateApplicationStatus),
 );
 
+router.patch("/:id/withdraw",
+    verifyToken,
+    authoriseRoles("adopter"),
+    asyncHandler(adoptionController.withdrawApplication)
+);
+
 module.exports = router;

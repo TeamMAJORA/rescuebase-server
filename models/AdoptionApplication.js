@@ -134,7 +134,7 @@ const adoptionApplicationSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["pending", "interview_scheduled", "interview_completed" ,"approved", "rejected"],
+            enum: ["pending", "interview_scheduled", "interview_completed" ,"approved", "rejected", "withdrawn"],
             default: "pending",
         },
 
@@ -171,6 +171,22 @@ const adoptionApplicationSchema = new mongoose.Schema(
         interviewSchedule: {
             type: Date,
             default: null,
+        },
+
+        withdrawnAt: {
+            type: Date,
+            default: null,
+        },
+
+        withdrawnFromStatus: {
+            type: String,
+            default: "",
+        },
+
+        withdrawalReason: {
+            type: String,
+            default: "",
+            trim: true,
         },
     },
     {
