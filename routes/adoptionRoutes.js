@@ -41,11 +41,23 @@ router.get("/user/latest",
     asyncHandler(adoptionController.getLatestUserApplication)
 );
 
+router.get("/user/history",
+    verifyToken,
+    authoriseRoles("adopter"),
+    asyncHandler(adoptionController.getUserApplicationHistory)
+);
+
 router.patch("/:id/status",
     verifyToken,
     authoriseRoles("admin", "staff"),
     validateRequest(["status"]),
     asyncHandler(adoptionController.updateApplicationStatus),
+);
+
+router.patch("/:id/withdraw",
+    verifyToken,
+    authoriseRoles("adopter"),
+    asyncHandler(adoptionController.withdrawApplication)
 );
 
 module.exports = router;
