@@ -93,6 +93,10 @@ exports.createVaccination = async (
 
             veterinarian:
                 veterinarian || null,
+            
+            status: req.body.status || "Completed",
+
+            notes: String(req.body.notes || "").trim(),
         });
 
     await vaccination.populate(
@@ -254,6 +258,8 @@ exports.updateVaccination = async (
         "vaccination_date",
         "next_due_date",
         "veterinarian",
+        "status",
+        "notes",
     ];
 
     const updates = {};
