@@ -607,3 +607,28 @@ exports.withdrawApplication = async (req, res) => {
         application,
     });
 };
+
+exports.getUserApplicationHistory = async (req, res) => {
+    const email = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!email) {
+        const error = new Error("Authenticated user email is missing");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const applications = await AdoptionApplication.find({ email })
+        .select(
+            "petName petBreed petImage status createdAt updatedAt reviewedAt " +
+            "withdrawnAt interviewSchedule rejectionReason withdrawalReason animalId"
+        )
+        .populate("animalId", "name breed image")
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean();
+
+    return res.status(200).json({
+        success: true,
+        applications,
+    });
+};
