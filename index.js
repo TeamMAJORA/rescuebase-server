@@ -34,6 +34,7 @@ const qrTagRoutes = require("./routes/qrTagRoutes");
 const vaccinationRoutes = require("./routes/vaccinationRoutes");
 const startVaccinationReminders = require("./jobs/vaccinationReminders");
 const analyticsRoutes = require("./routes/analyticsRoutes");
+const activityLogRoutes = require("./routes/activityLogRoutes");
 
 //Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -91,6 +92,7 @@ app.use("/api/payment-methods", paymentMethodRoutes);
 app.use("/api/qr-tags", qrTagRoutes);
 app.use("/api/vaccinations", vaccinationRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/activity-logs", activityLogRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);
