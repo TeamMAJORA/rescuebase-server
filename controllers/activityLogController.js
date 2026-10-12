@@ -1,30 +1,32 @@
-const mongoose = require("mongoose");
 
+const mongoose = require("mongoose");
 const ActivityLog = require("../models/ActivityLog");
 
 exports.getActivityLogs = async (req, res) => {
-    const userId = String(
-        req.query.userId || ""
-    ).trim();
+    const userId = String(req.query.userId || "").trim();
+    const startDate = String(req.query.startDate || "").trim();
+    const endDate = String(req.query.endDate || "").trim();
 
-    const startDate = String(
-        req.query.startDate || ""
-    ).trim();
-
-    const endDate = String(
-        req.query.endDate || ""
-    ).trim();
+    const role = String(req.user?.role || "").toLowerCase();
+    const authenticatedUserId = String(req.user?.id || "");
 
     const filter = {};
 
-    if (userId) {
+    // Admin can view all logs, while other authorized users
+    // are restricted to their own activity.
+    if (role !== "admin") {
+        if (!mongoose.isValidObjectId(authenticatedUserId)) {
+            const error = new Error("Invalid authenticated user ID.");
+            error.statusCode = 401;
+            throw error;
+        }
+
+        // Ignore any userId supplied by a non-admin.
+        filter.user = authenticatedUserId;
+    } else if (userId) {
         if (!mongoose.isValidObjectId(userId)) {
-            const error = new Error(
-                "Invalid user ID."
-            );
-
+            const error = new Error("Invalid user ID.");
             error.statusCode = 400;
-
             throw error;
         }
 
@@ -35,55 +37,49 @@ exports.getActivityLogs = async (req, res) => {
         filter.activityDate = {};
 
         if (startDate) {
-            const parsedStartDate = new Date(
-                `${startDate}T00:00:00`
-            );
+            const parsedStartDate = new Date(`${startDate}T00:00:00`);
 
             if (Number.isNaN(parsedStartDate.getTime())) {
-                const error = new Error(
-                    "Invalid start date."
-                );
-
+                const error = new Error("Invalid start date.");
                 error.statusCode = 400;
-
                 throw error;
             }
 
-            filter.activityDate.$gte =
-                parsedStartDate;
+            filter.activityDate.$gte = parsedStartDate;
         }
 
         if (endDate) {
-            const parsedEndDate = new Date(
-                `${endDate}T23:59:59.999`
-            );
+            const parsedEndDate = new Date(`${endDate}T23:59:59.999`);
 
             if (Number.isNaN(parsedEndDate.getTime())) {
-                const error = new Error(
-                    "Invalid end date."
-                );
-
+                const error = new Error("Invalid end date.");
                 error.statusCode = 400;
-
                 throw error;
             }
 
-            filter.activityDate.$lte =
-                parsedEndDate;
+            filter.activityDate.$lte = parsedEndDate;
+        }
+
+        if (
+            filter.activityDate.$gte &&
+            filter.activityDate.$lte &&
+            filter.activityDate.$gte > filter.activityDate.$lte
+        ) {
+            const error = new Error("Start date cannot be after end date.");
+            error.statusCode = 400;
+            throw error;
         }
     }
 
     const logs = await ActivityLog.find(filter)
-        .populate(
-            "user",
-            "username name email role"
-        )
-        .sort({
-            activityDate: -1,
-        });
+        .populate("user", "username name email role")
+        .sort({ activityDate: -1 })
+        .limit(500)
+        .lean();
 
     return res.status(200).json({
         success: true,
+        count: logs.length,
         logs,
     });
 };
