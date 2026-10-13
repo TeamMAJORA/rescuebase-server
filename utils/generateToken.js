@@ -1,9 +1,10 @@
-
 const jwt = require("jsonwebtoken");
 
 function generateToken(user, sessionTimeoutMinutes = 120) {
     if (!user) {
-        throw new Error("User information is required to generate an auth token.");
+        throw new Error(
+            "User information is required to generate an auth token."
+        );
     }
 
     if (!process.env.JWT_SECRET) {
@@ -12,9 +13,13 @@ function generateToken(user, sessionTimeoutMinutes = 120) {
 
     const timeout = Number(sessionTimeoutMinutes);
 
-    if (!Number.isInteger(timeout) || timeout < 5 || timeout > 10080) {
+    if (
+        !Number.isInteger(timeout) ||
+        timeout < 5 ||
+        timeout > 10080
+    ) {
         throw new Error(
-            "Session timeout must be an integer between 5 and 10080 minutes."
+            "Session timeout must be between 5 and 10080 minutes."
         );
     }
 
@@ -24,11 +29,15 @@ function generateToken(user, sessionTimeoutMinutes = 120) {
         role: String(user.role).toLowerCase(),
     };
 
-    return jwt.sign(payload, process.env.JWT_SECRET, {
-        expiresIn: `${timeout}m`,
-        issuer: "RescueBase",
-        audience: "rescuebase-client",
-    });
+    return jwt.sign(
+        payload,
+        process.env.JWT_SECRET,
+        {
+            expiresIn: `${timeout}m`,
+            issuer: "RescueBase",
+            audience: "rescuebase-client",
+        }
+    );
 }
 
 module.exports = generateToken;
