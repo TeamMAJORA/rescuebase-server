@@ -1,6 +1,8 @@
-const jwt = require("jsonwebtoken");
 
-module.exports = function verifyToken(req, res, next) {
+const jwt = require("jsonwebtoken");
+const { getGlobalSettings } = require("../utils/globalSettings");
+
+module.exports = async function verifyToken(req, res, next) {
     try {
         const authHeader = req.headers.authorization;
 
@@ -28,10 +30,7 @@ module.exports = function verifyToken(req, res, next) {
         }
 
         if (!process.env.JWT_SECRET) {
-
-            console.error(
-                "JWT_SECRET is not configured."
-            );
+            console.error("JWT_SECRET is not configured.");
 
             return res.status(500).json({
                 success: false,
@@ -39,17 +38,33 @@ module.exports = function verifyToken(req, res, next) {
             });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET,
-            {
-                issuer: "RescueBase",
-                audience: "rescuebase-client",
-            }
-        );
+        const decoded = jwt.verify(token, process.env.JWT_SECRET, {
+            issuer: "RescueBase",
+            audience: "rescuebase-client",
+        });
 
-        if (!decoded || !decoded.id || !decoded.email || !decoded.role) {
+        if (
+            !decoded ||
+            !decoded.id ||
+            !decoded.email ||
+            !decoded.role ||
+            !decoded.iat
+        ) {
             return res.status(401).json({
                 success: false,
                 message: "Invalid authentication payload.",
+            });
+        }
+
+        const settings = await getGlobalSettings();
+        const timeoutMs =
+            settings.security.sessionTimeoutMinutes * 60 * 1000;
+        const issuedAtMs = decoded.iat * 1000;
+
+        if (Date.now() >= issuedAtMs + timeoutMs) {
+            return res.status(401).json({
+                success: false,
+                message: "Session has expired. Please log in again.",
             });
         }
 
@@ -68,16 +83,12 @@ module.exports = function verifyToken(req, res, next) {
             role,
         };
 
-        next();
-
+        return next();
     } catch (error) {
-
-        console.error("JWT Verification Failed:", {
-            name: error.name,
-            message: error.message,
-        });
-
-        if (error.name === "TokenExpiredError") {
+        if (
+            error.name === "TokenExpiredError" ||
+            error.message === "SESSION_EXPIRED"
+        ) {
             return res.status(401).json({
                 success: false,
                 message: "Session has expired. Please log in again.",
@@ -94,10 +105,7 @@ module.exports = function verifyToken(req, res, next) {
             });
         }
 
-        console.error(
-            "JWT Verification Error:",
-            error
-        );
+        console.error("JWT verification error:", error);
 
         return res.status(500).json({
             success: false,
