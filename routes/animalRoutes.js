@@ -16,13 +16,6 @@ const animalController = require("../controllers/animalController");
     validateRequest(["name", "type"]),
     asyncHandler(animalController.createAnimal)
     );
-    router.post(
-        "/",
-        verifyToken,
-        authoriseRoles("admin", "staff", "volunteer"),
-        validateRequest(["name", "type"]),
-        asyncHandler(animalController.createAnimal)
-    );
 
 router.get(
     "/",

@@ -95,6 +95,9 @@ app.use("/api/payment-methods", paymentMethodRoutes);
 app.use("/api/qr-tags", qrTagRoutes);
 app.use("/api/vaccinations", vaccinationRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/medical-records", medicalRecordRoutes);
+app.use("/api/animal-transfers", animalTransferRoutes);
+app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/settings", globalSettingsRoutes);
 
