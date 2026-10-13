@@ -13,7 +13,7 @@ const validateRequest = require("../middleware/validateRequest");
 const verifyToken = require("../middleware/verifyToken");
 const authoriseRoles = require("../middleware/authoriseRoles");
 
-router.post("/", 
+router.post("/",
     verifyToken,
     authoriseRoles("adopter"),
     validateRequest([
@@ -25,7 +25,7 @@ router.post("/",
     )
 );
 
-router.get("/", 
+router.get("/",
     verifyToken,
     authoriseRoles(
         "admin",
