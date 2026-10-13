@@ -157,6 +157,19 @@ const userSchema = new mongoose.Schema(
             default: null,
             select: false,
         },
+
+        passwordLoginAttempts: {
+            type: Number,
+            default: 0,
+            select: false,
+        },
+
+        passwordLoginLockedUntil: {
+            type: Date,
+            default: null,
+            select: false,
+        },
+
     },
     { timestamps: true }
 );
