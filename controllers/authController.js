@@ -349,7 +349,7 @@ exports.verifyLoginOtp = async (req, res) => {
             await user.save();
             const e = new Error("Too many incorrect OTP Attempts. Please try again later.");
             e.statusCode = 429;
-            throw error;
+            throw e;
         }
 
         await user.save();
