@@ -4,6 +4,8 @@ const User = require("../models/User");
 const generateOtp = require("../utils/generateOtp");
 const cleanUser = require("../utils/cleanUser");
 const generateToken = require("../utils/generateToken");
+const { getGlobalSettings } = require("../utils/globalSettings");
+const { validatePassword } = require("../utils/passwordPolicy");
 
 const {
     sendOtpEmail, sendPasswordResetEmail
@@ -45,11 +47,7 @@ exports.emailSignup = async (req, res) => {
         throw error;
     }
 
-    if (password.length < 6) {
-        const error = new Error("Passwords must be at least 6 characters.");
-        error.statusCode = 400;
-        throw error;
-    }
+    await validatePassword(password);
 
     const existingUser = await User.findOne({
         email
@@ -182,7 +180,12 @@ exports.verifyOtp = async (req, res) => {
     user.emailOtpExpires = null;
     user.emailOtpAttempts = 0;
     await user.save();
-    const token = generateToken(user);
+    const settings = await getGlobalSettings();
+
+    const token = generateToken(
+        user,
+        settings.security.sessionTimeoutMinutes
+    );
 
     return res.json({
         success: true,
@@ -232,12 +235,23 @@ exports.resendOtp = async (req, res) => {
     });
 };
 
+
 exports.emailLogin = async (req, res) => {
     const email = String(req.body.email || "").trim().toLowerCase();
     const password = String(req.body.password || "");
-    const user = await User.findOne({
-        email,
-    }).select("+password " + "+loginOtp " + "+loginOtpExpires " + "+loginOtpAttempts " + "+loginOtpLockedUntil ");
+
+    const settings = await getGlobalSettings();
+    const { maxLoginAttempts, lockoutMinutes } = settings.security;
+
+    const user = await User.findOne({ email }).select(
+        "+password " +
+        "+loginOtp " +
+        "+loginOtpExpires " +
+        "+loginOtpAttempts " +
+        "+loginOtpLockedUntil " +
+        "+passwordLoginAttempts " +
+        "+passwordLoginLockedUntil"
+    );
 
     if (!user) {
         const error = new Error("Invalid email or password.");
@@ -251,16 +265,56 @@ exports.emailLogin = async (req, res) => {
         throw error;
     }
 
-    const passwordMatches = await bcrypt.compare(password, user.password || "");
+    if (
+        user.passwordLoginLockedUntil &&
+        user.passwordLoginLockedUntil > new Date()
+    ) {
+        const error = new Error(
+            "Too many failed login attempts. Please try again later."
+        );
+        error.statusCode = 429;
+        throw error;
+    }
+
+    if (
+        user.passwordLoginLockedUntil &&
+        user.passwordLoginLockedUntil <= new Date()
+    ) {
+        user.passwordLoginLockedUntil = null;
+        user.passwordLoginAttempts = 0;
+    }
+
+    const passwordMatches = await bcrypt.compare(
+        password,
+        user.password || ""
+    );
 
     if (!passwordMatches) {
-        const error = new Error("Invalid email or password.");
-        error.statusCode = 401;
+        user.passwordLoginAttempts =
+            (user.passwordLoginAttempts || 0) + 1;
+
+        if (user.passwordLoginAttempts >= maxLoginAttempts) {
+            user.passwordLoginLockedUntil = new Date(
+                Date.now() + lockoutMinutes * 60 * 1000
+            );
+        }
+
+        await user.save();
+
+        const error = new Error(
+            user.passwordLoginLockedUntil
+                ? "Too many failed login attempts. Your account is temporarily locked."
+                : "Invalid email or password."
+        );
+
+        error.statusCode = user.passwordLoginLockedUntil ? 429 : 401;
         throw error;
     }
 
     if (!user.verified) {
-        const error = new Error("Please verify your email OTP before logging in");
+        const error = new Error(
+            "Please verify your email OTP before logging in."
+        );
         error.statusCode = 403;
         error.needsVerification = true;
         error.email = user.email;
@@ -273,6 +327,9 @@ exports.emailLogin = async (req, res) => {
         throw error;
     }
 
+    user.passwordLoginAttempts = 0;
+    user.passwordLoginLockedUntil = null;
+
     const loginOtp = generateOtp();
 
     user.loginOtp = loginOtp;
@@ -281,7 +338,6 @@ exports.emailLogin = async (req, res) => {
     user.loginOtpLockedUntil = null;
 
     await user.save();
-
     await sendOtpEmail(user.email, loginOtp);
 
     return res.status(200).json({
@@ -292,73 +348,106 @@ exports.emailLogin = async (req, res) => {
     });
 };
 
+
+
 exports.verifyLoginOtp = async (req, res) => {
     const email = String(req.body.email || "").trim().toLowerCase();
     const otp = String(req.body.otp || "").trim();
 
     if (!email || !otp) {
-        const e = new Error("Email and OTP are required.");
-        e.statusCode = 400;
-        throw e;
+        const error = new Error("Email and OTP are required.");
+        error.statusCode = 400;
+        throw error;
     }
 
-    const user = await User.findOne({ email, }).select("+loginOtp " + "+loginOtpExpires " + "+loginOtpAttempts " + "+loginOtpLockedUntil ");
+    const settings = await getGlobalSettings();
+    const { maxLoginAttempts, lockoutMinutes, sessionTimeoutMinutes } =
+        settings.security;
+
+    const user = await User.findOne({ email }).select(
+        "+loginOtp " +
+        "+loginOtpExpires " +
+        "+loginOtpAttempts " +
+        "+loginOtpLockedUntil"
+    );
 
     if (!user) {
-        const e = new Error("Invalid OTP.");
-        e.statusCode = 401;
-        throw e;
+        const error = new Error("Invalid OTP.");
+        error.statusCode = 401;
+        throw error;
     }
 
-    if (user.loginOtpLockedUntil && user.loginOtpLockedUntil > new Date()) {
-        const e = new Error("Too many incorrect OTP attempts. Please try again later.");
-        e.statusCode = 429;
-        throw e;
+    if (
+        user.loginOtpLockedUntil &&
+        user.loginOtpLockedUntil > new Date()
+    ) {
+        const error = new Error(
+            "Too many incorrect OTP attempts. Please try again later."
+        );
+        error.statusCode = 429;
+        throw error;
     }
 
-    if (user.loginOtpLockedUntil && user.loginOtpLockedUntil <= new Date()) {
+    if (
+        user.loginOtpLockedUntil &&
+        user.loginOtpLockedUntil <= new Date()
+    ) {
         user.loginOtpLockedUntil = null;
         user.loginOtpAttempts = 0;
     }
 
     if (!user.loginOtp || !user.loginOtpExpires) {
-        const e = new Error("No active login OTP found. Please log in again.");
-        e.statusCode = 400;
-        throw e;
+        const error = new Error(
+            "No active login OTP found. Please log in again."
+        );
+        error.statusCode = 400;
+        throw error;
     }
 
     if (user.loginOtpExpires < new Date()) {
         user.loginOtp = "";
         user.loginOtpExpires = null;
         user.loginOtpAttempts = 0;
+        user.loginOtpLockedUntil = null;
 
         await user.save();
-        const e = new Error("Login OTP has expired. Please login again.");
-        e.statusCode = 400;
-        throw e;
+
+        const error = new Error(
+            "Login OTP has expired. Please log in again."
+        );
+        error.statusCode = 400;
+        throw error;
     }
 
     if (user.loginOtp !== otp) {
-        user.loginOtpAttempts += 1;
+        user.loginOtpAttempts = (user.loginOtpAttempts || 0) + 1;
 
-        if (user.loginOtpAttempts >= 3) {
+        if (user.loginOtpAttempts >= maxLoginAttempts) {
             user.loginOtp = "";
             user.loginOtpExpires = null;
-            user.loginOtpLockedUntil = new Date(Date.now() + 15 * 60 * 1000);
+            user.loginOtpLockedUntil = new Date(
+                Date.now() + lockoutMinutes * 60 * 1000
+            );
 
             await user.save();
-            const e = new Error("Too many incorrect OTP Attempts. Please try again later.");
-            e.statusCode = 429;
-            throw e;
+
+            const error = new Error(
+                "Too many incorrect OTP attempts. Please try again later."
+            );
+            error.statusCode = 429;
+            throw error;
         }
 
         await user.save();
 
-        const remainingAttempts = 3 - user.loginOtpAttempts;
+        const remainingAttempts =
+            maxLoginAttempts - user.loginOtpAttempts;
 
-        const e = new Error(`Invalid OTP. ${remainingAttempts} attempt(s) remaining.`);
-        e.statusCode = 401;
-        throw e;
+        const error = new Error(
+            `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`
+        );
+        error.statusCode = 401;
+        throw error;
     }
 
     user.loginOtp = "";
@@ -368,15 +457,15 @@ exports.verifyLoginOtp = async (req, res) => {
 
     await user.save();
 
-    const token = generateToken(user);
+    const token = generateToken(user, sessionTimeoutMinutes);
 
     return res.status(200).json({
         success: true,
         message: "Login successful.",
         token,
         user: cleanUser(user),
-    })
-}
+    });
+};
 
 exports.forgotPassword = async (req, res) => {
     const email = String(
@@ -481,13 +570,7 @@ exports.resetPassword = async (req, res) => {
         throw e;
     }
 
-    if (password.length < 6) {
-        const e = new Error(
-            "Password must be at least 6 characters."
-        );
-        e.statusCode = 400;
-        throw e;
-    }
+    await validatePassword(password);
 
     const user = await User.findOne({
         passwordResetToken: otp,
@@ -576,7 +659,12 @@ exports.googleSignup = async (req, res) => {
         status: "active",
     });
 
-    const token = generateToken(user);
+    const settings = await getGlobalSettings();
+
+    const token = generateToken(
+        user,
+        settings.security.sessionTimeoutMinutes
+    );
 
     return res.status(200).json({
         success: true,
@@ -672,13 +760,7 @@ exports.adminCreateUser = async (req, res) => {
         throw error;
     }
 
-    if (password.length < 6) {
-        const error = new Error(
-            "Password must be at least 6 characters."
-        );
-        error.statusCode = 400;
-        throw error;
-    }
+    await validatePassword(password);
 
     if (!allowedRoles.includes(role)) {
         const error = new Error("Invalid user role.");
