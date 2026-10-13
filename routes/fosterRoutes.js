@@ -130,7 +130,7 @@ router.patch(
 router.delete(
     "/assignments/:id",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.deleteAssignment
     )
