@@ -43,7 +43,7 @@ router.get(
 router.patch(
     "/applications/:id/status",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.reviewApplication
     )
@@ -53,7 +53,7 @@ router.patch(
 router.post(
     "/assignments",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.createAssignment
     )
@@ -101,7 +101,7 @@ router.post(
 router.patch(
     "/assignments/:id/behavior-evaluation/accept",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.acceptBehaviorEvaluation
     )
@@ -110,7 +110,7 @@ router.patch(
 router.patch(
     "/assignments/:id/complete",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.completeAssignment
     )
@@ -120,7 +120,7 @@ router.patch(
 router.patch(
     "/assignments/:id",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.updateAssignment
     )
