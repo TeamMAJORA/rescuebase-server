@@ -23,7 +23,7 @@ router.post(
 router.get(
     "/applications",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.getAllApplications
     )
@@ -63,7 +63,7 @@ router.post(
 router.get(
     "/assignments",
     verifyToken,
-    authoriseRoles("admin", "volunteer"),
+    authoriseRoles("admin", "staff", "volunteer"),
     asyncHandler(
         fosterController.getAllAssignments
     )
