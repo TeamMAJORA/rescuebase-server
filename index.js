@@ -8,6 +8,7 @@ const {
 const admin = require("firebase-admin");
 const securityGuard = require("./middleware/securityGuard");
 const errorhandler = require("./middleware/errorHandler")
+const maintenanceMode = require("./middleware/maintenenceMode");
 
 dotenv.config();
 
@@ -64,6 +65,7 @@ app.use(cors({
 
 app.use(express.json());
 app.use(securityGuard);
+app.use(maintenanceMode);
 
 initializeApp({
     credential: cert(serviceAccount),
