@@ -8,7 +8,7 @@ const {
 const admin = require("firebase-admin");
 const securityGuard = require("./middleware/securityGuard");
 const errorhandler = require("./middleware/errorHandler")
-const maintenanceMode = require("./middleware/maintenenceMode");
+const maintenanceMode = require("./middleware/maintenanceMode");
 
 dotenv.config();
 
