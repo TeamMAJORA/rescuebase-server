@@ -10,7 +10,7 @@ const fosterController = require("../controllers/fosterController");
 router.post(
     "/applications",
     verifyToken,
-    authoriseRoles("foster"),
+    authoriseRoles("adopter", "foster"),
     validateRequest([
         "applicantName",
     ]),
@@ -33,7 +33,7 @@ router.get(
 router.get(
     "/applications/me",
     verifyToken,
-    authoriseRoles("foster"),
+    authoriseRoles("adopter", "foster"),
     asyncHandler(
         fosterController.getMyApplications
     )

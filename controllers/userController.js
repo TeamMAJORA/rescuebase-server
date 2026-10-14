@@ -208,7 +208,8 @@ exports.submitRoleApplication = async (req, res) => {
         const userId = req.user.id || req.user._id;
         const { targetRole, reason } = req.body;
 
-        if (!["volunteer", "foster"].includes(targetRole)) {
+        // Foster now applies through the full foster form
+        if (targetRole !== "volunteer") {
             return res.status(400).json({
                 success: false,
                 message: "Invalid application role.",

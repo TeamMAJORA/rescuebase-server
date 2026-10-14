@@ -169,6 +169,17 @@ exports.reviewApplication = async (req, res) => {
         throw error;
     }
 
+
+    // A reason is required to reject; the applicant sees it
+    if (
+        status === "rejected" &&
+        !String(req.body.reviewNotes || "").trim()
+    ) {
+        const error = new Error("A rejection reason is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const adminId = req.user?.id;
     const adminEmail = String(
         req.user?.email || ""
@@ -227,6 +238,11 @@ exports.reviewApplication = async (req, res) => {
                         status === "pending"
                             ? null
                             : new Date(),
+
+                    rejectionReason:
+                        status === "rejected"
+                            ? String(req.body.reviewNotes || "").trim()
+                            : "",
                 },
             },
             {
@@ -269,6 +285,33 @@ exports.reviewApplication = async (req, res) => {
                 application.reviewNotes,
         },
     });
+
+    // adopter to foster role upgrade if approved
+    if (application.status === "approved") {
+        await User.updateOne(
+            { email: application.applicantEmail, role: "adopter" },
+            { $set: { role: "foster" } }
+        );
+    }
+
+    if (application.status === "rejected") {
+        const stillApproved = await FosterApplication.exists({
+            applicantEmail: application.applicantEmail,
+            status: "approved",
+        });
+
+        const activeAssignments = await FosterAssignment.countDocuments({
+            fosterEmail: application.applicantEmail,
+            status: "active",
+        });
+
+        if (!stillApproved && activeAssignments === 0) {
+            await User.updateOne(
+                { email: application.applicantEmail, role: "foster" },
+                { $set: { role: "adopter" } }
+            );
+        }
+    }
 
     if (
         ["approved", "rejected"].includes(
