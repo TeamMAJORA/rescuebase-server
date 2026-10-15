@@ -136,6 +136,7 @@ const fosterApplicationSchema = new mongoose.Schema(
                 "pending",
                 "approved",
                 "rejected",
+                "withdrawn",
             ],
             default: "pending",
         },
@@ -168,6 +169,17 @@ const fosterApplicationSchema = new mongoose.Schema(
         reviewedAt: {
             type: Date,
             default: null,
+        },
+
+        withdrawnAt: {
+            type: Date,
+            default: null,
+        },
+
+        withdrawnReason: {
+            type: String,
+            default: "",
+            trim: true,
         },
     },
     {

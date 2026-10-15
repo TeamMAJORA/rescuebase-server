@@ -333,6 +333,94 @@ exports.reviewApplication = async (req, res) => {
     });
 };
 
+// Applicant revokes their own foster application.
+// Pending  -> cancelled.
+// Approved -> they stop being a foster (only if no animals are in their care).
+exports.withdrawMyApplication = async (req, res) => {
+    const applicantEmail = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!applicantEmail) {
+        const e = new Error("Auth applicant email is missing.");
+        e.statusCode = 401;
+        throw e;
+    }
+
+    const application = await FosterApplication.findOne({
+        applicantEmail,
+        status: { $in: ["pending", "approved"] },
+    }).sort({ createdAt: -1 });
+
+    if (!application) {
+        const e = new Error("You have no pending or approved foster application to revoke.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    const wasApproved = application.status === "approved";
+
+    if (wasApproved) {
+        const activeAssignments = await FosterAssignment.countDocuments({
+            fosterEmail: applicantEmail,
+            status: "active",
+        });
+
+        if (activeAssignments > 0) {
+            const e = new Error(
+                `You still have ${activeAssignments} animal(s) in your care. Please contact the shelter to return them before revoking.`
+            );
+            e.statusCode = 400;
+            throw e;
+        }
+    }
+
+    application.status = "withdrawn";
+    application.withdrawnAt = new Date();
+    application.withdrawnReason = String(req.body.reason || "").trim();
+    await application.save();
+
+    // Go back to adopter only if no other approved application keeps the foster role
+    let roleChanged = false;
+
+    if (wasApproved) {
+        const stillApproved = await FosterApplication.exists({
+            applicantEmail,
+            status: "approved",
+        });
+
+        if (!stillApproved) {
+            const result = await User.updateOne(
+                { email: applicantEmail, role: "foster" },
+                { $set: { role: "adopter" } }
+            );
+            roleChanged = result.modifiedCount > 0;
+        }
+    }
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_application_withdrawn",
+        actorName: application.applicantName,
+        actorEmail: applicantEmail,
+        targetType: "FosterApplication",
+        targetId: application._id.toString(),
+        description: `${application.applicantName} revoked their ${wasApproved ? "approved" : "pending"} foster application.`,
+        status: "withdrawn",
+        metadata: {
+            reason: application.withdrawnReason,
+            roleChanged,
+        },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: wasApproved
+            ? "You are no longer a foster. Please log in again."
+            : "Your foster application was cancelled.",
+        application,
+        roleChanged,
+    });
+};
+
 exports.createAssignment = async (req, res) => {
     const fosterEmail = String(
         req.body.fosterEmail || ""
