@@ -8,6 +8,17 @@ const MedicalRequest = require("../models/MedicalRequest");
 const AdoptionApplication = require("../models/AdoptionApplication");
 const FosterAssignment = require("../models/FosterAssignment");
 const LostFoundReport = require("../models/LostFoundReport");
+const MedicalRecord = require("../models/MedicalRecord");
+const VaccinationRecord = require("../models/VaccinationRecord");
+
+// Animal id -> name, for records that only store the animal id
+async function animalNameMap(ids) {
+    const unique = [...new Set(ids.filter(Boolean).map(String))];
+    if (unique.length === 0) return {};
+
+    const animals = await Animal.find({ _id: { $in: unique } }).select("name").lean();
+    return Object.fromEntries(animals.map((animal) => [String(animal._id), animal.name]));
+}
 
 // ==================================================
 // HELPERS
@@ -210,6 +221,7 @@ function selectedDatasets(body = {}) {
         "adoption",
         "foster",
         "lost-found",
+        "vaccinations",
     ];
 
     if (!supportedTypes.includes(reportType)) {
@@ -244,6 +256,11 @@ function selectedDatasets(body = {}) {
             reportType === "lost-found" ||
             (reportType === "all" &&
                 body.includeLostFound !== false),
+
+        includeVaccinations:
+            reportType === "vaccinations" ||
+            (reportType === "all" &&
+                body.includeVaccinations !== false),
     };
 }
 
@@ -362,6 +379,7 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
         includeAdoptionApplications,
         includeFosterAssignments,
         includeLostFoundReports,
+        includeVaccinations,
     } = datasets;
 
     const exportData = {};
@@ -497,6 +515,40 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
                     updatedAt: request.updatedAt,
                 });
             }
+        }
+
+        // Clinic records from the Medical Records module
+        const clinicRecords = await MedicalRecord.find(
+            dateFilter("record_date", fromDate, toDate)
+        )
+            .sort({ record_date: -1 })
+            .lean();
+
+        const clinicNames = await animalNameMap(clinicRecords.map((record) => record.animal_id));
+
+        for (const record of clinicRecords) {
+            medicalRows.push({
+                source: "MedicalRecord",
+                recordId: record._id,
+                assignmentId: "",
+                petId: record.animal_id,
+                petName: clinicNames[String(record.animal_id)] || "",
+                fosterEmail: "",
+                issueType: record.record_type,
+                issue: "",
+                priority: "",
+                urgency: "",
+                description: record.notes,
+                status: "",
+                adminResponse: "",
+                resolutionNotes: "",
+                resolvedAt: "",
+                submittedBy: record.veterinarian,
+                submittedByEmail: "",
+                reviewedBy: "",
+                createdAt: record.record_date,
+                updatedAt: record.updatedAt,
+            });
         }
 
         counts["medical_records"] = medicalRows.length;
@@ -662,6 +714,39 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     }
 
     // --------------------------------------------------
+    // VACCINATIONS
+    // --------------------------------------------------
+
+    if (includeVaccinations) {
+        const vaccinations = await VaccinationRecord.find(
+            dateFilter("vaccination_date", fromDate, toDate)
+        )
+            .sort({ vaccination_date: -1 })
+            .lean();
+
+        const names = await animalNameMap(vaccinations.map((record) => record.animal_id));
+
+        const vaccinationRows = vaccinations.map((record) => ({
+            ...record,
+            animalName: names[String(record.animal_id)] || "",
+        }));
+
+        counts["vaccinations"] = vaccinationRows.length;
+        exportData["vaccinations.csv"] = toCSV(vaccinationRows, [
+            { label: "Record ID", value: "_id" },
+            { label: "Animal ID", value: "animal_id" },
+            { label: "Animal Name", value: "animalName" },
+            { label: "Vaccine", value: "vaccine_name" },
+            { label: "Vaccination Date", value: "vaccination_date" },
+            { label: "Next Due Date", value: "next_due_date" },
+            { label: "Veterinarian", value: "veterinarian" },
+            { label: "Status", value: "status" },
+            { label: "Notes", value: "notes" },
+            { label: "Created At", value: "createdAt" },
+        ]);
+    }
+
+    // --------------------------------------------------
     // LOST AND FOUND REPORTS
     // --------------------------------------------------
 
@@ -716,6 +801,7 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
         adoptionsIncluded: includeAdoptionApplications,
         fosterIncluded: includeFosterAssignments,
         lostFoundIncluded: includeLostFoundReports,
+        vaccinationsIncluded: Boolean(includeVaccinations),
         fileCount: Object.keys(exportData).length + 1,
     };
 
@@ -730,6 +816,7 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
         { label: "Adoptions Included", value: "adoptionsIncluded" },
         { label: "Foster Included", value: "fosterIncluded" },
         { label: "Lost and Found Included", value: "lostFoundIncluded" },
+        { label: "Vaccinations Included", value: "vaccinationsIncluded" },
         { label: "Data File Count", value: "fileCount" },
     ]);
 
@@ -849,6 +936,7 @@ exports.generateReport = async (req, res) => {
                 includeAdoptionApplications: datasets.includeAdoptionApplications,
                 includeFosterAssignments: datasets.includeFosterAssignments,
                 includeLostFoundReports: datasets.includeLostFoundReports,
+                includeVaccinations: datasets.includeVaccinations,
             },
             recordCounts: counts,
         });

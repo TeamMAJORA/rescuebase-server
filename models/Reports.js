@@ -15,6 +15,7 @@ const reportSchema = new mongoose.Schema(
                 "all",
                 "animals",
                 "medical",
+                "vaccinations",
                 "adoption",
                 "foster",
                 "lost-found",
