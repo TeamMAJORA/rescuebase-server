@@ -355,6 +355,121 @@ exports.reviewApplication = async (req, res) => {
     });
 };
 
+// Applicant edits their own pending/approved application in place.
+// Status stays the same; the admin sees which fields changed.
+const EDITABLE_APPLICATION_FIELDS = {
+    applicantName: "Full name",
+    phoneNumber: "Phone",
+    address: "Address",
+    housingType: "Home type",
+    hasChildren: "Children",
+    hasPets: "Other pets",
+    petFriendly: "Pet-friendly home",
+    preferredAnimalType: "Preferred animal",
+    preferredSize: "Preferred size",
+    capacity: "Capacity",
+    fosterDuration: "Duration",
+    fosterExperience: "Experience",
+    emergencyName: "Emergency contact",
+    emergencyRelationship: "Relationship",
+    emergencyPhone: "Emergency phone",
+    notes: "Notes",
+};
+
+exports.updateMyApplication = async (req, res) => {
+    const applicantEmail = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!applicantEmail) {
+        const e = new Error("Auth applicant email is missing.");
+        e.statusCode = 401;
+        throw e;
+    }
+
+    const application = await FosterApplication.findOne({
+        applicantEmail,
+        status: { $in: ["pending", "approved"] },
+    }).sort({ createdAt: -1 });
+
+    if (!application) {
+        const e = new Error("You have no active foster application to update.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    const changed = [];
+
+    for (const [field, label] of Object.entries(EDITABLE_APPLICATION_FIELDS)) {
+        if (req.body[field] === undefined) continue;
+
+        let value = req.body[field];
+
+        if (["hasChildren", "hasPets", "petFriendly"].includes(field)) value = Boolean(value);
+        else if (field === "capacity") value = Number(value);
+        else value = String(value).trim();
+
+        if (String(application[field]) !== String(value)) {
+            application[field] = value;
+            changed.push(label);
+        }
+    }
+
+    if (!application.applicantName) {
+        const e = new Error("Applicant name is required.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (Number.isNaN(application.capacity) || application.capacity < 1) {
+        const e = new Error("Invalid foster capacity.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (changed.length === 0) {
+        return res.status(200).json({
+            success: true,
+            message: "No changes to save.",
+            application,
+        });
+    }
+
+    // Can't lower capacity below the animals already in their care
+    const activeAssignments = await FosterAssignment.countDocuments({
+        fosterEmail: applicantEmail,
+        status: "active",
+    });
+
+    if (application.capacity < activeAssignments) {
+        const e = new Error(
+            `You have ${activeAssignments} animal(s) in your care, so capacity can't be lower than that.`
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    application.editedFields = changed;
+    application.lastEditedAt = new Date();
+    await application.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_application_updated",
+        actorName: application.applicantName,
+        actorEmail: application.applicantEmail,
+        targetType: "FosterApplication",
+        targetId: application._id.toString(),
+        description: `${application.applicantName} updated their foster application (${changed.join(", ")}).`,
+        status: application.status,
+        metadata: { editedFields: changed },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: "Changes saved. The shelter has been notified.",
+        application,
+    });
+};
+
 // Applicant revokes their own foster application.
 // Pending  -> cancelled.
 // Approved -> they stop being a foster (only if no animals are in their care).

@@ -171,6 +171,16 @@ const fosterApplicationSchema = new mongoose.Schema(
             default: null,
         },
 
+        lastEditedAt: {
+            type: Date,
+            default: null,
+        },
+
+        editedFields: {
+            type: [String],
+            default: [],
+        },
+
         withdrawnAt: {
             type: Date,
             default: null,
