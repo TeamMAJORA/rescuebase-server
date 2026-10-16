@@ -267,7 +267,9 @@ exports.updateApplicationStatus = async (req, res) => {
         throw error;
     }
 
-    if (!application.animalId) {
+    // Rejecting is always allowed, even if the animal record is missing or was deleted,
+    // so an application can never get stuck
+    if (!application.animalId && status !== "rejected") {
         const error = new Error("Application is not connected to an animal.");
         error.statusCode = 400;
         throw error;
@@ -292,11 +294,11 @@ exports.updateApplicationStatus = async (req, res) => {
         throw error;
     }
 
-    const animalExists = await Animal.exists({
-        _id: application.animalId,
-    });
+    const animalExists = application.animalId
+        ? await Animal.exists({ _id: application.animalId })
+        : null;
 
-    if (!animalExists) {
+    if (!animalExists && status !== "rejected") {
         const error = new Error("Animal record not found.");
         error.statusCode = 404;
         throw error;
@@ -328,7 +330,7 @@ exports.updateApplicationStatus = async (req, res) => {
                 },
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -516,7 +518,7 @@ exports.updateApplicationStatus = async (req, res) => {
             `${application.petName} to ${status}.`,
         status,
         metadata: {
-            animalId: application.animalId.toString(),
+            animalId: application.animalId ? application.animalId.toString() : "",
             petName: application.petName,
             applicantEmail: application.email,
             interviewSchedule: application.interviewSchedule,

@@ -7,6 +7,15 @@ const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
 const { sendApplicationUpdateEmail, sendFosterUpdateEmail } = require("../services/emailService");
 
+// email must have a function that returns a promise(promise??), and it must throw an error if the email fails to send
+async function sendEmailSafely(sendFn, ...args) {
+    try {
+        await sendFn(...args);
+    } catch (error) {
+        console.error("Foster email error:", error.message);
+    }
+}
+
 async function createLedgerEntrySafely(data) {
     try {
         await LedgerEntry.create(data);
@@ -89,6 +98,15 @@ exports.createApplication = async (req, res) => {
             "Both",
 
         capacity,
+
+        petFriendly: req.body.petFriendly !== false,
+        preferredSize: String(req.body.preferredSize || "Any").trim(),
+        fosterDuration: String(req.body.fosterDuration || "1 Month").trim(),
+        emergencyName: String(req.body.emergencyName || "").trim(),
+        emergencyRelationship: String(req.body.emergencyRelationship || "").trim(),
+        emergencyPhone: String(req.body.emergencyPhone || "").trim(),
+        notes: String(req.body.notes || "").trim(),
+        agreementAccepted: Boolean(req.body.agreementAccepted),
 
         status: "pending",
     });
@@ -246,7 +264,7 @@ exports.reviewApplication = async (req, res) => {
                 },
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -318,7 +336,8 @@ exports.reviewApplication = async (req, res) => {
             application.status
         )
     ) {
-        await sendApplicationUpdateEmail(
+        await sendEmailSafely(
+            sendApplicationUpdateEmail,
             application.applicantEmail,
             application.status,
             "foster"
@@ -385,19 +404,46 @@ exports.createAssignment = async (req, res) => {
         throw error;
     }
 
+    // The pet must be an existing animal record
+    const animalId = String(req.body.animalId || "").trim();
+
+    if (!mongoose.Types.ObjectId.isValid(animalId)) {
+        const error = new Error("Please choose an animal from the list.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const animal = await Animal.findById(animalId);
+
+    if (!animal) {
+        const error = new Error("The selected animal was not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (animal.adoptionStatus === "adopted") {
+        const error = new Error(`${animal.name} has already been adopted.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const alreadyFostered = await FosterAssignment.exists({
+        animalId: animal._id,
+        status: "active",
+    });
+
+    if (alreadyFostered) {
+        const error = new Error(`${animal.name} is already in an active foster assignment.`);
+        error.statusCode = 409;
+        throw error;
+    }
+
     const assignment =
         await FosterAssignment.create({
-            petName: String(
-                req.body.petName || ""
-            ).trim(),
-
-            petBreed: String(
-                req.body.petBreed || ""
-            ).trim(),
-
-            petImage: String(
-                req.body.petImage || ""
-            ).trim(),
+            animalId: animal._id,
+            petName: animal.name,
+            petBreed: animal.breed || "",
+            petImage: animal.image || "",
 
             fosterName:
                 String(
@@ -424,6 +470,8 @@ exports.createAssignment = async (req, res) => {
 
             status: "active",
         });
+
+    await Animal.findByIdAndUpdate(animal._id, { $set: { fosterStatus: "in_foster" } });
 
     const adminId = req.user?.id;
     const adminEmail = String(
@@ -491,7 +539,8 @@ exports.createAssignment = async (req, res) => {
         },
     });
 
-    await sendFosterUpdateEmail(
+    await sendEmailSafely(
+        sendFosterUpdateEmail,
         assignment.fosterEmail,
         "New Foster Assignment.",
         `You have been assigned to foster ${assignment.petName}. Please log in to RescueBase to view the care instructions and assignment details.`
@@ -692,6 +741,18 @@ exports.submitBehaviorEvaluation = async (req, res) => {
         throw err;
     }
 
+    const currentStatus = assignment.behaviorEvaluation?.status;
+
+    if (currentStatus === "pending" || currentStatus === "accepted") {
+        const err = new Error(
+            currentStatus === "pending"
+                ? "Your evaluation is already waiting for staff review."
+                : "This evaluation was already accepted."
+        );
+        err.statusCode = 400;
+        throw err;
+    }
+
     const factors = [
         "energyLevel",
         "friendliness",
@@ -724,6 +785,7 @@ exports.submitBehaviorEvaluation = async (req, res) => {
     evaluation.status = "pending";
     evaluation.submittedAt = new Date();
     evaluation.reviewedAt = null;
+    evaluation.reviewNotes = "";
 
     assignment.behaviorEvaluation = evaluation;
 
@@ -840,10 +902,10 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
         throw error;
     }
 
-    const animal =
-        await Animal.findOne({
-            name: assignment.petName,
-        });
+    // used linked list old animals at da back 
+    const animal = assignment.animalId
+        ? await Animal.findById(assignment.animalId)
+        : await Animal.findOne({ name: assignment.petName });
 
     if (!animal) {
         const error = new Error(
@@ -872,6 +934,10 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
             evaluation[field];
     }
 
+    animalUpdates.fosterStatus = "completed";
+    animalUpdates.behaviorAssessedBy = evaluation.submittedBy || assignment.fosterName;
+    animalUpdates.behaviorAssessedAt = new Date();
+
     const updatedAnimal =
         await Animal.findByIdAndUpdate(
             animal._id,
@@ -879,13 +945,16 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
                 $set: animalUpdates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
 
     evaluation.status = "accepted";
     evaluation.reviewedAt = new Date();
+    evaluation.reviewNotes = "";
+
+    if (!assignment.animalId) assignment.animalId = animal._id;
 
     assignment.status = "completed";
     assignment.endDate = new Date();
@@ -926,7 +995,8 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
         },
     });
 
-    await sendFosterUpdateEmail(
+    await sendEmailSafely(
+        sendFosterUpdateEmail,
         assignment.fosterEmail,
         "Foster Assignment Completed",
         `Your foster assignment for ${assignment.petName} has been completed after the behavioral evaluation was reviewed and accepted.`
@@ -938,6 +1008,75 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
             "Behavioral evaluation accepted and foster assignment completed.",
         assignment,
         animal: updatedAnimal,
+    });
+};
+//this allows staff to send the evaluation back to the foster for revision, with a reason why
+exports.returnBehaviorEvaluation = async (req, res) => {
+    const reason = String(req.body.reason || "").trim();
+
+    if (!reason) {
+        const error = new Error("Tell the foster what to fix before sending it back.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const assignment = await FosterAssignment.findById(req.params.id);
+
+    if (!assignment) {
+        const error = new Error("Foster assignment not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (assignment.status !== "active") {
+        const error = new Error("Only active foster assignments can be reviewed.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (assignment.behaviorEvaluation?.status !== "pending") {
+        const error = new Error("There is no pending behavioral evaluation to send back.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const reviewer = await User.findById(req.user?.id).select("name username");
+    const reviewerName = String(reviewer?.name || reviewer?.username || "Staff").trim();
+
+    // Foster keeps their scores and can edit and resubmit them
+    assignment.behaviorEvaluation.status = "revision";
+    assignment.behaviorEvaluation.reviewNotes = reason;
+    assignment.behaviorEvaluation.reviewedAt = new Date();
+
+    await assignment.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_behavior_evaluation_returned",
+        actorName: reviewerName,
+        actorEmail: String(req.user?.email || "").trim().toLowerCase(),
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+        description: `${reviewerName} sent ${assignment.petName}'s behavioral evaluation back for revision.`,
+        status: "revision",
+        metadata: {
+            petName: assignment.petName,
+            fosterEmail: assignment.fosterEmail,
+            reason,
+        },
+    });
+
+    await sendEmailSafely(
+        sendFosterUpdateEmail,
+        assignment.fosterEmail,
+        "Behavior Evaluation Needs Changes",
+        `Your behavioral evaluation for ${assignment.petName} was sent back for revision. Reason: ${reason}`
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: "Behavioral evaluation sent back for revision.",
+        assignment,
     });
 };
 
@@ -1080,6 +1219,36 @@ exports.updateAssignment = async (req, res) => {
 
     const allowedUpdates = {};
 
+    // change animal name, breed, image if animalId is changed
+    if (req.body.animalId !== undefined && String(req.body.animalId) !== String(currentAssignment.animalId || "")) {
+        const newAnimal = mongoose.Types.ObjectId.isValid(String(req.body.animalId))
+            ? await Animal.findById(req.body.animalId)
+            : null;
+
+        if (!newAnimal) {
+            const error = new Error("The selected animal was not found.");
+            error.statusCode = 404;
+            throw error;
+        }
+
+        const taken = await FosterAssignment.exists({
+            _id: { $ne: currentAssignment._id },
+            animalId: newAnimal._id,
+            status: "active",
+        });
+
+        if (taken) {
+            const error = new Error(`${newAnimal.name} is already in an active foster assignment.`);
+            error.statusCode = 409;
+            throw error;
+        }
+
+        req.body.petName = newAnimal.name;
+        req.body.petBreed = newAnimal.breed || "";
+        req.body.petImage = newAnimal.image || "";
+        req.body.newAnimalId = newAnimal._id;
+    }
+
     const allowedFields = [
         "petName",
         "petBreed",
@@ -1108,6 +1277,10 @@ exports.updateAssignment = async (req, res) => {
                 .toLowerCase();
     }
 
+    if (req.body.newAnimalId) {
+        allowedUpdates.animalId = req.body.newAnimalId;
+    }
+
     if (
         Object.keys(allowedUpdates).length === 0
     ) {
@@ -1126,10 +1299,17 @@ exports.updateAssignment = async (req, res) => {
                 $set: allowedUpdates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
+
+    if (allowedUpdates.animalId) {
+        if (currentAssignment.animalId) {
+            await Animal.findByIdAndUpdate(currentAssignment.animalId, { $set: { fosterStatus: "none" } });
+        }
+        await Animal.findByIdAndUpdate(allowedUpdates.animalId, { $set: { fosterStatus: "in_foster" } });
+    }
 
     const adminId = req.user?.id;
 
@@ -1176,7 +1356,8 @@ exports.updateAssignment = async (req, res) => {
         },
     });
 
-    await sendFosterUpdateEmail(
+    await sendEmailSafely(
+        sendFosterUpdateEmail,
         assignment.fosterEmail,
         "Foster Assignment Updated",
         `Your foster assignment for ${assignment.petName} has been updated. Please log in to RescueBase to view the latest details.`
@@ -1272,6 +1453,10 @@ exports.deleteAssignment = async (req, res) => {
     await FosterAssignment.findByIdAndDelete(
         req.params.id
     );
+
+    if (assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { $set: { fosterStatus: "none" } });
+    }
 
     return res.status(200).json({
         success: true,
