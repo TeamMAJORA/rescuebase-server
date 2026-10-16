@@ -777,17 +777,18 @@ exports.getMyActiveAssignment = async (req, res) => {
         throw error;
     }
 
-    const assignment =
-        await FosterAssignment.findOne({
+    const assignments =
+        await FosterAssignment.find({
             fosterEmail: email,
             status: "active",
-        }).sort({
-            createdAt: -1,
-        });
+        })
+            .sort({ createdAt: -1 })
+            .populate("animalId", "type age gender size");
 
     return res.status(200).json({
         success: true,
-        assignment,
+        assignment: assignments[0] || null,
+        assignments,
     });
 };
 
