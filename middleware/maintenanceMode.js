@@ -6,6 +6,8 @@ const EXEMPT_PATHS = new Set([
     "/",
     "/api/settings",
     "/api/settings/status",
+    "/api/gis/public",
+    "/api/gis/shelters",
 ]);
 
 module.exports = async function maintenanceMode(req, res, next) {
@@ -14,7 +16,7 @@ module.exports = async function maintenanceMode(req, res, next) {
         // and turn maintenance off. Other roles see the maintenance screen after login.
         if (
             req.method === "OPTIONS" ||
-            EXEMPT_PATHS.has(req.path) ||
+            (EXEMPT_PATHS.has(req.path) && (req.method === "GET" || req.path.startsWith("/api/settings"))) ||
             req.path.startsWith("/api/auth/")
         ) {
             return next();
