@@ -30,6 +30,15 @@ router.get(
 );
 
 
+router.get(
+    "/volunteers",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        userController.getVolunteerList
+    )
+);
+
 router.patch(
     "/:id",
     verifyToken,

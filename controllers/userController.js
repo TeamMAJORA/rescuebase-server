@@ -42,6 +42,26 @@ exports.getStaffList = async (req, res) => {
     });
 };
 
+// Active volunteers for the Rescue page dropdown (admin and staff)
+exports.getVolunteerList = async (req, res) => {
+    const volunteers = await User.find({
+        role: "volunteer",
+        status: { $in: ["active", null] },
+    })
+        .select("name username email")
+        .sort({ name: 1 });
+
+    return res.status(200).json({
+        success: true,
+        volunteers: volunteers.map((user) => ({
+            _id: user._id,
+            name: user.name || user.username || "Unnamed",
+            username: user.username,
+            email: user.email,
+        })),
+    });
+};
+
 exports.updateUser = async (req, res) => {
     const allowedFields = [
         "name",
