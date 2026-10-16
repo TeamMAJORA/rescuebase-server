@@ -1,6 +1,10 @@
 
 const jwt = require("jsonwebtoken");
 const { getGlobalSettings } = require("../utils/globalSettings");
+const User = require("../models/User");
+
+const DEACTIVATED_MESSAGE =
+    "This account has been deactivated. Contact the shelter staff if you think this is a mistake.";
 
 module.exports = async function verifyToken(req, res, next) {
     try {
@@ -65,6 +69,25 @@ module.exports = async function verifyToken(req, res, next) {
             return res.status(401).json({
                 success: false,
                 message: "Session has expired. Please log in again.",
+            });
+        }
+
+        // A deactivated (or deleted) account is signed out on its next request,
+        // not only when the session runs out
+        const account = await User.findById(decoded.id).select("status").lean();
+
+        if (!account) {
+            return res.status(401).json({
+                success: false,
+                message: "This account no longer exists.",
+            });
+        }
+
+        if (account.status === "disabled") {
+            return res.status(401).json({
+                success: false,
+                accountDisabled: true,
+                message: DEACTIVATED_MESSAGE,
             });
         }
 
