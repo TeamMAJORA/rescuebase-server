@@ -495,19 +495,35 @@ exports.createAssignment = async (req, res) => {
         throw error;
     }
 
+    // Link the assignment to a registered animal
+    const animalId = String(req.body.animalId || "").trim();
+
+    if (!mongoose.Types.ObjectId.isValid(animalId)) {
+        const error = new Error("Please select a registered pet.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+        const animal = await Animal.findById(animalId);
+
+    if (!animal) {
+        const error = new Error("Selected pet was not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (animal.adoptionStatus === "adopted" || animal.fosterStatus === "in_foster") {
+        const error = new Error(`${animal.name} is already adopted or in foster care.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
     const assignment =
         await FosterAssignment.create({
-            petName: String(
-                req.body.petName || ""
-            ).trim(),
-
-            petBreed: String(
-                req.body.petBreed || ""
-            ).trim(),
-
-            petImage: String(
-                req.body.petImage || ""
-            ).trim(),
+            animalId: animal._id,
+            petName: animal.name,
+            petBreed: animal.breed || "",
+            petImage: animal.image || "",
 
             fosterName:
                 String(
@@ -534,6 +550,8 @@ exports.createAssignment = async (req, res) => {
 
             status: "active",
         });
+    
+    await Animal.findByIdAndUpdate(animal._id, { fosterStatus: "in_foster" });
 
     const adminId = req.user?.id;
     const adminEmail = String(
@@ -950,10 +968,9 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
         throw error;
     }
 
-    const animal =
-        await Animal.findOne({
-            name: assignment.petName,
-        });
+    const animal = assignment.animalId
+        ? await Animal.findById(assignment.animalId)
+        : await Animal.findOne({ name: assignment.petName });
 
     if (!animal) {
         const error = new Error(
@@ -999,6 +1016,9 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
 
     assignment.status = "completed";
     assignment.endDate = new Date();
+    if (assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { fosterStatus: "completed" });
+    }
 
     await assignment.save();
 
@@ -1125,6 +1145,9 @@ exports.completeAssignment = async (req, res) => {
 
     assignment.status = "completed";
     assignment.endDate = new Date();
+    if (assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { fosterStatus: "completed" });
+    }
 
     await assignment.save();
 
@@ -1378,6 +1401,10 @@ exports.deleteAssignment = async (req, res) => {
             fosterEmail: assignment.fosterEmail,
         },
     });
+
+    if (assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { fosterStatus: "none" });
+    }
 
     await FosterAssignment.findByIdAndDelete(
         req.params.id

@@ -165,6 +165,12 @@ const medicalRequestSchema = new mongoose.Schema(
 
 const fosterAssignmentSchema = new mongoose.Schema(
     {
+        animalId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Animal",
+            default: null,
+        },
+
         petName: {
             type: String,
             required: true,
