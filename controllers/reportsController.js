@@ -8,6 +8,17 @@ const MedicalRequest = require("../models/MedicalRequest");
 const AdoptionApplication = require("../models/AdoptionApplication");
 const FosterAssignment = require("../models/FosterAssignment");
 const LostFoundReport = require("../models/LostFoundReport");
+const MedicalRecord = require("../models/MedicalRecord");
+const VaccinationRecord = require("../models/VaccinationRecord");
+
+// Animal id -> name, for records that only store the animal id
+async function animalNameMap(ids) {
+    const unique = [...new Set(ids.filter(Boolean).map(String))];
+    if (unique.length === 0) return {};
+
+    const animals = await Animal.find({ _id: { $in: unique } }).select("name").lean();
+    return Object.fromEntries(animals.map((animal) => [String(animal._id), animal.name]));
+}
 
 // ==================================================
 // HELPERS
@@ -158,8 +169,17 @@ function parseDateRange(body = {}) {
         );
     }
 
-    const fromDate = new Date(fromValue);
-    const toDate = new Date(toValue);
+    // "YYYY-MM-DD" from a date picker means that day in local time
+    // (new Date("2026-10-16") would be 8 AM in Manila and miss the early hours)
+    const toLocalDate = (value) => {
+        const match = typeof value === "string" && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return match
+            ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+            : new Date(value);
+    };
+
+    const fromDate = toLocalDate(fromValue);
+    const toDate = toLocalDate(toValue);
 
     if (
         Number.isNaN(fromDate.getTime()) ||
@@ -201,6 +221,7 @@ function selectedDatasets(body = {}) {
         "adoption",
         "foster",
         "lost-found",
+        "vaccinations",
     ];
 
     if (!supportedTypes.includes(reportType)) {
@@ -235,6 +256,11 @@ function selectedDatasets(body = {}) {
             reportType === "lost-found" ||
             (reportType === "all" &&
                 body.includeLostFound !== false),
+
+        includeVaccinations:
+            reportType === "vaccinations" ||
+            (reportType === "all" &&
+                body.includeVaccinations !== false),
     };
 }
 
@@ -344,11 +370,8 @@ exports.createReport = async (req, res) => {
 // POST /api/reports/generate
 // ==================================================
 
-exports.generateReport = async (req, res) => {
-    const user = await getAuthenticatedUser(req);
-    const { fromDate, toDate } = parseDateRange(req.body || {});
-    const datasets = selectedDatasets(req.body || {});
-
+//Csv reports
+async function buildExport({ user, fromDate, toDate, datasets, generatedAt, period }) {
     const {
         reportType,
         includeAnimals,
@@ -356,11 +379,11 @@ exports.generateReport = async (req, res) => {
         includeAdoptionApplications,
         includeFosterAssignments,
         includeLostFoundReports,
+        includeVaccinations,
     } = datasets;
 
-    const generatedAt = new Date();
-    const period = buildDateMetadata(fromDate, toDate);
     const exportData = {};
+    const counts = {};
 
     // --------------------------------------------------
     // ANIMALS
@@ -373,6 +396,7 @@ exports.generateReport = async (req, res) => {
             .sort({ intakeDate: -1 })
             .lean();
 
+        counts["animals"] = animals.length;
         exportData["animals.csv"] = toCSV(animals, [
             { label: "Animal ID", value: "_id" },
             { label: "Name", value: "name" },
@@ -493,6 +517,41 @@ exports.generateReport = async (req, res) => {
             }
         }
 
+        // Clinic records from the Medical Records module
+        const clinicRecords = await MedicalRecord.find(
+            dateFilter("record_date", fromDate, toDate)
+        )
+            .sort({ record_date: -1 })
+            .lean();
+
+        const clinicNames = await animalNameMap(clinicRecords.map((record) => record.animal_id));
+
+        for (const record of clinicRecords) {
+            medicalRows.push({
+                source: "MedicalRecord",
+                recordId: record._id,
+                assignmentId: "",
+                petId: record.animal_id,
+                petName: clinicNames[String(record.animal_id)] || "",
+                fosterEmail: "",
+                issueType: record.record_type,
+                issue: "",
+                priority: "",
+                urgency: "",
+                description: record.notes,
+                status: "",
+                adminResponse: "",
+                resolutionNotes: "",
+                resolvedAt: "",
+                submittedBy: record.veterinarian,
+                submittedByEmail: "",
+                reviewedBy: "",
+                createdAt: record.record_date,
+                updatedAt: record.updatedAt,
+            });
+        }
+
+        counts["medical_records"] = medicalRows.length;
         exportData["medical_records.csv"] = toCSV(medicalRows, [
             { label: "Source", value: "source" },
             { label: "Record ID", value: "recordId" },
@@ -528,6 +587,7 @@ exports.generateReport = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
+        counts["adoption_applications"] = applications.length;
         exportData["adoption_applications.csv"] = toCSV(applications, [
             { label: "Application ID", value: "_id" },
             { label: "Applicant User ID", value: "applicantUserId" },
@@ -586,6 +646,7 @@ exports.generateReport = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
+        counts["foster_assignments"] = assignments.length;
         exportData["foster_assignments.csv"] = toCSV(assignments, [
             { label: "Assignment ID", value: "_id" },
             { label: "Pet Name", value: "petName" },
@@ -653,6 +714,39 @@ exports.generateReport = async (req, res) => {
     }
 
     // --------------------------------------------------
+    // VACCINATIONS
+    // --------------------------------------------------
+
+    if (includeVaccinations) {
+        const vaccinations = await VaccinationRecord.find(
+            dateFilter("vaccination_date", fromDate, toDate)
+        )
+            .sort({ vaccination_date: -1 })
+            .lean();
+
+        const names = await animalNameMap(vaccinations.map((record) => record.animal_id));
+
+        const vaccinationRows = vaccinations.map((record) => ({
+            ...record,
+            animalName: names[String(record.animal_id)] || "",
+        }));
+
+        counts["vaccinations"] = vaccinationRows.length;
+        exportData["vaccinations.csv"] = toCSV(vaccinationRows, [
+            { label: "Record ID", value: "_id" },
+            { label: "Animal ID", value: "animal_id" },
+            { label: "Animal Name", value: "animalName" },
+            { label: "Vaccine", value: "vaccine_name" },
+            { label: "Vaccination Date", value: "vaccination_date" },
+            { label: "Next Due Date", value: "next_due_date" },
+            { label: "Veterinarian", value: "veterinarian" },
+            { label: "Status", value: "status" },
+            { label: "Notes", value: "notes" },
+            { label: "Created At", value: "createdAt" },
+        ]);
+    }
+
+    // --------------------------------------------------
     // LOST AND FOUND REPORTS
     // --------------------------------------------------
 
@@ -663,8 +757,8 @@ exports.generateReport = async (req, res) => {
             .sort({ dateReported: -1 })
             .lean();
 
-        exportData["lost_found_reports.csv"] = toCSV(
-            lostFoundReports,
+        counts["lost_found_reports"] = lostFoundReports.length;
+        exportData["lost_found_reports.csv"] = toCSV(lostFoundReports,
             [
                 { label: "Report ID", value: "_id" },
                 { label: "Report Type", value: "reportType" },
@@ -707,6 +801,7 @@ exports.generateReport = async (req, res) => {
         adoptionsIncluded: includeAdoptionApplications,
         fosterIncluded: includeFosterAssignments,
         lostFoundIncluded: includeLostFoundReports,
+        vaccinationsIncluded: Boolean(includeVaccinations),
         fileCount: Object.keys(exportData).length + 1,
     };
 
@@ -721,17 +816,15 @@ exports.generateReport = async (req, res) => {
         { label: "Adoptions Included", value: "adoptionsIncluded" },
         { label: "Foster Included", value: "fosterIncluded" },
         { label: "Lost and Found Included", value: "lostFoundIncluded" },
+        { label: "Vaccinations Included", value: "vaccinationsIncluded" },
         { label: "Data File Count", value: "fileCount" },
     ]);
 
-        // --------------------------------------------------
-    // ZIP DOWNLOAD
-    // --------------------------------------------------
+    return { exportData, counts };
+}
 
-    const filename =
-        `rescuebase_${sanitizeFilename(reportType)}_report_` +
-        `${generatedAt.toISOString().slice(0, 10)}.zip`;
-
+// Streams the CSV files to the browser as one ZIP
+async function sendZip(res, exportData, filename) {
     const archive = archiver("zip", {
         zlib: { level: 9 },
     });
@@ -772,6 +865,93 @@ exports.generateReport = async (req, res) => {
     }
 
     await archive.finalize();
+}
+
+// Readable date range for the saved report list
+function periodLabel(dateRange, fromDate, toDate) {
+    if (dateRange === "all") return "All records";
+
+    if (dateRange === "current-year" && fromDate) {
+        return `This year (${fromDate.getFullYear()})`;
+    }
+
+    if (dateRange === "current-month" && fromDate) {
+        return fromDate.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+    }
+
+    if (dateRange === "custom" && fromDate && toDate) {
+        const format = (date) =>
+            date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+
+        return fromDate.toDateString() === toDate.toDateString()
+            ? format(fromDate)
+            : `${format(fromDate)} to ${format(toDate)}`;
+    }
+
+    return buildDateMetadata(fromDate, toDate);
+}
+
+exports.generateReport = async (req, res) => {
+    const user = await getAuthenticatedUser(req);
+    const { fromDate, toDate, dateRange } = parseDateRange(req.body || {});
+    const datasets = selectedDatasets(req.body || {});
+
+    const generatedAt = new Date();
+    const period = buildDateMetadata(fromDate, toDate);
+
+    const { exportData, counts } = await buildExport({
+        user,
+        fromDate,
+        toDate,
+        datasets,
+        generatedAt,
+        period,
+    });
+
+    // Save a record of this report so it shows in "Generated reports".
+    // Real data only: the record keeps the settings and row counts,
+    // and Download rebuilds the same ZIP from them.
+    const title =
+        String(req.body?.title || "").trim().slice(0, 160) ||
+        "Complete Shelter Report";
+
+    const totalRows = Object.values(counts).reduce((sum, value) => sum + value, 0);
+
+    try {
+        const saved = await Report.create({
+            title,
+            type: datasets.reportType,
+            period: periodLabel(dateRange, fromDate, toDate),
+            summary: `${Object.keys(counts).length} dataset(s), ${totalRows} record(s).`,
+            createdBy: user._id,
+            createdByName: user.name || user.username || "User",
+            createdByEmail: user.email || "",
+            exportFormat: "zip",
+            dateRange,
+            fromDate,
+            toDate,
+            datasets: {
+                includeAnimals: datasets.includeAnimals,
+                includeMedicalRecords: datasets.includeMedicalRecords,
+                includeAdoptionApplications: datasets.includeAdoptionApplications,
+                includeFosterAssignments: datasets.includeFosterAssignments,
+                includeLostFoundReports: datasets.includeLostFoundReports,
+                includeVaccinations: datasets.includeVaccinations,
+            },
+            recordCounts: counts,
+        });
+
+        res.setHeader("X-Report-Id", String(saved._id));
+    } catch (saveError) {
+        // The download still works even if the record could not be saved
+        console.error("Save generated report error:", saveError.message);
+    }
+
+    const filename =
+        `${sanitizeFilename(title)}_` +
+        `${generatedAt.toISOString().slice(0, 10)}.zip`;
+
+    await sendZip(res, exportData, filename);
 };
 
 // ==================================================
@@ -849,6 +1029,30 @@ exports.downloadReport = async (req, res) => {
     if (!report) {
         throw createError("Report not found.", 404);
     }
+
+    // Reports made by Generate keep their settings: rebuild the same ZIP
+    if (report.datasets && report.exportFormat === "zip") {
+        const user = await getAuthenticatedUser(req);
+        const fromDate = report.fromDate ? new Date(report.fromDate) : null;
+        const toDate = report.toDate ? new Date(report.toDate) : null;
+
+        const { exportData } = await buildExport({
+            user,
+            fromDate,
+            toDate,
+            datasets: { reportType: report.type, ...report.datasets },
+            generatedAt: new Date(),
+            period: buildDateMetadata(fromDate, toDate),
+        });
+
+        return sendZip(
+            res,
+            exportData,
+            `${sanitizeFilename(report.title)}.zip`
+        );
+    }
+
+    // Older saved reports only have a text summary
 
     const reportText = `
 RESCUEBASE REPORT

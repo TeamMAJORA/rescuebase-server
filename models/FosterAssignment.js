@@ -97,6 +97,13 @@ const fosterBehaviorEvaluationSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+
+       // for reavaluation requests
+        reviewNotes: {
+            type: String,
+            default: "",
+            trim: true,
+        },
     },
     { _id: false }
 );

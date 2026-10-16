@@ -124,6 +124,16 @@ router.patch(
     )
 );
 
+// Send the evaluation back to the foster with a reason
+router.patch(
+    "/assignments/:id/behavior-evaluation/return",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.returnBehaviorEvaluation
+    )
+);
+
 router.patch(
     "/assignments/:id/complete",
     verifyToken,

@@ -467,7 +467,7 @@ exports.updateLocation = async (
                 $set: updates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -913,7 +913,7 @@ exports.updateShelter = async (req, res) => {
         shelterId,
         { $set: updates },
         {
-            new: true,
+            returnDocument: "after",
             runValidators: true,
         }
     );
