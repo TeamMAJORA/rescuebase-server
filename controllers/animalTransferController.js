@@ -102,7 +102,7 @@ exports.updateTransfer = async (req, res) => {
     const transfer = await AnimalTransfer.findByIdAndUpdate(
         id,
         { $set: updates },
-        { new: true, runValidators: true }
+        { returnDocument: "after", runValidators: true }
     ).populate("animal_id", "name type breed image");
 
     if (!transfer) throw httpError("Transfer not found.", 404);

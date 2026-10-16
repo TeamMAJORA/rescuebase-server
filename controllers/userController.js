@@ -79,7 +79,7 @@ exports.updateUser = async (req, res) => {
                 $set: allowedUpdates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         ).select(

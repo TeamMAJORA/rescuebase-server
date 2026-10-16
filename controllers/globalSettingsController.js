@@ -235,7 +235,7 @@ async function getOrCreateSettings() {
         { key: "global" },
         { $setOnInsert: { key: "global" } },
         {
-            new: true,
+            returnDocument: "after",
             upsert: true,
             setDefaultsOnInsert: true,
             runValidators: true,
@@ -294,7 +294,7 @@ exports.updateGlobalSettings = async (req, res) => {
             $setOnInsert: { key: "global" },
         },
         {
-            new: true,
+            returnDocument: "after",
             upsert: true,
             setDefaultsOnInsert: true,
             runValidators: true,

@@ -91,7 +91,7 @@ exports.updateMedicalRecord = async (req, res) => {
     const record = await MedicalRecord.findByIdAndUpdate(
         id,
         { $set: updates },
-        { new: true, runValidators: true }
+        { returnDocument: "after", runValidators: true }
     ).populate("animal_id", "name type breed image");
 
     if (!record) throw httpError("Medical record not found.", 404);

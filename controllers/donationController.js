@@ -339,7 +339,7 @@ exports.updateDonation = async (req, res) => {
                 },
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );

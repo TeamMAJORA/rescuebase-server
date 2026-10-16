@@ -78,7 +78,9 @@ async function sendApplicationUpdateEmail(email, status, applicationType = "appl
                 </p>
 
                 <p>
-                    Please log in to RescueBase to view the latest details.
+                    ${status === "approved"
+                        ? "If you are already logged in, please log out and log in again to open your new dashboard."
+                        : "Please log in to RescueBase to view the latest details."}
                 </p>
 
                 <p>— RescueBase</p>

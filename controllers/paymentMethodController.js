@@ -93,7 +93,7 @@ exports.updatePaymentMethod = async (req, res) => {
             id,
             updates,
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
