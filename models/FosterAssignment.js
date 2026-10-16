@@ -172,7 +172,6 @@ const medicalRequestSchema = new mongoose.Schema(
 
 const fosterAssignmentSchema = new mongoose.Schema(
     {
-        // old assignments might have different structure, so we keep the animalId as optional
         animalId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Animal",

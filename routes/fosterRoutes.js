@@ -39,6 +39,23 @@ router.get(
     )
 );
 
+router.patch(
+    "/applications/me",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
+    asyncHandler(
+        fosterController.updateMyApplication
+    )
+);
+
+router.patch(
+    "/applications/me/withdraw",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
+    asyncHandler(
+        fosterController.withdrawMyApplication
+    )
+);
 
 router.patch(
     "/applications/:id/status",
