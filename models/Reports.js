@@ -12,6 +12,9 @@ const reportSchema = new mongoose.Schema(
             type: String,
             required: true,
             enum: [
+                "all",
+                "animals",
+                "medical",
                 "adoption",
                 "foster",
                 "lost-found",
@@ -68,6 +71,39 @@ const reportSchema = new mongoose.Schema(
         finalizedAt: {
             type: Date,
             default: null,
+        },
+
+        // Saved by Generate so Download can rebuild the same ZIP
+        exportFormat: {
+            type: String,
+            enum: ["text", "zip"],
+            default: "text",
+        },
+
+        dateRange: {
+            type: String,
+            default: "all",
+        },
+
+        fromDate: {
+            type: Date,
+            default: null,
+        },
+
+        toDate: {
+            type: Date,
+            default: null,
+        },
+
+        datasets: {
+            type: Object,
+            default: null,
+        },
+
+        // Rows per CSV file, e.g. { animals: 42, medical_records: 18 }
+        recordCounts: {
+            type: Object,
+            default: {},
         },
     },
     {

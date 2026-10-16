@@ -158,8 +158,17 @@ function parseDateRange(body = {}) {
         );
     }
 
-    const fromDate = new Date(fromValue);
-    const toDate = new Date(toValue);
+    // "YYYY-MM-DD" from a date picker means that day in local time
+    // (new Date("2026-10-16") would be 8 AM in Manila and miss the early hours)
+    const toLocalDate = (value) => {
+        const match = typeof value === "string" && value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        return match
+            ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+            : new Date(value);
+    };
+
+    const fromDate = toLocalDate(fromValue);
+    const toDate = toLocalDate(toValue);
 
     if (
         Number.isNaN(fromDate.getTime()) ||
@@ -344,11 +353,8 @@ exports.createReport = async (req, res) => {
 // POST /api/reports/generate
 // ==================================================
 
-exports.generateReport = async (req, res) => {
-    const user = await getAuthenticatedUser(req);
-    const { fromDate, toDate } = parseDateRange(req.body || {});
-    const datasets = selectedDatasets(req.body || {});
-
+//Csv reports
+async function buildExport({ user, fromDate, toDate, datasets, generatedAt, period }) {
     const {
         reportType,
         includeAnimals,
@@ -358,9 +364,8 @@ exports.generateReport = async (req, res) => {
         includeLostFoundReports,
     } = datasets;
 
-    const generatedAt = new Date();
-    const period = buildDateMetadata(fromDate, toDate);
     const exportData = {};
+    const counts = {};
 
     // --------------------------------------------------
     // ANIMALS
@@ -373,6 +378,7 @@ exports.generateReport = async (req, res) => {
             .sort({ intakeDate: -1 })
             .lean();
 
+        counts["animals"] = animals.length;
         exportData["animals.csv"] = toCSV(animals, [
             { label: "Animal ID", value: "_id" },
             { label: "Name", value: "name" },
@@ -493,6 +499,7 @@ exports.generateReport = async (req, res) => {
             }
         }
 
+        counts["medical_records"] = medicalRows.length;
         exportData["medical_records.csv"] = toCSV(medicalRows, [
             { label: "Source", value: "source" },
             { label: "Record ID", value: "recordId" },
@@ -528,6 +535,7 @@ exports.generateReport = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
+        counts["adoption_applications"] = applications.length;
         exportData["adoption_applications.csv"] = toCSV(applications, [
             { label: "Application ID", value: "_id" },
             { label: "Applicant User ID", value: "applicantUserId" },
@@ -586,6 +594,7 @@ exports.generateReport = async (req, res) => {
             .sort({ createdAt: -1 })
             .lean();
 
+        counts["foster_assignments"] = assignments.length;
         exportData["foster_assignments.csv"] = toCSV(assignments, [
             { label: "Assignment ID", value: "_id" },
             { label: "Pet Name", value: "petName" },
@@ -663,8 +672,8 @@ exports.generateReport = async (req, res) => {
             .sort({ dateReported: -1 })
             .lean();
 
-        exportData["lost_found_reports.csv"] = toCSV(
-            lostFoundReports,
+        counts["lost_found_reports"] = lostFoundReports.length;
+        exportData["lost_found_reports.csv"] = toCSV(lostFoundReports,
             [
                 { label: "Report ID", value: "_id" },
                 { label: "Report Type", value: "reportType" },
@@ -724,14 +733,11 @@ exports.generateReport = async (req, res) => {
         { label: "Data File Count", value: "fileCount" },
     ]);
 
-        // --------------------------------------------------
-    // ZIP DOWNLOAD
-    // --------------------------------------------------
+    return { exportData, counts };
+}
 
-    const filename =
-        `rescuebase_${sanitizeFilename(reportType)}_report_` +
-        `${generatedAt.toISOString().slice(0, 10)}.zip`;
-
+// Streams the CSV files to the browser as one ZIP
+async function sendZip(res, exportData, filename) {
     const archive = archiver("zip", {
         zlib: { level: 9 },
     });
@@ -772,6 +778,92 @@ exports.generateReport = async (req, res) => {
     }
 
     await archive.finalize();
+}
+
+// Readable date range for the saved report list
+function periodLabel(dateRange, fromDate, toDate) {
+    if (dateRange === "all") return "All records";
+
+    if (dateRange === "current-year" && fromDate) {
+        return `This year (${fromDate.getFullYear()})`;
+    }
+
+    if (dateRange === "current-month" && fromDate) {
+        return fromDate.toLocaleDateString("en-PH", { month: "long", year: "numeric" });
+    }
+
+    if (dateRange === "custom" && fromDate && toDate) {
+        const format = (date) =>
+            date.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
+
+        return fromDate.toDateString() === toDate.toDateString()
+            ? format(fromDate)
+            : `${format(fromDate)} to ${format(toDate)}`;
+    }
+
+    return buildDateMetadata(fromDate, toDate);
+}
+
+exports.generateReport = async (req, res) => {
+    const user = await getAuthenticatedUser(req);
+    const { fromDate, toDate, dateRange } = parseDateRange(req.body || {});
+    const datasets = selectedDatasets(req.body || {});
+
+    const generatedAt = new Date();
+    const period = buildDateMetadata(fromDate, toDate);
+
+    const { exportData, counts } = await buildExport({
+        user,
+        fromDate,
+        toDate,
+        datasets,
+        generatedAt,
+        period,
+    });
+
+    // Save a record of this report so it shows in "Generated reports".
+    // Real data only: the record keeps the settings and row counts,
+    // and Download rebuilds the same ZIP from them.
+    const title =
+        String(req.body?.title || "").trim().slice(0, 160) ||
+        "Complete Shelter Report";
+
+    const totalRows = Object.values(counts).reduce((sum, value) => sum + value, 0);
+
+    try {
+        const saved = await Report.create({
+            title,
+            type: datasets.reportType,
+            period: periodLabel(dateRange, fromDate, toDate),
+            summary: `${Object.keys(counts).length} dataset(s), ${totalRows} record(s).`,
+            createdBy: user._id,
+            createdByName: user.name || user.username || "User",
+            createdByEmail: user.email || "",
+            exportFormat: "zip",
+            dateRange,
+            fromDate,
+            toDate,
+            datasets: {
+                includeAnimals: datasets.includeAnimals,
+                includeMedicalRecords: datasets.includeMedicalRecords,
+                includeAdoptionApplications: datasets.includeAdoptionApplications,
+                includeFosterAssignments: datasets.includeFosterAssignments,
+                includeLostFoundReports: datasets.includeLostFoundReports,
+            },
+            recordCounts: counts,
+        });
+
+        res.setHeader("X-Report-Id", String(saved._id));
+    } catch (saveError) {
+        // The download still works even if the record could not be saved
+        console.error("Save generated report error:", saveError.message);
+    }
+
+    const filename =
+        `${sanitizeFilename(title)}_` +
+        `${generatedAt.toISOString().slice(0, 10)}.zip`;
+
+    await sendZip(res, exportData, filename);
 };
 
 // ==================================================
@@ -849,6 +941,30 @@ exports.downloadReport = async (req, res) => {
     if (!report) {
         throw createError("Report not found.", 404);
     }
+
+    // Reports made by Generate keep their settings: rebuild the same ZIP
+    if (report.datasets && report.exportFormat === "zip") {
+        const user = await getAuthenticatedUser(req);
+        const fromDate = report.fromDate ? new Date(report.fromDate) : null;
+        const toDate = report.toDate ? new Date(report.toDate) : null;
+
+        const { exportData } = await buildExport({
+            user,
+            fromDate,
+            toDate,
+            datasets: { reportType: report.type, ...report.datasets },
+            generatedAt: new Date(),
+            period: buildDateMetadata(fromDate, toDate),
+        });
+
+        return sendZip(
+            res,
+            exportData,
+            `${sanitizeFilename(report.title)}.zip`
+        );
+    }
+
+    // Older saved reports only have a text summary
 
     const reportText = `
 RESCUEBASE REPORT
