@@ -72,13 +72,8 @@ exports.createApplication = async (req, res) => {
         hasChildren:
             Boolean(req.body.hasChildren),
 
-        availableSpace: String(
-            req.body.availableSpace || ""
-        ).trim(),
-
-        availableTime: String(
-            req.body.availableTime || ""
-        ).trim(),
+        petFriendly:
+            Boolean(req.body.petFriendly),
 
         fosterExperience: String(
             req.body.fosterExperience || ""
@@ -88,7 +83,34 @@ exports.createApplication = async (req, res) => {
             req.body.preferredAnimalType ||
             "Both",
 
+        preferredSize:
+            req.body.preferredSize ||
+            "Any",
+
         capacity,
+
+        fosterDuration: String(
+            req.body.fosterDuration || "1 Month"
+        ).trim(),
+
+        emergencyName: String(
+            req.body.emergencyName || ""
+        ).trim(),
+
+        emergencyRelationship: String(
+            req.body.emergencyRelationship || ""
+        ).trim(),
+
+        emergencyPhone: String(
+            req.body.emergencyPhone || ""
+        ).trim(),
+
+        notes: String(
+            req.body.notes || ""
+        ).trim(),
+
+        agreementAccepted:
+            Boolean(req.body.agreementAccepted),
 
         status: "pending",
     });
