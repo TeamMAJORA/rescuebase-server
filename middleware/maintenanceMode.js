@@ -5,6 +5,7 @@ const { getGlobalSettings } = require("../utils/globalSettings");
 const EXEMPT_PATHS = new Set([
     "/",
     "/api/settings",
+    "/api/settings/status",
 ]);
 
 module.exports = async function maintenanceMode(req, res, next) {

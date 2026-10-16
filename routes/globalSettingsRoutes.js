@@ -10,6 +10,23 @@ const {
 const verifyToken = require("../middleware/verifyToken");
 const authorizeRoles = require("../middleware/authoriseRoles");
 const asyncHandler = require("../middleware/asyncHandler");
+const { getGlobalSettings: getSettingsDocument } = require("../utils/globalSettings");
+
+//for the maintenance status output
+router.get("/status", asyncHandler(async (req, res) => {
+    const settings = await getSettingsDocument();
+    const maintenance = settings?.maintenance || {};
+
+    res.set("Cache-Control", "no-store");
+
+    return res.status(200).json({
+        success: true,
+        maintenance: {
+            enabled: Boolean(maintenance.enabled),
+            message: maintenance.enabled ? String(maintenance.message || "") : "",
+        },
+    });
+}));
 
 router.use(verifyToken);
 router.use(authorizeRoles("admin"));
