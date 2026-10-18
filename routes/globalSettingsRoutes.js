@@ -28,7 +28,22 @@ router.get("/status", asyncHandler(async (req, res) => {
     });
 }));
 
+router.get("/contact", verifyToken, asyncHandler(async (req, res) => {
+    const settings = await getSettingsDocument();
+    const general = settings?.general || {};
+
+    return res.status(200).json({
+        success: true,
+        contact: {
+            name: general.appName || "RescueBase",
+            email: general.contactEmail || "",
+            phone: general.contactPhone || "",
+        },
+    });
+}));
+
 router.use(verifyToken);
+
 router.use(authorizeRoles("admin"));
 
 router.get("/", asyncHandler(getGlobalSettings));
