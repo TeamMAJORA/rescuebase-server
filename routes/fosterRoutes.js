@@ -163,6 +163,23 @@ router.delete(
     )
 );
 
+router.post(
+    "/assignments/:id/return-request",
+    verifyToken,
+    authoriseRoles("foster"),
+    asyncHandler(
+        fosterController.requestReturn
+    )
+);
+
+router.patch(
+    "/assignments/:id/return-request",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.handleReturnRequest
+    )
+);
 
 router.get(
     "/assignments/me/history",

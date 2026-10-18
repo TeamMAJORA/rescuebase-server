@@ -5,6 +5,7 @@ const FosterApplication = require("../models/FosterApplication");
 const Animal = require("../models/Animal");
 const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
+const Notification = require("../models/Notifications");
 const { sendApplicationUpdateEmail, sendFosterUpdateEmail } = require("../services/emailService");
 
 // email must have a function that returns a promise(promise??), and it must throw an error if the email fails to send
@@ -1681,6 +1682,223 @@ exports.deleteAssignment = async (req, res) => {
     });
 };
 
+// ===== Early return: foster requests, admin/staff confirm or decline =====
+const RETURN_REASONS = ["Medical", "Behavior", "Personal", "Emergency"];
+
+// Tell every admin/staff account (in-app always, email too)
+async function notifyShelterStaff(title, message) {
+    try {
+        const staff = await User.find({ role: { $in: ["admin", "staff"] } }).select("_id email");
+
+        if (staff.length) {
+            await Notification.insertMany(
+                staff.map((user) => ({ user: user._id, title, message, type: "foster_update" }))
+            );
+        }
+
+        await Promise.allSettled(
+            staff.map((user) => sendFosterUpdateEmail(user.email, title, message))
+        );
+    } catch (error) {
+        console.error("Return request staff notification error:", error);
+    }
+}
+
+async function notifyFoster(email, title, message) {
+    try {
+        const foster = await User.findOne({ email }).select("_id");
+
+        if (foster) {
+            await Notification.create({ user: foster._id, title, message, type: "foster_update" });
+        }
+
+        await sendFosterUpdateEmail(email, title, message);
+    } catch (error) {
+        console.error("Return request foster notification error:", error);
+    }
+}
+
+exports.requestReturn = async (req, res) => {
+    const fosterEmail = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        const error = new Error("Invalid assignment.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const assignment = await FosterAssignment.findOne({
+        _id: req.params.id,
+        fosterEmail,
+        status: "active",
+    });
+
+    if (!assignment) {
+        const error = new Error("Active foster assignment not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (assignment.returnRequest?.status === "pending") {
+        const error = new Error("You already asked to return this animal.");
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const reason = String(req.body.reason || "").trim();
+
+    if (!RETURN_REASONS.includes(reason)) {
+        const error = new Error("Please choose a reason for the return.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    let preferredDate = null;
+
+    if (req.body.preferredDate) {
+        preferredDate = new Date(req.body.preferredDate);
+
+        if (Number.isNaN(preferredDate.getTime())) {
+            const error = new Error("Invalid preferred return date.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const urgent = Boolean(req.body.urgent) || reason === "Emergency";
+
+    assignment.returnRequest = {
+        status: "pending",
+        reason,
+        notes: String(req.body.notes || "").trim().slice(0, 1000),
+        preferredDate,
+        urgent,
+        requestedAt: new Date(),
+        adminNote: "",
+        handledBy: "",
+        handledAt: null,
+    };
+
+    await assignment.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_return_requested",
+        actorName: assignment.fosterName,
+        actorEmail: assignment.fosterEmail,
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+        description: `${assignment.fosterName} asked to return ${assignment.petName} (${reason}).`,
+        status: "active",
+        metadata: { petName: assignment.petName, reason, urgent },
+    });
+
+    const when = preferredDate
+        ? ` Preferred date: ${preferredDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}.`
+        : "";
+
+    await notifyShelterStaff(
+        urgent ? "URGENT: Foster return request" : "Foster return request",
+        `${assignment.fosterName} asked to return ${assignment.petName} (${reason}).${when}`
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: "Return request sent. The shelter will contact you to arrange the handover.",
+        assignment,
+    });
+};
+
+exports.handleReturnRequest = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        const error = new Error("Invalid assignment.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const action = String(req.body.action || "").trim().toLowerCase();
+    const adminNote = String(req.body.adminNote || "").trim().slice(0, 500);
+
+    if (!["confirm", "decline"].includes(action)) {
+        const error = new Error("Action must be confirm or decline.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (action === "decline" && !adminNote) {
+        const error = new Error("Add a note so the foster knows why.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const admin = await User.findById(req.user?.id).select("name username email");
+    const adminName = String(admin?.name || admin?.username || "Shelter staff").trim();
+    const now = new Date();
+
+    const set = {
+        "returnRequest.status": action === "confirm" ? "confirmed" : "declined",
+        "returnRequest.adminNote": adminNote,
+        "returnRequest.handledBy": adminName,
+        "returnRequest.handledAt": now,
+    };
+
+    if (action === "confirm") {
+        set.status = "returned";
+        set.endDate = now;
+        set.endReason = "early_return";
+    }
+
+    // One update that only works while the request is still pending and the
+    // assignment is still active (so it can't clash with Accept Evaluation)
+    const assignment = await FosterAssignment.findOneAndUpdate(
+        { _id: req.params.id, status: "active", "returnRequest.status": "pending" },
+        { $set: set },
+        { new: true }
+    );
+
+    if (!assignment) {
+        const error = new Error("This request was already handled or the assignment is no longer active.");
+        error.statusCode = 409;
+        throw error;
+    }
+
+    if (action === "confirm" && assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { $set: { fosterStatus: "none" } });
+    }
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: action === "confirm" ? "foster_return_confirmed" : "foster_return_declined",
+        actorName: adminName,
+        actorEmail: String(admin?.email || req.user?.email || "").toLowerCase(),
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+        description: action === "confirm"
+            ? `${assignment.petName} was returned to the shelter by ${assignment.fosterName}.`
+            : `${adminName} declined ${assignment.fosterName}'s return request for ${assignment.petName}.`,
+        status: assignment.status,
+        metadata: {
+            petName: assignment.petName,
+            reason: assignment.returnRequest?.reason,
+            adminNote,
+        },
+    });
+
+    await notifyFoster(
+        assignment.fosterEmail,
+        action === "confirm" ? "Return confirmed" : "Return request declined",
+        action === "confirm"
+            ? `The shelter confirmed ${assignment.petName} is back. Thank you for fostering!`
+            : `Your request to return ${assignment.petName} was declined: ${adminNote}`
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: action === "confirm" ? "Return confirmed." : "Return request declined.",
+        assignment,
+    });
+};
+
 exports.getMyAssignmentHistory = async (req, res) => {
     const fosterEmail = String(
         req.user?.email || ""
@@ -1700,7 +1918,7 @@ exports.getMyAssignmentHistory = async (req, res) => {
     const assignments =
         await FosterAssignment.find({
             fosterEmail,
-            status: "completed",
+            status: { $in: ["completed", "returned"] },
         }).sort({
             endDate: -1,
         });
