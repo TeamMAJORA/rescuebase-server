@@ -126,6 +126,18 @@ const adoptionApplicationSchema = new mongoose.Schema(
             default: false,
         },
 
+        // Set when the applicant is currently fostering this pet
+        isFosterAdoption: {
+            type: Boolean,
+            default: false,
+        },
+
+        fosterAssignmentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "FosterAssignment",
+            default: null,
+        },
+
         role: {
             type: String,
             enum: ["adopter"],
