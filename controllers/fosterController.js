@@ -1921,7 +1921,7 @@ exports.getMyAssignmentHistory = async (req, res) => {
             status: { $in: ["completed", "returned"] },
         }).sort({
             endDate: -1,
-        });
+        }).populate("animalId", "adoptionStatus");
 
     return res.status(200).json({
         success: true,
