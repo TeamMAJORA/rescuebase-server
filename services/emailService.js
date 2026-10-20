@@ -410,6 +410,33 @@ async function sendRoleApplicationEmail(
     });
 }
 
+async function sendDocumentRequestEmail(email, petName, reason) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase: Please resubmit your documents",
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Document resubmission needed</h2>
+
+                <p>
+                    The shelter reviewed the ID you uploaded for your adoption
+                    application for <strong>${petName}</strong> and needs a new copy.
+                </p>
+
+                <p><strong>Reason:</strong> ${reason}</p>
+
+                <p>
+                    Log in to RescueBase and open <strong>Application Status</strong>
+                    to upload a new photo of your ID.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
 module.exports = {
     sendOtpEmail,
     sendPasswordResetEmail,
@@ -419,6 +446,7 @@ module.exports = {
     sendFosterUpdateEmail,
     sendVaccinationReminderEmail,
     sendInterviewScheduleEmail,
+    sendDocumentRequestEmail,
     sendPetAvailableEmail,
     sendLostFoundClaimEmail,
     sendLostFoundReunitedEmail,

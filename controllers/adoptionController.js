@@ -10,6 +10,7 @@ const Notification = require("../models/Notifications");
 const {
     sendApplicationUpdateEmail,
     sendInterviewScheduleEmail,
+    sendDocumentRequestEmail,
 } = require("../services/emailService");
 
 async function createLedgerEntrySafely(data) {
@@ -690,5 +691,187 @@ exports.getUserApplicationHistory = async (req, res) => {
     return res.status(200).json({
         success: true,
         applications,
+    });
+};
+
+// Applications that can still change documents
+const DOCUMENT_OPEN_STATUSES = [
+    "pending",
+    "interview_scheduled",
+    "interview_completed",
+];
+
+// Admin/staff: ask the applicant to upload their documents again
+exports.requestDocumentResubmission = async (req, res) => {
+    const applicationId = String(req.params.id || "").trim();
+    const reason = String(req.body?.reason || "").trim().slice(0, 500);
+
+    if (!mongoose.isValidObjectId(applicationId)) {
+        const error = new Error("Invalid Application ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!reason) {
+        const error = new Error("Tell the applicant what needs to be fixed.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const application = await AdoptionApplication.findById(applicationId);
+
+    if (!application) {
+        const error = new Error("Application not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (!DOCUMENT_OPEN_STATUSES.includes(application.status)) {
+        const error = new Error(
+            `This application is already ${application.status}, so documents can no longer be requested.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const staff = await User.findById(req.user?.id).select("name username");
+    const staffName = String(staff?.name || staff?.username || "Staff").trim();
+
+    application.documents.forEach((document) => {
+        document.status = "rejected";
+    });
+    application.documentsVerified = false;
+    application.documentRequest = {
+        status: "requested",
+        reason,
+        requestedAt: new Date(),
+        requestedBy: staffName,
+        resubmittedAt: null,
+    };
+
+    await application.save();
+
+    await createLedgerEntrySafely({
+        type: "adoption",
+        action: "documents_resubmission_requested",
+        actorName: staffName,
+        actorEmail: String(req.user?.email || "").toLowerCase(),
+        targetType: "AdoptionApplication",
+        targetId: application._id.toString(),
+        description: `${staffName} asked ${application.fullName} to resubmit their documents for ${application.petName}.`,
+        status: application.status,
+        metadata: { reason },
+    });
+
+    if (application.applicantUserId) {
+        await Notification.create({
+            user: application.applicantUserId,
+            title: "Please resubmit your documents",
+            message: `The shelter needs a new copy of your ID for ${application.petName}. Reason: ${reason}`,
+            type: "application_update",
+        });
+    }
+
+    try {
+        await sendDocumentRequestEmail(application.email, application.petName, reason);
+    } catch (error) {
+        console.error("Document request email error:", error);
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Resubmission request sent to the applicant.",
+        application,
+    });
+};
+
+// Adopter/foster: upload new documents after staff asked for them
+exports.resubmitDocuments = async (req, res) => {
+    const applicationId = String(req.params.id || "").trim();
+    const email = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!mongoose.isValidObjectId(applicationId)) {
+        const error = new Error("Invalid Application ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    // Only the owner of the application can resubmit
+    const application = await AdoptionApplication.findOne({ _id: applicationId, email });
+
+    if (!application) {
+        const error = new Error("Application not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (application.documentRequest?.status !== "requested") {
+        const error = new Error("The shelter has not asked for new documents.");
+        error.statusCode = 409;
+        throw error;
+    }
+
+    if (!DOCUMENT_OPEN_STATUSES.includes(application.status)) {
+        const error = new Error(`This application is already ${application.status}.`);
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const documents = (Array.isArray(req.body?.documents) ? req.body.documents : [])
+        .map((document) => ({
+            documentName: String(document?.documentName || "").trim(),
+            documentUrl: String(document?.documentUrl || ""),
+            publicId: String(document?.publicId || ""),
+            status: "pending",
+        }))
+        .filter((document) => document.documentUrl);
+
+    if (!documents.length) {
+        const error = new Error("Please upload your ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    application.documents = documents;
+    application.documentsVerified = false;
+    application.documentRequest.status = "resubmitted";
+    application.documentRequest.resubmittedAt = new Date();
+
+    await application.save();
+
+    await createLedgerEntrySafely({
+        type: "adoption",
+        action: "documents_resubmitted",
+        actorName: application.fullName,
+        actorEmail: application.email,
+        targetType: "AdoptionApplication",
+        targetId: application._id.toString(),
+        description: `${application.fullName} resubmitted their documents for ${application.petName}.`,
+        status: application.status,
+        metadata: { petName: application.petName },
+    });
+
+    // Let admins and staff know new documents are waiting
+    try {
+        const reviewers = await User.find({ role: { $in: ["admin", "staff"] } }).select("_id");
+
+        if (reviewers.length) {
+            await Notification.insertMany(
+                reviewers.map((reviewer) => ({
+                    user: reviewer._id,
+                    title: "Documents resubmitted",
+                    message: `${application.fullName} uploaded new documents for ${application.petName}.`,
+                    type: "application_update",
+                }))
+            );
+        }
+    } catch (error) {
+        console.error("Notify reviewers error:", error);
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Your new documents were sent to the shelter.",
+        application,
     });
 };

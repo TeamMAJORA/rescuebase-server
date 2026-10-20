@@ -126,6 +126,19 @@ const adoptionApplicationSchema = new mongoose.Schema(
             default: false,
         },
 
+        // Staff asked the applicant to upload their documents again
+        documentRequest: {
+            status: {
+                type: String,
+                enum: ["none", "requested", "resubmitted"],
+                default: "none",
+            },
+            reason: { type: String, default: "", trim: true, maxlength: 500 },
+            requestedAt: { type: Date, default: null },
+            requestedBy: { type: String, default: "", trim: true },
+            resubmittedAt: { type: Date, default: null },
+        },
+
         // Set when the applicant is currently fostering this pet
         isFosterAdoption: {
             type: Boolean,

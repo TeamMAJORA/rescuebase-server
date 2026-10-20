@@ -60,4 +60,16 @@ router.patch("/:id/withdraw",
     asyncHandler(adoptionController.withdrawApplication)
 );
 
+router.patch("/:id/documents/request",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(adoptionController.requestDocumentResubmission)
+);
+
+router.patch("/:id/documents",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
+    asyncHandler(adoptionController.resubmitDocuments)
+);
+
 module.exports = router;
