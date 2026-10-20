@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const AdoptionApplication = require("../models/AdoptionApplication");
 const Animal = require("../models/Animal");
+const FosterAssignment = require("../models/FosterAssignment");
 const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
@@ -86,6 +87,13 @@ exports.submitApplication = async (req, res) => {
         }))
         : [];
 
+    // Is the applicant the pet's current foster?
+    const fosterAssignment = await FosterAssignment.findOne({
+        fosterEmail: email,
+        animalId: animal._id,
+        status: "active",
+    }).select("_id");
+
     const application = await AdoptionApplication.create({
         applicantUserId,
         fullName,
@@ -103,6 +111,8 @@ exports.submitApplication = async (req, res) => {
         experience: String(req.body.experience || "").trim(),
         documents,
         documentsVerified: false,
+        isFosterAdoption: Boolean(fosterAssignment),
+        fosterAssignmentId: fosterAssignment?._id || null,
         role: "adopter",
         status: "pending",
     });
@@ -115,7 +125,8 @@ exports.submitApplication = async (req, res) => {
         targetType: "AdoptionApplication",
         targetId: application._id.toString(),
         description:
-            `${application.fullName} submitted an adoption application for ${application.petName}.`,
+            `${application.fullName} submitted an adoption application for ${application.petName}` +
+            (application.isFosterAdoption ? " (their current foster pet)." : "."),
         status: "pending",
         metadata: {
             animalId: application.animalId.toString(),
@@ -447,6 +458,53 @@ exports.updateApplicationStatus = async (req, res) => {
                     notificationError
                 );
             }
+        }
+    }
+
+    // The pet was in foster care: end that foster assignment
+    if (status === "approved") {
+        try {
+            const activeFoster = await FosterAssignment.findOne({
+                animalId: application.animalId,
+                status: "active",
+            });
+
+            if (activeFoster) {
+                const byFoster = activeFoster.fosterEmail === application.email;
+
+                await FosterAssignment.updateOne(
+                    { _id: activeFoster._id, status: "active" },
+                    {
+                        $set: {
+                            status: "completed",
+                            endDate: new Date(),
+                            endReason: byFoster ? "adopted_by_foster" : "adopted",
+                        },
+                    }
+                );
+
+                await Animal.updateOne(
+                    { _id: application.animalId },
+                    { $set: { fosterStatus: "completed" } }
+                );
+
+                if (!byFoster) {
+                    const foster = await User.findOne({ email: activeFoster.fosterEmail }).select("_id");
+
+                    if (foster) {
+                        await Notification.create({
+                            user: foster._id,
+                            title: "Your foster pet was adopted",
+                            message:
+                                `${activeFoster.petName} has been adopted. The shelter will contact you ` +
+                                "to arrange the handover. Thank you for fostering!",
+                            type: "foster_update",
+                        });
+                    }
+                }
+            }
+        } catch (fosterError) {
+            console.error("Failed to close the foster assignment:", fosterError);
         }
     }
 

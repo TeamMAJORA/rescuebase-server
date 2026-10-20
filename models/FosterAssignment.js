@@ -169,6 +169,29 @@ const medicalRequestSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+// Foster asks to return an animal early; staff confirm once it is back
+const returnRequestSchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: ["none", "pending", "declined", "confirmed"],
+            default: "none",
+        },
+        reason: {
+            type: String,
+            enum: ["", "Medical", "Behavior", "Personal", "Emergency"],
+            default: "",
+        },
+        notes: { type: String, default: "", trim: true, maxlength: 1000 },
+        preferredDate: { type: Date, default: null },
+        urgent: { type: Boolean, default: false },
+        requestedAt: { type: Date, default: null },
+        adminNote: { type: String, default: "", trim: true, maxlength: 500 },
+        handledBy: { type: String, default: "", trim: true },
+        handledAt: { type: Date, default: null },
+    },
+    { _id: false }
+);
 
 const fosterAssignmentSchema = new mongoose.Schema(
     {
@@ -214,8 +237,19 @@ const fosterAssignmentSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["active", "completed", "cancelled"],
+            enum: ["active", "completed", "cancelled", "returned"],
             default: "active",
+        },
+
+        returnRequest: {
+            type: returnRequestSchema,
+            default: () => ({}),
+        },
+
+        endReason: {
+            type: String,
+            default: "",
+            trim: true,
         },
 
         startDate: {
