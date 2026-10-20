@@ -108,7 +108,8 @@ exports.createLocation = async (req, res) => {
             locationName,
             latitude,
             longitude,
-            status: "open",
+            // Staff/admin can save a report as already resolved (e.g. rescued on the spot)
+            status: String(req.body.status || "").trim().toLowerCase() === "resolved" ? "resolved" : "open",
             description,
 
             createdBy: user._id,
@@ -237,9 +238,11 @@ exports.getAllLocations = async (
     const locations =
         await GISLocation.find(
             filter
-        ).sort({
-            createdAt: -1,
-        });
+        )
+            .populate("createdBy", "role")
+            .sort({
+                createdAt: -1,
+            });
 
     return res.status(200).json({
         success: true,
@@ -601,7 +604,7 @@ exports.getHotspotAnalysis = async (req, res) => {
         },
         latitude: { $exists: true, $ne: null },
         longitude: { $exists: true, $ne: null },
-    }).select("latitude longitude reportType");
+    }).select("latitude longitude reportType locationName");
 
     const reports = locations.filter((location) => {
         const latitude = Number(location.latitude);
@@ -619,6 +622,7 @@ exports.getHotspotAnalysis = async (req, res) => {
         latitude: Number(location.latitude),
         longitude: Number(location.longitude),
         reportType: location.reportType,
+        locationName: location.locationName || "",
     }));
 
     const toRadians = (degrees) => degrees * Math.PI / 180;
@@ -693,7 +697,16 @@ exports.getHotspotAnalysis = async (req, res) => {
             }
         }
 
+        //For the hotspot and we will use the locationname for the label
+        const nameCounts = {};
+        for (const report of cluster) {
+            const name = report.locationName.split(",")[0].trim();
+            if (name) nameCounts[name] = (nameCounts[name] || 0) + 1;
+        }
+        const areaName = Object.keys(nameCounts).sort((a, b) => nameCounts[b] - nameCounts[a])[0] || "";
+
         hotspots.push({
+            areaName,
             latitude: latitudeSum / cluster.length,
             longitude: longitudeSum / cluster.length,
             count: cluster.length,
