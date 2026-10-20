@@ -739,6 +739,21 @@ exports.getShelters = async (req, res) => {
 };
 
 
+// Shelter category / island helpers
+const SHELTER_CATEGORIES = ["shelter", "clinic", "pound"];
+
+function cleanCategory(value) {
+    const category = String(value || "shelter").trim().toLowerCase();
+    return SHELTER_CATEGORIES.includes(category) ? category : null;
+}
+
+// Rough box around Mactan Island (Lapu-Lapu City / Cordova)
+function guessIsland(latitude, longitude) {
+    return latitude >= 10.24 && latitude <= 10.36 && longitude >= 123.94
+        ? "mactan"
+        : "cebu";
+}
+
 exports.createShelter = async (req, res) => {
     const name = String(req.body.name || "").trim();
     const address = String(req.body.address || "").trim();
@@ -785,6 +800,14 @@ exports.createShelter = async (req, res) => {
         throw error;
     }
 
+    const category = cleanCategory(req.body.category);
+
+    if (!category) {
+        const error = new Error("Category must be shelter, clinic or pound.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const shelter = await Shelter.create({
         name,
         address,
@@ -793,6 +816,8 @@ exports.createShelter = async (req, res) => {
         contact,
         email,
         description,
+        category,
+        island: guessIsland(latitude, longitude),
         status: "active",
     });
 
@@ -822,6 +847,7 @@ exports.updateShelter = async (req, res) => {
         "email",
         "description",
         "status",
+        "category",
     ];
 
     const updates = {};
@@ -920,6 +946,20 @@ exports.updateShelter = async (req, res) => {
             error.statusCode = 400;
             throw error;
         }
+    }
+
+    if (updates.category !== undefined) {
+        updates.category = cleanCategory(updates.category);
+
+        if (!updates.category) {
+            const error = new Error("Category must be shelter, clinic or pound.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.latitude !== undefined && updates.longitude !== undefined) {
+        updates.island = guessIsland(Number(updates.latitude), Number(updates.longitude));
     }
 
     const shelter = await Shelter.findByIdAndUpdate(
