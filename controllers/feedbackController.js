@@ -212,3 +212,19 @@ exports.deleteFeedback = async (req, res) => {
         message : "Feedback deleted successfully."
     });
 };
+exports.getMyFeedback = async (req, res) => {
+    const email = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!email) {
+        const error = new Error("Authenticated user email is missing.");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const feedback = await Feedback.find({ userEmail: email }).sort({ createdAt: -1 });
+
+    return res.json({
+        success: true,
+        feedback,
+    });
+};
