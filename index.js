@@ -8,6 +8,7 @@ const {
 const admin = require("firebase-admin");
 const securityGuard = require("./middleware/securityGuard");
 const errorhandler = require("./middleware/errorHandler")
+const maintenanceMode = require("./middleware/maintenanceMode");
 
 dotenv.config();
 
@@ -32,8 +33,12 @@ const matchmakingRoutes = require("./routes/matchmakingRoutes");
 const paymentMethodRoutes = require("./routes/paymentMethodRoutes");
 const qrTagRoutes = require("./routes/qrTagRoutes");
 const vaccinationRoutes = require("./routes/vaccinationRoutes");
+const medicalRecordRoutes = require("./routes/medicalRecordRoutes");
+const animalTransferRoutes = require("./routes/animalTransferRoutes");
 const startVaccinationReminders = require("./jobs/vaccinationReminders");
 const analyticsRoutes = require("./routes/analyticsRoutes");
+const activityLogRoutes = require("./routes/activityLogRoutes");
+const globalSettingsRoutes = require("./routes/globalSettingsRoutes");
 
 //Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -60,6 +65,7 @@ app.use(cors({
 
 app.use(express.json());
 app.use(securityGuard);
+app.use(maintenanceMode);
 
 initializeApp({
     credential: cert(serviceAccount),
@@ -91,6 +97,11 @@ app.use("/api/payment-methods", paymentMethodRoutes);
 app.use("/api/qr-tags", qrTagRoutes);
 app.use("/api/vaccinations", vaccinationRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/medical-records", medicalRecordRoutes);
+app.use("/api/animal-transfers", animalTransferRoutes);
+app.use("/api/activity-logs", activityLogRoutes);
+app.use("/api/activity-logs", activityLogRoutes);
+app.use("/api/settings", globalSettingsRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);

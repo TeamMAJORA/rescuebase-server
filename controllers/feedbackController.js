@@ -148,7 +148,7 @@ exports.archiveFeedback = async (req, res) => {
 
     await feedback.save();
 
-    return res, status(200).json({
+    return res.status(200).json({
         success: true,
         message: "Feedback archived successfully.",
         feedback,
@@ -185,7 +185,7 @@ exports.restoreFeedback = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        message: "Feedback restored successfullu.",
+        message: "Feedback restored successfully.",
         feedback,
     });
 };

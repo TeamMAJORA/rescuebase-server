@@ -222,6 +222,15 @@ exports.claimReport = async (req, res) => {
         throw error;
     }
 
+    if (report.claimStatus === "approved") {
+        const error = new Error(
+            "This report already has an approved claim."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
     if (report.claimStatus === "pending") {
         const error = new Error(
             "This report already has a pending claim."
@@ -274,16 +283,18 @@ exports.claimReport = async (req, res) => {
 };
 
 exports.reviewClaim = async (req, res) => {
+    // "revoked" = take back an approved claim (claimant never came)
     const allowedStatuses = [
         "approved",
         "rejected",
+        "revoked",
     ];
 
-    const claimStatus = String(
+    const requested = String(
         req.body.claimStatus || ""
     ).trim().toLowerCase();
 
-    if (!allowedStatuses.includes(claimStatus)) {
+    if (!allowedStatuses.includes(requested)) {
         const error = new Error(
             "Invalid claim status."
         );
@@ -305,7 +316,16 @@ exports.reviewClaim = async (req, res) => {
         throw error;
     }
 
-    if (report.claimStatus !== "pending") {
+    if (requested === "revoked") {
+        if (report.claimStatus !== "approved" || report.status === "reunited") {
+            const error = new Error(
+                "Only an approved claim that isn't reunited yet can be revoked."
+            );
+
+            error.statusCode = 400;
+            throw error;
+        }
+    } else if (report.claimStatus !== "pending") {
         const error = new Error(
             "This report does not have a pending claim."
         );
@@ -313,6 +333,9 @@ exports.reviewClaim = async (req, res) => {
         error.statusCode = 400;
         throw error;
     }
+
+    // A revoked claim is saved as rejected and the report opens again
+    const claimStatus = requested === "revoked" ? "rejected" : requested;
 
     const reviewerName = getActorName(req);
     const reviewerEmail = getActorEmail(req);

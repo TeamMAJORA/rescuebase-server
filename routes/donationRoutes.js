@@ -35,7 +35,7 @@ router.get(
 router.get(
     "/my",
     verifyToken,
-    authoriseRoles("adopter"),
+    authoriseRoles("adopter", "foster"),
     asyncHandler(donationController.getMyDonations)
 )
 

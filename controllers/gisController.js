@@ -108,7 +108,8 @@ exports.createLocation = async (req, res) => {
             locationName,
             latitude,
             longitude,
-            status: "open",
+            // Staff/admin can save a report as already resolved (e.g. rescued on the spot)
+            status: String(req.body.status || "").trim().toLowerCase() === "resolved" ? "resolved" : "open",
             description,
 
             createdBy: user._id,
@@ -237,9 +238,11 @@ exports.getAllLocations = async (
     const locations =
         await GISLocation.find(
             filter
-        ).sort({
-            createdAt: -1,
-        });
+        )
+            .populate("createdBy", "role")
+            .sort({
+                createdAt: -1,
+            });
 
     return res.status(200).json({
         success: true,
@@ -467,7 +470,7 @@ exports.updateLocation = async (
                 $set: updates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -601,7 +604,7 @@ exports.getHotspotAnalysis = async (req, res) => {
         },
         latitude: { $exists: true, $ne: null },
         longitude: { $exists: true, $ne: null },
-    }).select("latitude longitude reportType");
+    }).select("latitude longitude reportType locationName");
 
     const reports = locations.filter((location) => {
         const latitude = Number(location.latitude);
@@ -619,6 +622,7 @@ exports.getHotspotAnalysis = async (req, res) => {
         latitude: Number(location.latitude),
         longitude: Number(location.longitude),
         reportType: location.reportType,
+        locationName: location.locationName || "",
     }));
 
     const toRadians = (degrees) => degrees * Math.PI / 180;
@@ -693,7 +697,16 @@ exports.getHotspotAnalysis = async (req, res) => {
             }
         }
 
+        //For the hotspot and we will use the locationname for the label
+        const nameCounts = {};
+        for (const report of cluster) {
+            const name = report.locationName.split(",")[0].trim();
+            if (name) nameCounts[name] = (nameCounts[name] || 0) + 1;
+        }
+        const areaName = Object.keys(nameCounts).sort((a, b) => nameCounts[b] - nameCounts[a])[0] || "";
+
         hotspots.push({
+            areaName,
             latitude: latitudeSum / cluster.length,
             longitude: longitudeSum / cluster.length,
             count: cluster.length,
@@ -725,6 +738,21 @@ exports.getShelters = async (req, res) => {
     });
 };
 
+
+// Shelter category / island helpers
+const SHELTER_CATEGORIES = ["shelter", "clinic", "pound"];
+
+function cleanCategory(value) {
+    const category = String(value || "shelter").trim().toLowerCase();
+    return SHELTER_CATEGORIES.includes(category) ? category : null;
+}
+
+// Rough box around Mactan Island (Lapu-Lapu City / Cordova)
+function guessIsland(latitude, longitude) {
+    return latitude >= 10.24 && latitude <= 10.36 && longitude >= 123.94
+        ? "mactan"
+        : "cebu";
+}
 
 exports.createShelter = async (req, res) => {
     const name = String(req.body.name || "").trim();
@@ -772,6 +800,14 @@ exports.createShelter = async (req, res) => {
         throw error;
     }
 
+    const category = cleanCategory(req.body.category);
+
+    if (!category) {
+        const error = new Error("Category must be shelter, clinic or pound.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const shelter = await Shelter.create({
         name,
         address,
@@ -780,6 +816,8 @@ exports.createShelter = async (req, res) => {
         contact,
         email,
         description,
+        category,
+        island: guessIsland(latitude, longitude),
         status: "active",
     });
 
@@ -809,6 +847,7 @@ exports.updateShelter = async (req, res) => {
         "email",
         "description",
         "status",
+        "category",
     ];
 
     const updates = {};
@@ -909,11 +948,25 @@ exports.updateShelter = async (req, res) => {
         }
     }
 
+    if (updates.category !== undefined) {
+        updates.category = cleanCategory(updates.category);
+
+        if (!updates.category) {
+            const error = new Error("Category must be shelter, clinic or pound.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.latitude !== undefined && updates.longitude !== undefined) {
+        updates.island = guessIsland(Number(updates.latitude), Number(updates.longitude));
+    }
+
     const shelter = await Shelter.findByIdAndUpdate(
         shelterId,
         { $set: updates },
         {
-            new: true,
+            returnDocument: "after",
             runValidators: true,
         }
     );

@@ -10,7 +10,7 @@ const fosterController = require("../controllers/fosterController");
 router.post(
     "/applications",
     verifyToken,
-    authoriseRoles("foster"),
+    authoriseRoles("adopter", "foster"),
     validateRequest([
         "applicantName",
     ]),
@@ -23,7 +23,7 @@ router.post(
 router.get(
     "/applications",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.getAllApplications
     )
@@ -33,17 +33,34 @@ router.get(
 router.get(
     "/applications/me",
     verifyToken,
-    authoriseRoles("foster"),
+    authoriseRoles("adopter", "foster"),
     asyncHandler(
         fosterController.getMyApplications
     )
 );
 
+router.patch(
+    "/applications/me",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
+    asyncHandler(
+        fosterController.updateMyApplication
+    )
+);
+
+router.patch(
+    "/applications/me/withdraw",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
+    asyncHandler(
+        fosterController.withdrawMyApplication
+    )
+);
 
 router.patch(
     "/applications/:id/status",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.reviewApplication
     )
@@ -53,7 +70,7 @@ router.patch(
 router.post(
     "/assignments",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.createAssignment
     )
@@ -63,7 +80,7 @@ router.post(
 router.get(
     "/assignments",
     verifyToken,
-    authoriseRoles("admin", "volunteer"),
+    authoriseRoles("admin", "staff", "volunteer"),
     asyncHandler(
         fosterController.getAllAssignments
     )
@@ -101,16 +118,26 @@ router.post(
 router.patch(
     "/assignments/:id/behavior-evaluation/accept",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.acceptBehaviorEvaluation
+    )
+);
+
+// Send the evaluation back to the foster with a reason
+router.patch(
+    "/assignments/:id/behavior-evaluation/return",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.returnBehaviorEvaluation
     )
 );
 
 router.patch(
     "/assignments/:id/complete",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.completeAssignment
     )
@@ -120,7 +147,7 @@ router.patch(
 router.patch(
     "/assignments/:id",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.updateAssignment
     )
@@ -130,12 +157,29 @@ router.patch(
 router.delete(
     "/assignments/:id",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         fosterController.deleteAssignment
     )
 );
 
+router.post(
+    "/assignments/:id/return-request",
+    verifyToken,
+    authoriseRoles("foster"),
+    asyncHandler(
+        fosterController.requestReturn
+    )
+);
+
+router.patch(
+    "/assignments/:id/return-request",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.handleReturnRequest
+    )
+);
 
 router.get(
     "/assignments/me/history",

@@ -29,7 +29,8 @@ router.get(
     "/",
     verifyToken,
     authorizeRoles(
-        "admin"
+        "admin",
+        "staff"
     ),
     asyncHandler(
         feedbackController.getAllFeedback
@@ -54,7 +55,8 @@ router.get(
     "/:id",
     verifyToken,
     authorizeRoles(
-        "admin"
+        "admin",
+        "staff"
     ),
     asyncHandler(
         feedbackController.getFeedbackById
@@ -65,7 +67,8 @@ router.patch(
     "/:id/archive",
     verifyToken,
     authorizeRoles(
-        "admin"
+        "admin",
+        "staff"
     ),
     asyncHandler(
         feedbackController.archiveFeedback
@@ -76,7 +79,8 @@ router.patch(
     "/:id/restore",
     verifyToken,
     authorizeRoles(
-        "admin"
+        "admin",
+        "staff"
     ),
     asyncHandler(
         feedbackController.restoreFeedback

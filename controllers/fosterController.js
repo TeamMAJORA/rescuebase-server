@@ -5,7 +5,17 @@ const FosterApplication = require("../models/FosterApplication");
 const Animal = require("../models/Animal");
 const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
+const Notification = require("../models/Notifications");
 const { sendApplicationUpdateEmail, sendFosterUpdateEmail } = require("../services/emailService");
+
+// email must have a function that returns a promise(promise??), and it must throw an error if the email fails to send
+async function sendEmailSafely(sendFn, ...args) {
+    try {
+        await sendFn(...args);
+    } catch (error) {
+        console.error("Foster email error:", error.message);
+    }
+}
 
 async function createLedgerEntrySafely(data) {
     try {
@@ -72,13 +82,8 @@ exports.createApplication = async (req, res) => {
         hasChildren:
             Boolean(req.body.hasChildren),
 
-        availableSpace: String(
-            req.body.availableSpace || ""
-        ).trim(),
-
-        availableTime: String(
-            req.body.availableTime || ""
-        ).trim(),
+        petFriendly:
+            Boolean(req.body.petFriendly),
 
         fosterExperience: String(
             req.body.fosterExperience || ""
@@ -88,7 +93,34 @@ exports.createApplication = async (req, res) => {
             req.body.preferredAnimalType ||
             "Both",
 
+        preferredSize:
+            req.body.preferredSize ||
+            "Any",
+
         capacity,
+
+        fosterDuration: String(
+            req.body.fosterDuration || "1 Month"
+        ).trim(),
+
+        emergencyName: String(
+            req.body.emergencyName || ""
+        ).trim(),
+
+        emergencyRelationship: String(
+            req.body.emergencyRelationship || ""
+        ).trim(),
+
+        emergencyPhone: String(
+            req.body.emergencyPhone || ""
+        ).trim(),
+
+        notes: String(
+            req.body.notes || ""
+        ).trim(),
+
+        agreementAccepted:
+            Boolean(req.body.agreementAccepted),
 
         status: "pending",
     });
@@ -169,6 +201,17 @@ exports.reviewApplication = async (req, res) => {
         throw error;
     }
 
+
+    // A reason is required to reject; the applicant sees it
+    if (
+        status === "rejected" &&
+        !String(req.body.reviewNotes || "").trim()
+    ) {
+        const error = new Error("A rejection reason is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const adminId = req.user?.id;
     const adminEmail = String(
         req.user?.email || ""
@@ -227,10 +270,15 @@ exports.reviewApplication = async (req, res) => {
                         status === "pending"
                             ? null
                             : new Date(),
+
+                    rejectionReason:
+                        status === "rejected"
+                            ? String(req.body.reviewNotes || "").trim()
+                            : "",
                 },
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -270,12 +318,40 @@ exports.reviewApplication = async (req, res) => {
         },
     });
 
+    // adopter to foster role upgrade if approved
+    if (application.status === "approved") {
+        await User.updateOne(
+            { email: application.applicantEmail, role: "adopter" },
+            { $set: { role: "foster" } }
+        );
+    }
+
+    if (application.status === "rejected") {
+        const stillApproved = await FosterApplication.exists({
+            applicantEmail: application.applicantEmail,
+            status: "approved",
+        });
+
+        const activeAssignments = await FosterAssignment.countDocuments({
+            fosterEmail: application.applicantEmail,
+            status: "active",
+        });
+
+        if (!stillApproved && activeAssignments === 0) {
+            await User.updateOne(
+                { email: application.applicantEmail, role: "foster" },
+                { $set: { role: "adopter" } }
+            );
+        }
+    }
+
     if (
         ["approved", "rejected"].includes(
             application.status
         )
     ) {
-        await sendApplicationUpdateEmail(
+        await sendEmailSafely(
+            sendApplicationUpdateEmail,
             application.applicantEmail,
             application.status,
             "foster"
@@ -287,6 +363,209 @@ exports.reviewApplication = async (req, res) => {
         message:
             `Foster application ${application.status}.`,
         application,
+    });
+};
+
+// Applicant edits their own pending/approved application in place.
+// Status stays the same; the admin sees which fields changed.
+const EDITABLE_APPLICATION_FIELDS = {
+    applicantName: "Full name",
+    phoneNumber: "Phone",
+    address: "Address",
+    housingType: "Home type",
+    hasChildren: "Children",
+    hasPets: "Other pets",
+    petFriendly: "Pet-friendly home",
+    preferredAnimalType: "Preferred animal",
+    preferredSize: "Preferred size",
+    capacity: "Capacity",
+    fosterDuration: "Duration",
+    fosterExperience: "Experience",
+    emergencyName: "Emergency contact",
+    emergencyRelationship: "Relationship",
+    emergencyPhone: "Emergency phone",
+    notes: "Notes",
+};
+
+exports.updateMyApplication = async (req, res) => {
+    const applicantEmail = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!applicantEmail) {
+        const e = new Error("Auth applicant email is missing.");
+        e.statusCode = 401;
+        throw e;
+    }
+
+    const application = await FosterApplication.findOne({
+        applicantEmail,
+        status: { $in: ["pending", "approved"] },
+    }).sort({ createdAt: -1 });
+
+    if (!application) {
+        const e = new Error("You have no active foster application to update.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    const changed = [];
+
+    for (const [field, label] of Object.entries(EDITABLE_APPLICATION_FIELDS)) {
+        if (req.body[field] === undefined) continue;
+
+        let value = req.body[field];
+
+        if (["hasChildren", "hasPets", "petFriendly"].includes(field)) value = Boolean(value);
+        else if (field === "capacity") value = Number(value);
+        else value = String(value).trim();
+
+        if (String(application[field]) !== String(value)) {
+            application[field] = value;
+            changed.push(label);
+        }
+    }
+
+    if (!application.applicantName) {
+        const e = new Error("Applicant name is required.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (Number.isNaN(application.capacity) || application.capacity < 1) {
+        const e = new Error("Invalid foster capacity.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (changed.length === 0) {
+        return res.status(200).json({
+            success: true,
+            message: "No changes to save.",
+            application,
+        });
+    }
+
+    // Can't lower capacity below the animals already in their care
+    const activeAssignments = await FosterAssignment.countDocuments({
+        fosterEmail: applicantEmail,
+        status: "active",
+    });
+
+    if (application.capacity < activeAssignments) {
+        const e = new Error(
+            `You have ${activeAssignments} animal(s) in your care, so capacity can't be lower than that.`
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    application.editedFields = changed;
+    application.lastEditedAt = new Date();
+    await application.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_application_updated",
+        actorName: application.applicantName,
+        actorEmail: application.applicantEmail,
+        targetType: "FosterApplication",
+        targetId: application._id.toString(),
+        description: `${application.applicantName} updated their foster application (${changed.join(", ")}).`,
+        status: application.status,
+        metadata: { editedFields: changed },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: "Changes saved. The shelter has been notified.",
+        application,
+    });
+};
+
+// Applicant revokes their own foster application.
+// Pending  -> cancelled.
+// Approved -> they stop being a foster (only if no animals are in their care).
+exports.withdrawMyApplication = async (req, res) => {
+    const applicantEmail = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!applicantEmail) {
+        const e = new Error("Auth applicant email is missing.");
+        e.statusCode = 401;
+        throw e;
+    }
+
+    const application = await FosterApplication.findOne({
+        applicantEmail,
+        status: { $in: ["pending", "approved"] },
+    }).sort({ createdAt: -1 });
+
+    if (!application) {
+        const e = new Error("You have no pending or approved foster application to revoke.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    const wasApproved = application.status === "approved";
+
+    if (wasApproved) {
+        const activeAssignments = await FosterAssignment.countDocuments({
+            fosterEmail: applicantEmail,
+            status: "active",
+        });
+
+        if (activeAssignments > 0) {
+            const e = new Error(
+                `You still have ${activeAssignments} animal(s) in your care. Please contact the shelter to return them before revoking.`
+            );
+            e.statusCode = 400;
+            throw e;
+        }
+    }
+
+    application.status = "withdrawn";
+    application.withdrawnAt = new Date();
+    application.withdrawnReason = String(req.body.reason || "").trim();
+    await application.save();
+
+    // Go back to adopter only if no other approved application keeps the foster role
+    let roleChanged = false;
+
+    if (wasApproved) {
+        const stillApproved = await FosterApplication.exists({
+            applicantEmail,
+            status: "approved",
+        });
+
+        if (!stillApproved) {
+            const result = await User.updateOne(
+                { email: applicantEmail, role: "foster" },
+                { $set: { role: "adopter" } }
+            );
+            roleChanged = result.modifiedCount > 0;
+        }
+    }
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_application_withdrawn",
+        actorName: application.applicantName,
+        actorEmail: applicantEmail,
+        targetType: "FosterApplication",
+        targetId: application._id.toString(),
+        description: `${application.applicantName} revoked their ${wasApproved ? "approved" : "pending"} foster application.`,
+        status: "withdrawn",
+        metadata: {
+            reason: application.withdrawnReason,
+            roleChanged,
+        },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: wasApproved
+            ? "You are no longer a foster. Please log in again."
+            : "Your foster application was cancelled.",
+        application,
+        roleChanged,
     });
 };
 
@@ -342,19 +621,35 @@ exports.createAssignment = async (req, res) => {
         throw error;
     }
 
+    // Link the assignment to a registered animal
+    const animalId = String(req.body.animalId || "").trim();
+
+    if (!mongoose.Types.ObjectId.isValid(animalId)) {
+        const error = new Error("Please select a registered pet.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+        const animal = await Animal.findById(animalId);
+
+    if (!animal) {
+        const error = new Error("Selected pet was not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (animal.adoptionStatus === "adopted" || animal.fosterStatus === "in_foster") {
+        const error = new Error(`${animal.name} is already adopted or in foster care.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
     const assignment =
         await FosterAssignment.create({
-            petName: String(
-                req.body.petName || ""
-            ).trim(),
-
-            petBreed: String(
-                req.body.petBreed || ""
-            ).trim(),
-
-            petImage: String(
-                req.body.petImage || ""
-            ).trim(),
+            animalId: animal._id,
+            petName: animal.name,
+            petBreed: animal.breed || "",
+            petImage: animal.image || "",
 
             fosterName:
                 String(
@@ -381,6 +676,10 @@ exports.createAssignment = async (req, res) => {
 
             status: "active",
         });
+    
+    await Animal.findByIdAndUpdate(animal._id, { fosterStatus: "in_foster" });
+
+    await Animal.findByIdAndUpdate(animal._id, { $set: { fosterStatus: "in_foster" } });
 
     const adminId = req.user?.id;
     const adminEmail = String(
@@ -448,7 +747,8 @@ exports.createAssignment = async (req, res) => {
         },
     });
 
-    await sendFosterUpdateEmail(
+    await sendEmailSafely(
+        sendFosterUpdateEmail,
         assignment.fosterEmail,
         "New Foster Assignment.",
         `You have been assigned to foster ${assignment.petName}. Please log in to RescueBase to view the care instructions and assignment details.`
@@ -491,17 +791,18 @@ exports.getMyActiveAssignment = async (req, res) => {
         throw error;
     }
 
-    const assignment =
-        await FosterAssignment.findOne({
+    const assignments =
+        await FosterAssignment.find({
             fosterEmail: email,
             status: "active",
-        }).sort({
-            createdAt: -1,
-        });
+        })
+            .sort({ createdAt: -1 })
+            .populate("animalId", "type age gender size");
 
     return res.status(200).json({
         success: true,
-        assignment,
+        assignment: assignments[0] || null,
+        assignments,
     });
 };
 
@@ -560,6 +861,19 @@ exports.submitAssignmentUpdate = async (req, res) => {
         photoUrl: String(
             req.body.photoUrl || ""
         ).trim(),
+
+        // Weekly care report details (optional)
+        healthStatus: String(req.body.healthStatus || "").trim(),
+        appetite: String(req.body.appetite || "").trim(),
+        behavior: String(req.body.behavior || "").trim(),
+        weight:
+            req.body.weight === "" ||
+            req.body.weight === undefined ||
+            Number.isNaN(Number(req.body.weight))
+                ? null
+                : Number(req.body.weight),
+        medication: Boolean(req.body.medication),
+        exercise: Boolean(req.body.exercise),
 
         submittedBy:
             String(
@@ -636,6 +950,18 @@ exports.submitBehaviorEvaluation = async (req, res) => {
         throw err;
     }
 
+    const currentStatus = assignment.behaviorEvaluation?.status;
+
+    if (currentStatus === "pending" || currentStatus === "accepted") {
+        const err = new Error(
+            currentStatus === "pending"
+                ? "Your evaluation is already waiting for staff review."
+                : "This evaluation was already accepted."
+        );
+        err.statusCode = 400;
+        throw err;
+    }
+
     const factors = [
         "energyLevel",
         "friendliness",
@@ -668,6 +994,7 @@ exports.submitBehaviorEvaluation = async (req, res) => {
     evaluation.status = "pending";
     evaluation.submittedAt = new Date();
     evaluation.reviewedAt = null;
+    evaluation.reviewNotes = "";
 
     assignment.behaviorEvaluation = evaluation;
 
@@ -784,10 +1111,9 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
         throw error;
     }
 
-    const animal =
-        await Animal.findOne({
-            name: assignment.petName,
-        });
+    const animal = assignment.animalId
+        ? await Animal.findById(assignment.animalId)
+        : await Animal.findOne({ name: assignment.petName });
 
     if (!animal) {
         const error = new Error(
@@ -816,6 +1142,10 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
             evaluation[field];
     }
 
+    animalUpdates.fosterStatus = "completed";
+    animalUpdates.behaviorAssessedBy = evaluation.submittedBy || assignment.fosterName;
+    animalUpdates.behaviorAssessedAt = new Date();
+
     const updatedAnimal =
         await Animal.findByIdAndUpdate(
             animal._id,
@@ -823,16 +1153,22 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
                 $set: animalUpdates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
 
     evaluation.status = "accepted";
     evaluation.reviewedAt = new Date();
+    evaluation.reviewNotes = "";
+
+    if (!assignment.animalId) assignment.animalId = animal._id;
 
     assignment.status = "completed";
     assignment.endDate = new Date();
+    if (assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { fosterStatus: "completed" });
+    }
 
     await assignment.save();
 
@@ -870,7 +1206,8 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
         },
     });
 
-    await sendFosterUpdateEmail(
+    await sendEmailSafely(
+        sendFosterUpdateEmail,
         assignment.fosterEmail,
         "Foster Assignment Completed",
         `Your foster assignment for ${assignment.petName} has been completed after the behavioral evaluation was reviewed and accepted.`
@@ -882,6 +1219,75 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
             "Behavioral evaluation accepted and foster assignment completed.",
         assignment,
         animal: updatedAnimal,
+    });
+};
+//this allows staff to send the evaluation back to the foster for revision, with a reason why
+exports.returnBehaviorEvaluation = async (req, res) => {
+    const reason = String(req.body.reason || "").trim();
+
+    if (!reason) {
+        const error = new Error("Tell the foster what to fix before sending it back.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const assignment = await FosterAssignment.findById(req.params.id);
+
+    if (!assignment) {
+        const error = new Error("Foster assignment not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (assignment.status !== "active") {
+        const error = new Error("Only active foster assignments can be reviewed.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (assignment.behaviorEvaluation?.status !== "pending") {
+        const error = new Error("There is no pending behavioral evaluation to send back.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const reviewer = await User.findById(req.user?.id).select("name username");
+    const reviewerName = String(reviewer?.name || reviewer?.username || "Staff").trim();
+
+    // Foster keeps their scores and can edit and resubmit them
+    assignment.behaviorEvaluation.status = "revision";
+    assignment.behaviorEvaluation.reviewNotes = reason;
+    assignment.behaviorEvaluation.reviewedAt = new Date();
+
+    await assignment.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_behavior_evaluation_returned",
+        actorName: reviewerName,
+        actorEmail: String(req.user?.email || "").trim().toLowerCase(),
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+        description: `${reviewerName} sent ${assignment.petName}'s behavioral evaluation back for revision.`,
+        status: "revision",
+        metadata: {
+            petName: assignment.petName,
+            fosterEmail: assignment.fosterEmail,
+            reason,
+        },
+    });
+
+    await sendEmailSafely(
+        sendFosterUpdateEmail,
+        assignment.fosterEmail,
+        "Behavior Evaluation Needs Changes",
+        `Your behavioral evaluation for ${assignment.petName} was sent back for revision. Reason: ${reason}`
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: "Behavioral evaluation sent back for revision.",
+        assignment,
     });
 };
 
@@ -959,6 +1365,9 @@ exports.completeAssignment = async (req, res) => {
 
     assignment.status = "completed";
     assignment.endDate = new Date();
+    if (assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { fosterStatus: "completed" });
+    }
 
     await assignment.save();
 
@@ -1024,6 +1433,36 @@ exports.updateAssignment = async (req, res) => {
 
     const allowedUpdates = {};
 
+    // change animal name, breed, image if animalId is changed
+    if (req.body.animalId !== undefined && String(req.body.animalId) !== String(currentAssignment.animalId || "")) {
+        const newAnimal = mongoose.Types.ObjectId.isValid(String(req.body.animalId))
+            ? await Animal.findById(req.body.animalId)
+            : null;
+
+        if (!newAnimal) {
+            const error = new Error("The selected animal was not found.");
+            error.statusCode = 404;
+            throw error;
+        }
+
+        const taken = await FosterAssignment.exists({
+            _id: { $ne: currentAssignment._id },
+            animalId: newAnimal._id,
+            status: "active",
+        });
+
+        if (taken) {
+            const error = new Error(`${newAnimal.name} is already in an active foster assignment.`);
+            error.statusCode = 409;
+            throw error;
+        }
+
+        req.body.petName = newAnimal.name;
+        req.body.petBreed = newAnimal.breed || "";
+        req.body.petImage = newAnimal.image || "";
+        req.body.newAnimalId = newAnimal._id;
+    }
+
     const allowedFields = [
         "petName",
         "petBreed",
@@ -1052,6 +1491,10 @@ exports.updateAssignment = async (req, res) => {
                 .toLowerCase();
     }
 
+    if (req.body.newAnimalId) {
+        allowedUpdates.animalId = req.body.newAnimalId;
+    }
+
     if (
         Object.keys(allowedUpdates).length === 0
     ) {
@@ -1070,10 +1513,17 @@ exports.updateAssignment = async (req, res) => {
                 $set: allowedUpdates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
+
+    if (allowedUpdates.animalId) {
+        if (currentAssignment.animalId) {
+            await Animal.findByIdAndUpdate(currentAssignment.animalId, { $set: { fosterStatus: "none" } });
+        }
+        await Animal.findByIdAndUpdate(allowedUpdates.animalId, { $set: { fosterStatus: "in_foster" } });
+    }
 
     const adminId = req.user?.id;
 
@@ -1120,7 +1570,8 @@ exports.updateAssignment = async (req, res) => {
         },
     });
 
-    await sendFosterUpdateEmail(
+    await sendEmailSafely(
+        sendFosterUpdateEmail,
         assignment.fosterEmail,
         "Foster Assignment Updated",
         `Your foster assignment for ${assignment.petName} has been updated. Please log in to RescueBase to view the latest details.`
@@ -1213,13 +1664,238 @@ exports.deleteAssignment = async (req, res) => {
         },
     });
 
+    if (assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { fosterStatus: "none" });
+    }
+
     await FosterAssignment.findByIdAndDelete(
         req.params.id
     );
 
+    if (assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { $set: { fosterStatus: "none" } });
+    }
+
     return res.status(200).json({
         success: true,
         message: "Foster assignment deleted.",
+    });
+};
+
+// ===== Early return: foster requests, admin/staff confirm or decline =====
+const RETURN_REASONS = ["Medical", "Behavior", "Personal", "Emergency"];
+
+// Tell every admin/staff account (in-app always, email too)
+async function notifyShelterStaff(title, message) {
+    try {
+        const staff = await User.find({ role: { $in: ["admin", "staff"] } }).select("_id email");
+
+        if (staff.length) {
+            await Notification.insertMany(
+                staff.map((user) => ({ user: user._id, title, message, type: "foster_update" }))
+            );
+        }
+
+        await Promise.allSettled(
+            staff.map((user) => sendFosterUpdateEmail(user.email, title, message))
+        );
+    } catch (error) {
+        console.error("Return request staff notification error:", error);
+    }
+}
+
+async function notifyFoster(email, title, message) {
+    try {
+        const foster = await User.findOne({ email }).select("_id");
+
+        if (foster) {
+            await Notification.create({ user: foster._id, title, message, type: "foster_update" });
+        }
+
+        await sendFosterUpdateEmail(email, title, message);
+    } catch (error) {
+        console.error("Return request foster notification error:", error);
+    }
+}
+
+exports.requestReturn = async (req, res) => {
+    const fosterEmail = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        const error = new Error("Invalid assignment.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const assignment = await FosterAssignment.findOne({
+        _id: req.params.id,
+        fosterEmail,
+        status: "active",
+    });
+
+    if (!assignment) {
+        const error = new Error("Active foster assignment not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (assignment.returnRequest?.status === "pending") {
+        const error = new Error("You already asked to return this animal.");
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const reason = String(req.body.reason || "").trim();
+
+    if (!RETURN_REASONS.includes(reason)) {
+        const error = new Error("Please choose a reason for the return.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    let preferredDate = null;
+
+    if (req.body.preferredDate) {
+        preferredDate = new Date(req.body.preferredDate);
+
+        if (Number.isNaN(preferredDate.getTime())) {
+            const error = new Error("Invalid preferred return date.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    const urgent = Boolean(req.body.urgent) || reason === "Emergency";
+
+    assignment.returnRequest = {
+        status: "pending",
+        reason,
+        notes: String(req.body.notes || "").trim().slice(0, 1000),
+        preferredDate,
+        urgent,
+        requestedAt: new Date(),
+        adminNote: "",
+        handledBy: "",
+        handledAt: null,
+    };
+
+    await assignment.save();
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_return_requested",
+        actorName: assignment.fosterName,
+        actorEmail: assignment.fosterEmail,
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+        description: `${assignment.fosterName} asked to return ${assignment.petName} (${reason}).`,
+        status: "active",
+        metadata: { petName: assignment.petName, reason, urgent },
+    });
+
+    const when = preferredDate
+        ? ` Preferred date: ${preferredDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" })}.`
+        : "";
+
+    await notifyShelterStaff(
+        urgent ? "URGENT: Foster return request" : "Foster return request",
+        `${assignment.fosterName} asked to return ${assignment.petName} (${reason}).${when}`
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: "Return request sent. The shelter will contact you to arrange the handover.",
+        assignment,
+    });
+};
+
+exports.handleReturnRequest = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        const error = new Error("Invalid assignment.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const action = String(req.body.action || "").trim().toLowerCase();
+    const adminNote = String(req.body.adminNote || "").trim().slice(0, 500);
+
+    if (!["confirm", "decline"].includes(action)) {
+        const error = new Error("Action must be confirm or decline.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (action === "decline" && !adminNote) {
+        const error = new Error("Add a note so the foster knows why.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const admin = await User.findById(req.user?.id).select("name username email");
+    const adminName = String(admin?.name || admin?.username || "Shelter staff").trim();
+    const now = new Date();
+
+    const set = {
+        "returnRequest.status": action === "confirm" ? "confirmed" : "declined",
+        "returnRequest.adminNote": adminNote,
+        "returnRequest.handledBy": adminName,
+        "returnRequest.handledAt": now,
+    };
+
+    if (action === "confirm") {
+        set.status = "returned";
+        set.endDate = now;
+        set.endReason = "early_return";
+    }
+
+    // One update that only works while the request is still pending and the
+    // assignment is still active (so it can't clash with Accept Evaluation)
+    const assignment = await FosterAssignment.findOneAndUpdate(
+        { _id: req.params.id, status: "active", "returnRequest.status": "pending" },
+        { $set: set },
+        { new: true }
+    );
+
+    if (!assignment) {
+        const error = new Error("This request was already handled or the assignment is no longer active.");
+        error.statusCode = 409;
+        throw error;
+    }
+
+    if (action === "confirm" && assignment.animalId) {
+        await Animal.findByIdAndUpdate(assignment.animalId, { $set: { fosterStatus: "none" } });
+    }
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: action === "confirm" ? "foster_return_confirmed" : "foster_return_declined",
+        actorName: adminName,
+        actorEmail: String(admin?.email || req.user?.email || "").toLowerCase(),
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+        description: action === "confirm"
+            ? `${assignment.petName} was returned to the shelter by ${assignment.fosterName}.`
+            : `${adminName} declined ${assignment.fosterName}'s return request for ${assignment.petName}.`,
+        status: assignment.status,
+        metadata: {
+            petName: assignment.petName,
+            reason: assignment.returnRequest?.reason,
+            adminNote,
+        },
+    });
+
+    await notifyFoster(
+        assignment.fosterEmail,
+        action === "confirm" ? "Return confirmed" : "Return request declined",
+        action === "confirm"
+            ? `The shelter confirmed ${assignment.petName} is back. Thank you for fostering!`
+            : `Your request to return ${assignment.petName} was declined: ${adminNote}`
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: action === "confirm" ? "Return confirmed." : "Return request declined.",
+        assignment,
     });
 };
 
@@ -1242,10 +1918,10 @@ exports.getMyAssignmentHistory = async (req, res) => {
     const assignments =
         await FosterAssignment.find({
             fosterEmail,
-            status: "completed",
+            status: { $in: ["completed", "returned"] },
         }).sort({
             endDate: -1,
-        });
+        }).populate("animalId", "adoptionStatus");
 
     return res.status(200).json({
         success: true,
@@ -1301,6 +1977,8 @@ exports.submitMedicalRequest = async (req, res) => {
     assignment.medicalRequests.push({
         issue,
         urgency,
+        issueType: String(req.body.issueType || "").trim(),
+        photoUrl: String(req.body.photoUrl || "").trim(),
         status: "pending",
         submittedBy:
             String(

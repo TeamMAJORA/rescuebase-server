@@ -126,6 +126,31 @@ const adoptionApplicationSchema = new mongoose.Schema(
             default: false,
         },
 
+        // Staff asked the applicant to upload their documents again
+        documentRequest: {
+            status: {
+                type: String,
+                enum: ["none", "requested", "resubmitted"],
+                default: "none",
+            },
+            reason: { type: String, default: "", trim: true, maxlength: 500 },
+            requestedAt: { type: Date, default: null },
+            requestedBy: { type: String, default: "", trim: true },
+            resubmittedAt: { type: Date, default: null },
+        },
+
+        // Set when the applicant is currently fostering this pet
+        isFosterAdoption: {
+            type: Boolean,
+            default: false,
+        },
+
+        fosterAssignmentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "FosterAssignment",
+            default: null,
+        },
+
         role: {
             type: String,
             enum: ["adopter"],
@@ -134,7 +159,7 @@ const adoptionApplicationSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["pending", "interview_scheduled", "interview_completed" ,"approved", "rejected"],
+            enum: ["pending", "interview_scheduled", "interview_completed" ,"approved", "rejected", "withdrawn"],
             default: "pending",
         },
 
@@ -171,6 +196,22 @@ const adoptionApplicationSchema = new mongoose.Schema(
         interviewSchedule: {
             type: Date,
             default: null,
+        },
+
+        withdrawnAt: {
+            type: Date,
+            default: null,
+        },
+
+        withdrawnFromStatus: {
+            type: String,
+            default: "",
+        },
+
+        withdrawalReason: {
+            type: String,
+            default: "",
+            trim: true,
         },
     },
     {

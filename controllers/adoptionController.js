@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const AdoptionApplication = require("../models/AdoptionApplication");
 const Animal = require("../models/Animal");
+const FosterAssignment = require("../models/FosterAssignment");
 const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
@@ -9,6 +10,7 @@ const Notification = require("../models/Notifications");
 const {
     sendApplicationUpdateEmail,
     sendInterviewScheduleEmail,
+    sendDocumentRequestEmail,
 } = require("../services/emailService");
 
 async function createLedgerEntrySafely(data) {
@@ -47,12 +49,12 @@ exports.submitApplication = async (req, res) => {
 
     const existingPendingApplication = await AdoptionApplication.findOne({
         email,
-        status: "pending",
+        status: { $in: ["pending", "interview_scheduled", "interview_completed"] },
     });
 
     if (existingPendingApplication) {
         const error = new Error(
-            "You already have a pending adoption application."
+            "You already have an active adoption application."
         );
         error.statusCode = 409;
         throw error;
@@ -86,6 +88,13 @@ exports.submitApplication = async (req, res) => {
         }))
         : [];
 
+    // Is the applicant the pet's current foster?
+    const fosterAssignment = await FosterAssignment.findOne({
+        fosterEmail: email,
+        animalId: animal._id,
+        status: "active",
+    }).select("_id");
+
     const application = await AdoptionApplication.create({
         applicantUserId,
         fullName,
@@ -103,6 +112,8 @@ exports.submitApplication = async (req, res) => {
         experience: String(req.body.experience || "").trim(),
         documents,
         documentsVerified: false,
+        isFosterAdoption: Boolean(fosterAssignment),
+        fosterAssignmentId: fosterAssignment?._id || null,
         role: "adopter",
         status: "pending",
     });
@@ -115,7 +126,8 @@ exports.submitApplication = async (req, res) => {
         targetType: "AdoptionApplication",
         targetId: application._id.toString(),
         description:
-            `${application.fullName} submitted an adoption application for ${application.petName}.`,
+            `${application.fullName} submitted an adoption application for ${application.petName}` +
+            (application.isFosterAdoption ? " (their current foster pet)." : "."),
         status: "pending",
         metadata: {
             animalId: application.animalId.toString(),
@@ -267,7 +279,9 @@ exports.updateApplicationStatus = async (req, res) => {
         throw error;
     }
 
-    if (!application.animalId) {
+    // Rejecting is always allowed, even if the animal record is missing or was deleted,
+    // so an application can never get stuck
+    if (!application.animalId && status !== "rejected") {
         const error = new Error("Application is not connected to an animal.");
         error.statusCode = 400;
         throw error;
@@ -292,11 +306,11 @@ exports.updateApplicationStatus = async (req, res) => {
         throw error;
     }
 
-    const animalExists = await Animal.exists({
-        _id: application.animalId,
-    });
+    const animalExists = application.animalId
+        ? await Animal.exists({ _id: application.animalId })
+        : null;
 
-    if (!animalExists) {
+    if (!animalExists && status !== "rejected") {
         const error = new Error("Animal record not found.");
         error.statusCode = 404;
         throw error;
@@ -328,7 +342,7 @@ exports.updateApplicationStatus = async (req, res) => {
                 },
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -448,6 +462,53 @@ exports.updateApplicationStatus = async (req, res) => {
         }
     }
 
+    // The pet was in foster care: end that foster assignment
+    if (status === "approved") {
+        try {
+            const activeFoster = await FosterAssignment.findOne({
+                animalId: application.animalId,
+                status: "active",
+            });
+
+            if (activeFoster) {
+                const byFoster = activeFoster.fosterEmail === application.email;
+
+                await FosterAssignment.updateOne(
+                    { _id: activeFoster._id, status: "active" },
+                    {
+                        $set: {
+                            status: "completed",
+                            endDate: new Date(),
+                            endReason: byFoster ? "adopted_by_foster" : "adopted",
+                        },
+                    }
+                );
+
+                await Animal.updateOne(
+                    { _id: application.animalId },
+                    { $set: { fosterStatus: "completed" } }
+                );
+
+                if (!byFoster) {
+                    const foster = await User.findOne({ email: activeFoster.fosterEmail }).select("_id");
+
+                    if (foster) {
+                        await Notification.create({
+                            user: foster._id,
+                            title: "Your foster pet was adopted",
+                            message:
+                                `${activeFoster.petName} has been adopted. The shelter will contact you ` +
+                                "to arrange the handover. Thank you for fostering!",
+                            type: "foster_update",
+                        });
+                    }
+                }
+            }
+        } catch (fosterError) {
+            console.error("Failed to close the foster assignment:", fosterError);
+        }
+    }
+
     let notificationMessage;
 
     switch (status) {
@@ -516,7 +577,7 @@ exports.updateApplicationStatus = async (req, res) => {
             `${application.petName} to ${status}.`,
         status,
         metadata: {
-            animalId: application.animalId.toString(),
+            animalId: application.animalId ? application.animalId.toString() : "",
             petName: application.petName,
             applicantEmail: application.email,
             interviewSchedule: application.interviewSchedule,
@@ -533,5 +594,284 @@ exports.updateApplicationStatus = async (req, res) => {
         message: `Application updated to ${status}.`,
         application,
         animal: application.animalId,
+    });
+};
+
+exports.withdrawApplication = async (req, res) => {
+    const applicationId = String(req.params.id || "").trim();
+    const email = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!mongoose.isValidObjectId(applicationId)) {
+        const error = new Error("Invalid Application ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    // Only the adopter who owns the application can withdraw it
+    const application = await AdoptionApplication.findOne({
+        _id: applicationId,
+        email,
+    });
+
+    if (!application) {
+        const error = new Error("Application not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const withdrawableStatuses = [
+        "pending",
+        "interview_scheduled",
+        "interview_completed",
+    ];
+
+    if (!withdrawableStatuses.includes(application.status)) {
+        const error = new Error(
+            `This application is already ${application.status} and can no longer be withdrawn.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const previousStatus = application.status;
+
+    application.status = "withdrawn";
+    application.withdrawnFromStatus = previousStatus;
+    application.withdrawnAt = new Date();
+    application.withdrawalReason = String(req.body?.reason || "")
+        .trim()
+        .slice(0, 300);
+
+    await application.save();
+
+    await createLedgerEntrySafely({
+        type: "adoption",
+        action: "application_withdrawn",
+        actorName: application.fullName,
+        actorEmail: application.email,
+        targetType: "AdoptionApplication",
+        targetId: application._id.toString(),
+        description:
+            `${application.fullName} withdrew their adoption application for ${application.petName}.`,
+        status: "withdrawn",
+        metadata: {
+            animalId: application.animalId.toString(),
+            petName: application.petName,
+            previousStatus,
+            reason: application.withdrawalReason,
+        },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: "Your application has been withdrawn.",
+        application,
+    });
+};
+
+exports.getUserApplicationHistory = async (req, res) => {
+    const email = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!email) {
+        const error = new Error("Authenticated user email is missing");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    const applications = await AdoptionApplication.find({ email })
+        .select(
+            "petName petBreed petImage status createdAt updatedAt reviewedAt " +
+            "withdrawnAt interviewSchedule rejectionReason withdrawalReason animalId"
+        )
+        .populate("animalId", "name breed image")
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean();
+
+    return res.status(200).json({
+        success: true,
+        applications,
+    });
+};
+
+// Applications that can still change documents
+const DOCUMENT_OPEN_STATUSES = [
+    "pending",
+    "interview_scheduled",
+    "interview_completed",
+];
+
+// Admin/staff: ask the applicant to upload their documents again
+exports.requestDocumentResubmission = async (req, res) => {
+    const applicationId = String(req.params.id || "").trim();
+    const reason = String(req.body?.reason || "").trim().slice(0, 500);
+
+    if (!mongoose.isValidObjectId(applicationId)) {
+        const error = new Error("Invalid Application ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!reason) {
+        const error = new Error("Tell the applicant what needs to be fixed.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const application = await AdoptionApplication.findById(applicationId);
+
+    if (!application) {
+        const error = new Error("Application not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (!DOCUMENT_OPEN_STATUSES.includes(application.status)) {
+        const error = new Error(
+            `This application is already ${application.status}, so documents can no longer be requested.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const staff = await User.findById(req.user?.id).select("name username");
+    const staffName = String(staff?.name || staff?.username || "Staff").trim();
+
+    application.documents.forEach((document) => {
+        document.status = "rejected";
+    });
+    application.documentsVerified = false;
+    application.documentRequest = {
+        status: "requested",
+        reason,
+        requestedAt: new Date(),
+        requestedBy: staffName,
+        resubmittedAt: null,
+    };
+
+    await application.save();
+
+    await createLedgerEntrySafely({
+        type: "adoption",
+        action: "documents_resubmission_requested",
+        actorName: staffName,
+        actorEmail: String(req.user?.email || "").toLowerCase(),
+        targetType: "AdoptionApplication",
+        targetId: application._id.toString(),
+        description: `${staffName} asked ${application.fullName} to resubmit their documents for ${application.petName}.`,
+        status: application.status,
+        metadata: { reason },
+    });
+
+    if (application.applicantUserId) {
+        await Notification.create({
+            user: application.applicantUserId,
+            title: "Please resubmit your documents",
+            message: `The shelter needs a new copy of your ID for ${application.petName}. Reason: ${reason}`,
+            type: "application_update",
+        });
+    }
+
+    try {
+        await sendDocumentRequestEmail(application.email, application.petName, reason);
+    } catch (error) {
+        console.error("Document request email error:", error);
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Resubmission request sent to the applicant.",
+        application,
+    });
+};
+
+// Adopter/foster: upload new documents after staff asked for them
+exports.resubmitDocuments = async (req, res) => {
+    const applicationId = String(req.params.id || "").trim();
+    const email = String(req.user?.email || "").trim().toLowerCase();
+
+    if (!mongoose.isValidObjectId(applicationId)) {
+        const error = new Error("Invalid Application ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    // Only the owner of the application can resubmit
+    const application = await AdoptionApplication.findOne({ _id: applicationId, email });
+
+    if (!application) {
+        const error = new Error("Application not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (application.documentRequest?.status !== "requested") {
+        const error = new Error("The shelter has not asked for new documents.");
+        error.statusCode = 409;
+        throw error;
+    }
+
+    if (!DOCUMENT_OPEN_STATUSES.includes(application.status)) {
+        const error = new Error(`This application is already ${application.status}.`);
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const documents = (Array.isArray(req.body?.documents) ? req.body.documents : [])
+        .map((document) => ({
+            documentName: String(document?.documentName || "").trim(),
+            documentUrl: String(document?.documentUrl || ""),
+            publicId: String(document?.publicId || ""),
+            status: "pending",
+        }))
+        .filter((document) => document.documentUrl);
+
+    if (!documents.length) {
+        const error = new Error("Please upload your ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    application.documents = documents;
+    application.documentsVerified = false;
+    application.documentRequest.status = "resubmitted";
+    application.documentRequest.resubmittedAt = new Date();
+
+    await application.save();
+
+    await createLedgerEntrySafely({
+        type: "adoption",
+        action: "documents_resubmitted",
+        actorName: application.fullName,
+        actorEmail: application.email,
+        targetType: "AdoptionApplication",
+        targetId: application._id.toString(),
+        description: `${application.fullName} resubmitted their documents for ${application.petName}.`,
+        status: application.status,
+        metadata: { petName: application.petName },
+    });
+
+    // Let admins and staff know new documents are waiting
+    try {
+        const reviewers = await User.find({ role: { $in: ["admin", "staff"] } }).select("_id");
+
+        if (reviewers.length) {
+            await Notification.insertMany(
+                reviewers.map((reviewer) => ({
+                    user: reviewer._id,
+                    title: "Documents resubmitted",
+                    message: `${application.fullName} uploaded new documents for ${application.petName}.`,
+                    type: "application_update",
+                }))
+            );
+        }
+    } catch (error) {
+        console.error("Notify reviewers error:", error);
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Your new documents were sent to the shelter.",
+        application,
     });
 };

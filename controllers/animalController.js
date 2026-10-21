@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 const Animal = require("../models/Animal");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
+const AdoptionApplication = require("../models/AdoptionApplication");
+const FosterAssignment = require("../models/FosterAssignment");
 const {
     sendPetAvailableEmail,
 } = require("../services/emailService");
@@ -486,7 +488,7 @@ exports.updateAnimal = async (req, res) => {
             $set: allowedUpdates,
         },
         {
-            new: true,
+            returnDocument: "after",
             runValidators: true,
         }
     );
@@ -527,17 +529,46 @@ exports.deleteAnimal = async (req, res) => {
         throw error;
     }
 
-    const animal = await Animal.findByIdAndDelete(
-        animalId
-    );
+    const existing = await Animal.findById(animalId).select("name");
 
-    if (!animal) {
+    if (!existing) {
         const error = new Error(
             "Animal profile not found."
         );
         error.statusCode = 404;
         throw error;
     }
+
+    // Deleting would leave these records stuck, so finish them first
+    const activeApplications = await AdoptionApplication.countDocuments({
+        animalId,
+        status: { $in: ["pending", "interview_scheduled", "interview_completed"] },
+    });
+
+    if (activeApplications > 0) {
+        const error = new Error(
+            `${existing.name} has ${activeApplications} open adoption application(s). Reject or finish them before deleting.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const activeFoster = await FosterAssignment.exists({
+        status: "active",
+        $or: [{ animalId }, { animalId: null, petName: existing.name }],
+    });
+
+    if (activeFoster) {
+        const error = new Error(
+            `${existing.name} is in an active foster assignment. Complete or delete the assignment first.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const animal = await Animal.findByIdAndDelete(
+        animalId
+    );
 
     return res.status(200).json({
         success: true,

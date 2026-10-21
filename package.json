@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "archiver": "^7.0.1",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.10.0",
     "cors": "^2.8.6",
@@ -7,11 +8,18 @@
     "express": "^5.2.1",
     "firebase": "^9.14.0",
     "firebase-admin": "^14.1.0",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.3",
     "multer": "^2.2.0",
     "node-cron": "^4.6.0",
     "nodemailer": "^9.0.3",
     "qrcode": "^1.5.4",
     "streamifier": "^0.1.1"
+  },
+  "allowScripts": {
+    "protobufjs@6.11.6": true,
+    "protobufjs@7.6.6": true,
+    "@firebase/util@1.15.3": true,
+    "bcrypt@6.0.0": true
   }
 }
