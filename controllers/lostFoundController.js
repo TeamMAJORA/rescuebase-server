@@ -339,9 +339,9 @@ exports.reviewClaim = async (req, res) => {
 
     const reviewerName = getActorName(req);
     const reviewerEmail = getActorEmail(req);
-
+    const claimantEmailForMail = report.claimedByEmail;
     report.claimStatus = claimStatus;
-
+    
     report.reviewedByName = reviewerName;
     report.reviewedByEmail = reviewerEmail;
     report.reviewedAt = new Date();
@@ -390,8 +390,8 @@ exports.reviewClaim = async (req, res) => {
         },
     });
 
-    await sendLostFoundClaimEmail(
-        report.claimedByEmail,
+        await sendLostFoundClaimEmail(
+        claimantEmailForMail,
         report.petName || report.species,
         claimStatus
     );
