@@ -1,5 +1,6 @@
 const QuizResponse = require("../models/QuizResponse");
 const Animal = require("../models/Animal");
+const AdoptionApplication = require("../models/AdoptionApplication");
 const { generateMatches } = require("../services/matchmakingService");
 
 exports.submitMatchmakingQuiz = async (req, res) => {
@@ -133,6 +134,64 @@ exports.getMatchmakingResults = async (req, res) => {
                     "development"
                     ? error.message
                     : undefined,
+        });
+    }
+};
+
+
+// Admin/staff: latest quiz per adopter + their latest adoption application
+exports.getAllQuizResponses = async (req, res) => {
+    try {
+        const responses = await QuizResponse.find()
+            .sort({ createdAt: -1 })
+            .lean();
+
+        // Keep only each adopter's most recent quiz
+        const seen = new Set();
+        const latest = [];
+
+        for (const response of responses) {
+            const key =
+                response.adopterEmail ||
+                String(response.adopterUserId || response._id);
+
+            if (seen.has(key)) continue;
+            seen.add(key);
+            latest.push(response);
+        }
+
+        const emails = latest
+            .map((response) => response.adopterEmail)
+            .filter(Boolean);
+
+        const applications = await AdoptionApplication.find({
+            email: { $in: emails },
+        })
+            .sort({ createdAt: -1 })
+            .select("email status petName petImage createdAt")
+            .lean();
+
+        const latestApplication = {};
+
+        for (const application of applications) {
+            if (!latestApplication[application.email]) {
+                latestApplication[application.email] = application;
+            }
+        }
+
+        return res.status(200).json({
+            success: true,
+            responses: latest.map((response) => ({
+                ...response,
+                latestApplication: latestApplication[response.adopterEmail] || null,
+            })),
+        });
+    } catch (error) {
+        console.error("Get quiz responses error:", error);
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to load quiz responses.",
         });
     }
 };

@@ -15,7 +15,7 @@ const authoriseRoles = require("../middleware/authoriseRoles");
 
 router.post("/", 
     verifyToken,
-    authoriseRoles("adopter"),
+    authoriseRoles("adopter", "foster"),
     validateRequest([
         "fullName",
         "animalId",
@@ -36,14 +36,14 @@ router.get("/",
 
 router.get("/user/latest",
     verifyToken,
-    authoriseRoles("adopter"),
+    authoriseRoles("adopter", "foster"),
 
     asyncHandler(adoptionController.getLatestUserApplication)
 );
 
 router.get("/user/history",
     verifyToken,
-    authoriseRoles("adopter"),
+    authoriseRoles("adopter", "foster"),
     asyncHandler(adoptionController.getUserApplicationHistory)
 );
 
@@ -56,8 +56,20 @@ router.patch("/:id/status",
 
 router.patch("/:id/withdraw",
     verifyToken,
-    authoriseRoles("adopter"),
+    authoriseRoles("adopter", "foster"),
     asyncHandler(adoptionController.withdrawApplication)
+);
+
+router.patch("/:id/documents/request",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(adoptionController.requestDocumentResubmission)
+);
+
+router.patch("/:id/documents",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
+    asyncHandler(adoptionController.resubmitDocuments)
 );
 
 module.exports = router;

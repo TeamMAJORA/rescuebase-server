@@ -41,7 +41,7 @@ async function getGlobalSettings() {
             },
         },
         {
-            new: true,
+            returnDocument: "after",
             upsert: true,
             setDefaultsOnInsert: true,
             runValidators: true,

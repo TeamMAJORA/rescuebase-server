@@ -354,7 +354,7 @@ exports.updateVaccination = async (
                 $set: updates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         ).populate(

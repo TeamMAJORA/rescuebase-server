@@ -5,11 +5,20 @@ const { getGlobalSettings } = require("../utils/globalSettings");
 const EXEMPT_PATHS = new Set([
     "/",
     "/api/settings",
+    "/api/settings/status",
+    "/api/gis/public",
+    "/api/gis/shelters",
 ]);
 
 module.exports = async function maintenanceMode(req, res, next) {
     try {
-        if (req.method === "OPTIONS" || EXEMPT_PATHS.has(req.path)) {
+        // makes the log in available to admins so they can log in
+        // and turn maintenance off. Other roles see the maintenance screen after login.
+        if (
+            req.method === "OPTIONS" ||
+            (EXEMPT_PATHS.has(req.path) && (req.method === "GET" || req.path.startsWith("/api/settings"))) ||
+            req.path.startsWith("/api/auth/")
+        ) {
             return next();
         }
 

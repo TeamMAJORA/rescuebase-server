@@ -40,6 +40,16 @@ exports.getTransfers = async (req, res) => {
     return res.status(200).json({ success: true, transfers });
 };
 
+// A completed transfer moves the animal: its profile location becomes the destination
+async function applyCompletedTransfer(transfer) {
+    const animalId = transfer.animal_id?._id || transfer.animal_id;
+    if (!animalId || !transfer.to_location) return;
+
+    await Animal.findByIdAndUpdate(animalId, {
+        $set: { location: transfer.to_location },
+    });
+}
+
 exports.createTransfer = async (req, res) => {
     const animalId = String(req.body.animal_id || "").trim();
     const fromLocation = String(req.body.from_location || "").trim();
@@ -65,6 +75,10 @@ exports.createTransfer = async (req, res) => {
         status,
         recorded_by: req.user?.id || null,
     });
+
+    if (transfer.status === "Completed") {
+        await applyCompletedTransfer(transfer);
+    }
 
     await transfer.populate("animal_id", "name type breed image");
 
@@ -99,13 +113,22 @@ exports.updateTransfer = async (req, res) => {
         if (updates[field] === "") throw httpError(`${field.replace("_", " ")} cannot be empty.`, 400);
     }
 
+    const before = await AnimalTransfer.findById(id).select("status").lean();
+
+    if (!before) throw httpError("Transfer not found.", 404);
+
     const transfer = await AnimalTransfer.findByIdAndUpdate(
         id,
         { $set: updates },
-        { new: true, runValidators: true }
+        { returnDocument: "after", runValidators: true }
     ).populate("animal_id", "name type breed image");
 
     if (!transfer) throw httpError("Transfer not found.", 404);
+
+    // Only when it becomes Completed (editing a completed one again re-applies the destination)
+    if (transfer.status === "Completed" && (before.status !== "Completed" || updates.to_location !== undefined || updates.animal_id !== undefined)) {
+        await applyCompletedTransfer(transfer);
+    }
 
     return res.status(200).json({
         success: true,

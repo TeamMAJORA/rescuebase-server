@@ -28,7 +28,10 @@ router.get(
     verifyToken,
     authorizeRoles(
         "admin",
-        "staff"
+        "staff",
+        "foster",
+        "adopter",
+        "volunteer"
     ),
     asyncHandler(
         lostFoundController.getAllReports

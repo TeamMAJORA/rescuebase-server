@@ -36,7 +36,21 @@ router.get(
         feedbackController.getAllFeedback
     )
 );
-
+router.get(
+    "/me",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff",
+        "adopter",
+        "foster",
+        "volunteer",
+        "donor"
+    ),
+    asyncHandler(
+        feedbackController.getMyFeedback
+    )
+);
 router.get(
     "/:id",
     verifyToken,
@@ -83,5 +97,4 @@ router.delete(
         feedbackController.deleteFeedback
     )
 );
-
-module.exports = router;
+   module.exports = router;

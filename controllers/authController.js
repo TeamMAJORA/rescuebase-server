@@ -322,7 +322,7 @@ exports.emailLogin = async (req, res) => {
     }
 
     if (user.status === "disabled") {
-        const error = new Error("Your account is disabled.");
+        const error = new Error("This account has been deactivated. Contact the shelter staff if you think this is a mistake.");
         error.statusCode = 403;
         throw error;
     }
@@ -706,7 +706,7 @@ exports.googleLogin = async (req, res) => {
     }
 
     if (user.status == "disabled") {
-        const error = new Error("This account has been disabled.");
+        const error = new Error("This account has been deactivated. Contact the shelter staff if you think this is a mistake.");
         error.statusCode = 403;
         throw error;
     }

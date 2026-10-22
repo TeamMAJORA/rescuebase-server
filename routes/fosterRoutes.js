@@ -39,6 +39,23 @@ router.get(
     )
 );
 
+router.patch(
+    "/applications/me",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
+    asyncHandler(
+        fosterController.updateMyApplication
+    )
+);
+
+router.patch(
+    "/applications/me/withdraw",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
+    asyncHandler(
+        fosterController.withdrawMyApplication
+    )
+);
 
 router.patch(
     "/applications/:id/status",
@@ -107,6 +124,16 @@ router.patch(
     )
 );
 
+// Send the evaluation back to the foster with a reason
+router.patch(
+    "/assignments/:id/behavior-evaluation/return",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.returnBehaviorEvaluation
+    )
+);
+
 router.patch(
     "/assignments/:id/complete",
     verifyToken,
@@ -136,6 +163,23 @@ router.delete(
     )
 );
 
+router.post(
+    "/assignments/:id/return-request",
+    verifyToken,
+    authoriseRoles("foster"),
+    asyncHandler(
+        fosterController.requestReturn
+    )
+);
+
+router.patch(
+    "/assignments/:id/return-request",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.handleReturnRequest
+    )
+);
 
 router.get(
     "/assignments/me/history",
