@@ -44,11 +44,14 @@ exports.getStaffList = async (req, res) => {
 
 // Active volunteers for the Rescue page dropdown (admin and staff)
 exports.getVolunteerList = async (req, res) => {
+    // ?includeStaff=1 also lists staff (used when assigning rescue tasks)
+    const roles = String(req.query.includeStaff || "") === "1" ? ["volunteer", "staff"] : ["volunteer"];
+
     const volunteers = await User.find({
-        role: "volunteer",
+        role: { $in: roles },
         status: { $in: ["active", null] },
     })
-        .select("name username email")
+        .select("name username email role")
         .sort({ name: 1 });
 
     return res.status(200).json({
@@ -58,6 +61,7 @@ exports.getVolunteerList = async (req, res) => {
             name: user.name || user.username || "Unnamed",
             username: user.username,
             email: user.email,
+            role: user.role,
         })),
     });
 };
