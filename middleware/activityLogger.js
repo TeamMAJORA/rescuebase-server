@@ -193,7 +193,9 @@ module.exports = function activityLogger(req, res, next) {
                 activity,
                 activityType: rule[2],
                 activityDate: new Date(),
-            }).catch((error) => console.error("Activity log write failed:", error.message));
+            })
+                .then(() => console.log(`[Activity Log] saved: ${activity}`))
+                .catch((error) => console.error("Activity log write failed:", error.message));
         } catch (error) {
             console.error("Activity log error:", error.message);
         }
