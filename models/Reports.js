@@ -81,6 +81,13 @@ const reportSchema = new mongoose.Schema(
             default: "text",
         },
 
+        // Dogs / cats filter used when the report was generated
+        species: {
+            type: String,
+            enum: ["all", "dog", "cat"],
+            default: "all",
+        },
+
         dateRange: {
             type: String,
             default: "all",
