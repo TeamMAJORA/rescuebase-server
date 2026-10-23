@@ -437,7 +437,38 @@ async function sendDocumentRequestEmail(email, petName, reason) {
     });
 }
 
+function escapeHtml(value) {
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+async function sendFeedbackReplyEmail(email, name, feedbackMessage, reply) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase replied to your feedback",
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Thank you for your feedback${name ? `, ${escapeHtml(name)}` : ""}!</h2>
+
+                <p><strong>Our reply:</strong></p>
+                <p style="white-space: pre-wrap;">${escapeHtml(reply)}</p>
+
+                <p style="color: #777;"><strong>Your feedback:</strong></p>
+                <blockquote style="margin: 0; padding-left: 12px; border-left: 3px solid #ddd; color: #777; white-space: pre-wrap;">${escapeHtml(feedbackMessage)}</blockquote>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
 module.exports = {
+    sendFeedbackReplyEmail,
     sendOtpEmail,
     sendPasswordResetEmail,
     sendApplicationUpdateEmail,

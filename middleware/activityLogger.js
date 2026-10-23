@@ -110,11 +110,15 @@ const RULES = [
     ["PATCH", /^\/api\/supplies\/[^/]+$/, "Supplies", (c) => withName("Updated needed supply", c.name)],
     ["DELETE", /^\/api\/supplies\/[^/]+$/, "Supplies", () => "Deleted a needed supply"],
 
+    // Reads worth recording (downloads / exports)
+    ["GET", /^\/api\/reports\/[^/]+\/download$/, "Report", (c) => withName("Downloaded report", c.reportTitle)],
+
     // Reports, feedback, users, settings
     ["POST", /^\/api\/reports(\/generate)?$/, "Report", (c) => withName("Generated report", c.name)],
     ["PATCH", /^\/api\/reports\/[^/]+\/finalize$/, "Report", (c) => withName("Finalized report", c.name)],
     ["DELETE", /^\/api\/reports\/[^/]+$/, "Report", () => "Deleted a report"],
     ["POST", /^\/api\/feedback\/?$/, "Feedback", () => "Sent feedback"],
+    ["PATCH", /^\/api\/feedback\/[^/]+\/reply$/, "Feedback", (c) => withName("Replied to feedback from", c.data?.feedback?.userName)],
     ["PATCH", /^\/api\/feedback\/[^/]+\/(archive|restore)$/, "Feedback", (c) => `${c.match[1] === "archive" ? "Archived" : "Restored"} feedback`],
     ["DELETE", /^\/api\/feedback\/[^/]+$/, "Feedback", () => "Deleted feedback"],
     ["POST", /^\/api\/users\/role-application$/, "User", () => "Applied for a new role"],
@@ -134,8 +138,10 @@ function userIdFrom(req, data) {
     return user?._id || user?.id ? String(user._id || user.id) : "";
 }
 
+console.log("[Activity Log] Logging is on.");
+
 module.exports = function activityLogger(req, res, next) {
-    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
 
     const path = req.originalUrl.split("?")[0].replace(/\/+$/, "") || "/";
     const rule = RULES.find(([method, pattern]) => method === req.method && pattern.test(path));
@@ -148,7 +154,7 @@ module.exports = function activityLogger(req, res, next) {
         return originalJson(body);
     };
 
-    res.on("finish", () => {
+    res.on("finish", async () => {
         try {
             if (res.statusCode >= 400) return;
 
@@ -158,12 +164,26 @@ module.exports = function activityLogger(req, res, next) {
             const userId = userIdFrom(req, responseData);
             if (!userId) return;
 
+            // Download responses are files, so look the report title up by id
+            const reportId = (path.match(/^\/api\/reports\/([^/]+)\/download$/) || [])[1];
+
             const ctx = {
+                reportTitle: "",
                 body: req.body || {},
                 data: responseData || {},
                 match: path.match(rule[1]) || [],
                 name: findName(responseData, req.body),
             };
+
+            if (reportId) {
+                try {
+                    const Report = require("../models/Reports");
+                    const report = await Report.findById(reportId).select("title").lean();
+                    ctx.reportTitle = report?.title || "";
+                } catch {
+                    // title is optional
+                }
+            }
 
             const activity = String(rule[3](ctx) || "").replace(/\s+/g, " ").trim().slice(0, 300);
             if (!activity) return;

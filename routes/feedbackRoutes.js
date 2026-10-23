@@ -64,6 +64,18 @@ router.get(
 );
 
 router.patch(
+    "/:id/reply",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff"
+    ),
+    asyncHandler(
+        feedbackController.replyToFeedback
+    )
+);
+
+router.patch(
     "/:id/archive",
     verifyToken,
     authorizeRoles(
