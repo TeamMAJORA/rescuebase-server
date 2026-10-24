@@ -91,7 +91,21 @@ exports.getAllFeedback = async (req, res) => {
         filter.status = status;
     }
 
-    const feedback = await Feedback.find(filter).sort({ createdAt: -1 });
+    const rows = await Feedback.find(filter).sort({ createdAt: -1 }).lean();
+
+    // Attach each sender's current profile photo (matched by account id, then email)
+    const ids = rows.map((row) => row.user).filter(Boolean);
+    const emails = rows.map((row) => String(row.userEmail || "").toLowerCase()).filter(Boolean);
+    const people = await User.find({ $or: [{ _id: { $in: ids } }, { email: { $in: emails } }] })
+        .select("email profileImage")
+        .lean();
+    const byId = new Map(people.map((person) => [String(person._id), person.profileImage || ""]));
+    const byEmail = new Map(people.map((person) => [String(person.email || "").toLowerCase(), person.profileImage || ""]));
+
+    const feedback = rows.map((row) => ({
+        ...row,
+        userImage: (row.user && byId.get(String(row.user))) || byEmail.get(String(row.userEmail || "").toLowerCase()) || "",
+    }));
 
     return res.status(200).json({
         success: true,
