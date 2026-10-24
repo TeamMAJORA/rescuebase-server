@@ -467,19 +467,59 @@ async function sendFeedbackReplyEmail(email, name, feedbackMessage, reply) {
     });
 }
 
+
+// ------------------------------------------------------------
+// Respect each user's email choices (Settings > Notifications).
+// Looks the recipient up by email; unknown or missing prefs = send.
+// ------------------------------------------------------------
+async function wantsEmail(email, category) {
+    if (!email || !category) return true;
+
+    try {
+        const User = require("../models/User");
+        const user = await User.findOne({ email: String(email).trim().toLowerCase() })
+            .select("emailPrefs")
+            .lean();
+        return user?.emailPrefs?.[category] !== false;
+    } catch (error) {
+        console.error("Email preference check failed:", error.message);
+        return true;
+    }
+}
+
+function gated(send, category, pickEmail = (args) => args[0]) {
+    return async (...args) => {
+        const email = pickEmail(args);
+
+        if (!(await wantsEmail(email, category))) {
+            console.log(`[Email] skipped ${category} email to ${email} (turned off in settings)`);
+            return { skipped: true };
+        }
+
+        return send(...args);
+    };
+}
+
 module.exports = {
-    sendFeedbackReplyEmail,
+    // Always sent (security / account)
     sendOtpEmail,
     sendPasswordResetEmail,
-    sendApplicationUpdateEmail,
     sendRoleApplicationEmail,
-    sendDonationConfirmationEmail,
-    sendFosterUpdateEmail,
-    sendVaccinationReminderEmail,
-    sendInterviewScheduleEmail,
-    sendDocumentRequestEmail,
-    sendPetAvailableEmail,
-    sendLostFoundClaimEmail,
-    sendLostFoundReunitedEmail,
-    sendRescueAssignmentEmail,
+
+    // Update emails the user can turn off
+    sendApplicationUpdateEmail: gated(sendApplicationUpdateEmail, "adoption"),
+    sendInterviewScheduleEmail: gated(sendInterviewScheduleEmail, "adoption"),
+    sendDocumentRequestEmail: gated(sendDocumentRequestEmail, "adoption"),
+    sendPetAvailableEmail: gated(sendPetAvailableEmail, "petAvailable"),
+    sendFosterUpdateEmail: gated(sendFosterUpdateEmail, "foster"),
+    sendVaccinationReminderEmail: gated(sendVaccinationReminderEmail, "foster"),
+    sendLostFoundClaimEmail: gated(sendLostFoundClaimEmail, "lostFound"),
+    sendLostFoundReunitedEmail: gated(sendLostFoundReunitedEmail, "lostFound"),
+    sendRescueAssignmentEmail: gated(sendRescueAssignmentEmail, "rescue"),
+    sendFeedbackReplyEmail: gated(sendFeedbackReplyEmail, "feedback"),
+    sendDonationConfirmationEmail: gated(
+        sendDonationConfirmationEmail,
+        "donation",
+        (args) => (args[0] && typeof args[0] === "object" ? args[0].donorEmail : args[0])
+    ),
 };
