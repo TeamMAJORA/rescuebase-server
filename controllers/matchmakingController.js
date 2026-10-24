@@ -106,21 +106,24 @@ exports.getMatchmakingResults = async (req, res) => {
         }
 
         const animals = await Animal.find({
-            availabilityStatus:
-                "available",
-
-            adoptionStatus:
-                "available",
+            availabilityStatus: "available",
+            adoptionStatus: "available",
         }).lean();
 
-        const matches = await generateMatches(animals, quizResponse);
+        // shortcut: one AI call per adopter × animal on every load; save scores on QuizResponse if this gets slow
+        const withMatches = await Promise.all(
+            latest.map(async (response) => ({
+                ...response,
+                latestApplication: latestApplication[response.adopterEmail] || null,
+                aiMatches: (await generateMatches(animals, response)).map(
+                    ({ animalId, score }) => ({ animalId, score })
+                ),
+            }))
+        );
 
         return res.status(200).json({
             success: true,
-            quizResponseId: quizResponse._id,
-            totalAnimalsEvaluated: animals.length,
-            totalMatches: matches.length,
-            matches,
+            responses: withMatches,
         });
     } catch (error) {
         console.error("Get matchmaking error:", error);
