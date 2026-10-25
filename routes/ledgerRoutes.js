@@ -16,4 +16,11 @@ router.get(
     )
 );
 
+router.get(
+    "/food-transactions",
+    verifyToken,
+    authorizeRoles("admin"),
+    asyncHandler(ledgerController.getFoodTransactions)
+);
+
 module.exports = router;
