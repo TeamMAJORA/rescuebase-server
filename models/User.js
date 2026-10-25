@@ -39,6 +39,18 @@ const userSchema = new mongoose.Schema(
             default: "",
         },
 
+        // Which update emails the user wants (in-app notifications always show).
+        // Security emails (login codes, password resets) ignore these.
+        emailPrefs: {
+            adoption: { type: Boolean, default: true },
+            petAvailable: { type: Boolean, default: true },
+            foster: { type: Boolean, default: true },
+            lostFound: { type: Boolean, default: true },
+            donation: { type: Boolean, default: true },
+            rescue: { type: Boolean, default: true },
+            feedback: { type: Boolean, default: true },
+        },
+
         provider: {
             type: String,
             enum: ["google", "local"],

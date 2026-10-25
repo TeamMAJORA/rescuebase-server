@@ -10,6 +10,12 @@ const userController = require(
 );
 
 
+// ----- My account (any logged-in role) — must stay above "/:id" -----
+router.get("/me", verifyToken, asyncHandler(userController.getMe));
+router.patch("/me", verifyToken, asyncHandler(userController.updateMe));
+router.patch("/me/password", verifyToken, asyncHandler(userController.changeMyPassword));
+router.patch("/me/notifications", verifyToken, asyncHandler(userController.updateMyNotifications));
+
 router.get(
     "/",
     verifyToken,

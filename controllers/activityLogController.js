@@ -71,15 +71,55 @@ exports.getActivityLogs = async (req, res) => {
         }
     }
 
-    const logs = await ActivityLog.find(filter)
-        .populate("user", "username name email role")
-        .sort({ activityDate: -1 })
-        .limit(500)
-        .lean();
+    // Stats use the same user scope, but not the other filters
+    const scope = filter.user ? { user: filter.user } : {};
+
+    const type = String(req.query.type || "").trim();
+    if (type) filter.activityType = type;
+
+    const search = String(req.query.search || "").trim().slice(0, 100);
+    if (search) {
+        filter.activity = {
+            $regex: search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+            $options: "i",
+        };
+    }
+
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
+    const skip = Math.max(parseInt(req.query.skip, 10) || 0, 0);
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(startOfToday);
+    weekAgo.setDate(weekAgo.getDate() - 6);
+
+    const [logs, matching, total, today, week, weekUsers, types] = await Promise.all([
+        ActivityLog.find(filter)
+            .populate("user", "username name email role")
+            .sort({ activityDate: -1 })
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+        ActivityLog.countDocuments(filter),
+        ActivityLog.countDocuments(scope),
+        ActivityLog.countDocuments({ ...scope, activityDate: { $gte: startOfToday } }),
+        ActivityLog.countDocuments({ ...scope, activityDate: { $gte: weekAgo } }),
+        ActivityLog.distinct("user", { ...scope, activityDate: { $gte: weekAgo } }),
+        ActivityLog.distinct("activityType", scope),
+    ]);
 
     return res.status(200).json({
         success: true,
         count: logs.length,
+        total: matching,
+        hasMore: skip + logs.length < matching,
+        stats: {
+            total,
+            today,
+            week,
+            activeUsersWeek: weekUsers.length,
+        },
+        types: types.filter(Boolean).sort(),
         logs,
     });
 };

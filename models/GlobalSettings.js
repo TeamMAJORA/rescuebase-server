@@ -35,6 +35,13 @@ const globalSettingsSchema = new mongoose.Schema(
                 trim: true,
                 maxlength: 100,
             },
+            // How many animals the shelter can hold (dashboard "Space used")
+            shelterCapacity: {
+                type: Number,
+                default: 30,
+                min: 1,
+                max: 10000,
+            },
         },
 
         security: {

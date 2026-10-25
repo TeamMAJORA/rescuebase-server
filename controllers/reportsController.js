@@ -230,12 +230,38 @@ function selectedDatasets(body = {}) {
         );
     }
 
+    // Dogs/cats split only applies when the animal list is included
+    const species =
+        reportType === "all" && body.includeAnimals === false
+            ? "all"
+            : String(body.species || "all").trim().toLowerCase();
+
+    if (!["all", "dog", "cat"].includes(species)) {
+        throw createError("Invalid species. Use all, dog, or cat.");
+    }
+
+    if (
+        reportType === "all" &&
+        [
+            body.includeAnimals,
+            body.includeMedical,
+            body.includeVaccinations,
+            body.includeAdoptions,
+            body.includeFoster,
+            body.includeLostFound,
+        ].every((value) => value === false)
+    ) {
+        throw createError("Pick at least one dataset to include.");
+    }
+
     return {
         reportType,
+        species,
 
         includeAnimals:
-            reportType === "all" ||
-            reportType === "animals",
+            reportType === "animals" ||
+            (reportType === "all" &&
+                body.includeAnimals !== false),
 
         includeMedicalRecords:
             reportType === "medical" ||
@@ -385,14 +411,28 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     const exportData = {};
     const counts = {};
 
+    // Dogs / cats filter. Records that only store an animal id are kept
+    // when that animal is the chosen species.
+    const species = ["dog", "cat"].includes(datasets.species) ? datasets.species : "all";
+    const speciesType = species === "dog" ? "Dog" : species === "cat" ? "Cat" : null;
+    let speciesIds = null;
+
+    if (speciesType) {
+        const matching = await Animal.find({ type: speciesType }).select("_id").lean();
+        speciesIds = new Set(matching.map((animal) => String(animal._id)));
+    }
+
+    const keepAnimal = (id) => !speciesIds || (Boolean(id) && speciesIds.has(String(id)));
+
     // --------------------------------------------------
     // ANIMALS
     // --------------------------------------------------
 
     if (includeAnimals) {
-        const animals = await Animal.find(
-            dateFilter("intakeDate", fromDate, toDate)
-        )
+        const animals = await Animal.find({
+            ...dateFilter("intakeDate", fromDate, toDate),
+            ...(speciesType ? { type: speciesType } : {}),
+        })
             .sort({ intakeDate: -1 })
             .lean();
 
@@ -432,11 +472,11 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     // --------------------------------------------------
 
     if (includeMedicalRecords) {
-        const medicalRecords = await MedicalRequest.find(
+        const medicalRecords = (await MedicalRequest.find(
             dateFilter("createdAt", fromDate, toDate)
         )
             .sort({ createdAt: -1 })
-            .lean();
+            .lean()).filter((record) => keepAnimal(record.petId));
 
         const medicalRows = medicalRecords.map((record) => ({
             source: "MedicalRequest",
@@ -463,10 +503,12 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
 
         // Also include requests embedded in foster assignments.
         const assignments = await FosterAssignment.find({})
-            .select("_id petName fosterEmail medicalRequests")
+            .select("_id petName fosterEmail medicalRequests animalId")
             .lean();
 
         for (const assignment of assignments) {
+            if (!keepAnimal(assignment.animalId)) continue;
+
             for (const request of assignment.medicalRequests || []) {
                 if (!request) continue;
 
@@ -518,11 +560,11 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
         }
 
         // Clinic records from the Medical Records module
-        const clinicRecords = await MedicalRecord.find(
+        const clinicRecords = (await MedicalRecord.find(
             dateFilter("record_date", fromDate, toDate)
         )
             .sort({ record_date: -1 })
-            .lean();
+            .lean()).filter((record) => keepAnimal(record.animal_id));
 
         const clinicNames = await animalNameMap(clinicRecords.map((record) => record.animal_id));
 
@@ -581,11 +623,11 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     // --------------------------------------------------
 
     if (includeAdoptionApplications) {
-        const applications = await AdoptionApplication.find(
+        const applications = (await AdoptionApplication.find(
             dateFilter("createdAt", fromDate, toDate)
         )
             .sort({ createdAt: -1 })
-            .lean();
+            .lean()).filter((application) => keepAnimal(application.animalId));
 
         counts["adoption_applications"] = applications.length;
         exportData["adoption_applications.csv"] = toCSV(applications, [
@@ -640,11 +682,11 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     // --------------------------------------------------
 
     if (includeFosterAssignments) {
-        const assignments = await FosterAssignment.find(
+        const assignments = (await FosterAssignment.find(
             dateFilter("createdAt", fromDate, toDate)
         )
             .sort({ createdAt: -1 })
-            .lean();
+            .lean()).filter((assignment) => keepAnimal(assignment.animalId));
 
         counts["foster_assignments"] = assignments.length;
         exportData["foster_assignments.csv"] = toCSV(assignments, [
@@ -718,11 +760,11 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     // --------------------------------------------------
 
     if (includeVaccinations) {
-        const vaccinations = await VaccinationRecord.find(
+        const vaccinations = (await VaccinationRecord.find(
             dateFilter("vaccination_date", fromDate, toDate)
         )
             .sort({ vaccination_date: -1 })
-            .lean();
+            .lean()).filter((record) => keepAnimal(record.animal_id));
 
         const names = await animalNameMap(vaccinations.map((record) => record.animal_id));
 
@@ -751,9 +793,10 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     // --------------------------------------------------
 
     if (includeLostFoundReports) {
-        const lostFoundReports = await LostFoundReport.find(
-            dateFilter("dateReported", fromDate, toDate)
-        )
+        const lostFoundReports = await LostFoundReport.find({
+            ...dateFilter("dateReported", fromDate, toDate),
+            ...(speciesType ? { species: new RegExp(`^${species}`, "i") } : {}),
+        })
             .sort({ dateReported: -1 })
             .lean();
 
@@ -793,6 +836,7 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     const metadata = {
         title: "RESCUEBASE Data Export",
         reportType,
+        species: speciesType ? `${speciesType}s only` : "Dogs and cats",
         period,
         generatedAt,
         generatedBy: user.email || String(user._id),
@@ -808,6 +852,7 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
     exportData["report_metadata.csv"] = toCSV([metadata], [
         { label: "Title", value: "title" },
         { label: "Report Type", value: "reportType" },
+        { label: "Animals", value: "species" },
         { label: "Date Range", value: "period" },
         { label: "Generated At", value: "generatedAt" },
         { label: "Generated By", value: "generatedBy" },
@@ -927,6 +972,7 @@ exports.generateReport = async (req, res) => {
             createdByName: user.name || user.username || "User",
             createdByEmail: user.email || "",
             exportFormat: "zip",
+            species: datasets.species,
             dateRange,
             fromDate,
             toDate,
@@ -937,6 +983,7 @@ exports.generateReport = async (req, res) => {
                 includeFosterAssignments: datasets.includeFosterAssignments,
                 includeLostFoundReports: datasets.includeLostFoundReports,
                 includeVaccinations: datasets.includeVaccinations,
+                species: datasets.species,
             },
             recordCounts: counts,
         });

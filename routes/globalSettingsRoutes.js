@@ -42,6 +42,14 @@ router.get("/contact", verifyToken, asyncHandler(async (req, res) => {
     });
 }));
 
+// Shelter capacity for the dashboard (admin and staff)
+router.get("/capacity", verifyToken, asyncHandler(async (req, res) => {
+    const settings = await getSettingsDocument();
+    const capacity = Number(settings?.general?.shelterCapacity) || 30;
+
+    return res.status(200).json({ success: true, shelterCapacity: capacity });
+}));
+
 router.use(verifyToken);
 
 router.use(authorizeRoles("admin"));

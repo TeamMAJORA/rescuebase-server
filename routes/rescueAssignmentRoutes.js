@@ -37,7 +37,8 @@ router.get(
     "/my",
     verifyToken,
     authorizeRoles(
-        "volunteer"
+        "volunteer",
+        "staff"
     ),
     asyncHandler(
         rescueAssignmentController.getMyAssignments
@@ -73,7 +74,8 @@ router.patch(
     "/:id/accept",
     verifyToken,
     authorizeRoles(
-        "volunteer"
+        "volunteer",
+        "staff"
     ),
     asyncHandler(
         rescueAssignmentController.acceptAssignment
@@ -84,7 +86,8 @@ router.patch(
     "/:id/decline",
     verifyToken,
     authorizeRoles(
-        "volunteer"
+        "volunteer",
+        "staff"
     ),
     asyncHandler(
         rescueAssignmentController.declineAssignment
@@ -95,7 +98,8 @@ router.patch(
     "/:id/start",
     verifyToken,
     authorizeRoles(
-        "volunteer"
+        "volunteer",
+        "staff"
     ),
     asyncHandler(
         rescueAssignmentController.startAssignment
@@ -106,7 +110,8 @@ router.patch(
     "/:id/complete",
     verifyToken,
     authorizeRoles(
-        "volunteer"
+        "volunteer",
+        "staff"
     ),
     asyncHandler(
         rescueAssignmentController.completeAssignment

@@ -437,18 +437,89 @@ async function sendDocumentRequestEmail(email, petName, reason) {
     });
 }
 
+function escapeHtml(value) {
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+async function sendFeedbackReplyEmail(email, name, feedbackMessage, reply) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase replied to your feedback",
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Thank you for your feedback${name ? `, ${escapeHtml(name)}` : ""}!</h2>
+
+                <p><strong>Our reply:</strong></p>
+                <p style="white-space: pre-wrap;">${escapeHtml(reply)}</p>
+
+                <p style="color: #777;"><strong>Your feedback:</strong></p>
+                <blockquote style="margin: 0; padding-left: 12px; border-left: 3px solid #ddd; color: #777; white-space: pre-wrap;">${escapeHtml(feedbackMessage)}</blockquote>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
+
+// ------------------------------------------------------------
+// Respect each user's email choices (Settings > Notifications).
+// Looks the recipient up by email; unknown or missing prefs = send.
+// ------------------------------------------------------------
+async function wantsEmail(email, category) {
+    if (!email || !category) return true;
+
+    try {
+        const User = require("../models/User");
+        const user = await User.findOne({ email: String(email).trim().toLowerCase() })
+            .select("emailPrefs")
+            .lean();
+        return user?.emailPrefs?.[category] !== false;
+    } catch (error) {
+        console.error("Email preference check failed:", error.message);
+        return true;
+    }
+}
+
+function gated(send, category, pickEmail = (args) => args[0]) {
+    return async (...args) => {
+        const email = pickEmail(args);
+
+        if (!(await wantsEmail(email, category))) {
+            console.log(`[Email] skipped ${category} email to ${email} (turned off in settings)`);
+            return { skipped: true };
+        }
+
+        return send(...args);
+    };
+}
+
 module.exports = {
+    // Always sent (security / account)
     sendOtpEmail,
     sendPasswordResetEmail,
-    sendApplicationUpdateEmail,
     sendRoleApplicationEmail,
-    sendDonationConfirmationEmail,
-    sendFosterUpdateEmail,
-    sendVaccinationReminderEmail,
-    sendInterviewScheduleEmail,
-    sendDocumentRequestEmail,
-    sendPetAvailableEmail,
-    sendLostFoundClaimEmail,
-    sendLostFoundReunitedEmail,
-    sendRescueAssignmentEmail,
+
+    // Update emails the user can turn off
+    sendApplicationUpdateEmail: gated(sendApplicationUpdateEmail, "adoption"),
+    sendInterviewScheduleEmail: gated(sendInterviewScheduleEmail, "adoption"),
+    sendDocumentRequestEmail: gated(sendDocumentRequestEmail, "adoption"),
+    sendPetAvailableEmail: gated(sendPetAvailableEmail, "petAvailable"),
+    sendFosterUpdateEmail: gated(sendFosterUpdateEmail, "foster"),
+    sendVaccinationReminderEmail: gated(sendVaccinationReminderEmail, "foster"),
+    sendLostFoundClaimEmail: gated(sendLostFoundClaimEmail, "lostFound"),
+    sendLostFoundReunitedEmail: gated(sendLostFoundReunitedEmail, "lostFound"),
+    sendRescueAssignmentEmail: gated(sendRescueAssignmentEmail, "rescue"),
+    sendFeedbackReplyEmail: gated(sendFeedbackReplyEmail, "feedback"),
+    sendDonationConfirmationEmail: gated(
+        sendDonationConfirmationEmail,
+        "donation",
+        (args) => (args[0] && typeof args[0] === "object" ? args[0].donorEmail : args[0])
+    ),
 };
