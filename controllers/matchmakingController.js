@@ -1,7 +1,7 @@
 const QuizResponse = require("../models/QuizResponse");
 const Animal = require("../models/Animal");
 const AdoptionApplication = require("../models/AdoptionApplication");
-const { generateMatches } = require("../services/matchmakingService");
+const { generateMatches, calculateAnimalMatch } = require("../services/matchmakingService");
 
 exports.submitMatchmakingQuiz = async (req, res) => {
     try {
@@ -110,20 +110,14 @@ exports.getMatchmakingResults = async (req, res) => {
             adoptionStatus: "available",
         }).lean();
 
-        // shortcut: one AI call per adopter × animal on every load; save scores on QuizResponse if this gets slow
-        const withMatches = await Promise.all(
-            latest.map(async (response) => ({
-                ...response,
-                latestApplication: latestApplication[response.adopterEmail] || null,
-                aiMatches: (await generateMatches(animals, response)).map(
-                    ({ animalId, score }) => ({ animalId, score })
-                ),
-            }))
-        );
+        const matches = await generateMatches(animals, quizResponse);
 
         return res.status(200).json({
             success: true,
-            responses: withMatches,
+            quizResponseId: quizResponse._id,
+            totalAnimalsEvaluated: animals.length,
+            totalMatches: matches.length,
+            matches,
         });
     } catch (error) {
         console.error("Get matchmaking error:", error);
@@ -171,7 +165,7 @@ exports.getAllQuizResponses = async (req, res) => {
             email: { $in: emails },
         })
             .sort({ createdAt: -1 })
-            .select("email status petName petImage createdAt")
+            .select("email status animalId petName petImage createdAt")
             .lean();
 
         const latestApplication = {};
@@ -182,12 +176,64 @@ exports.getAllQuizResponses = async (req, res) => {
             }
         }
 
+        const animals = await Animal.find({
+            availabilityStatus: "available",
+            adoptionStatus: "available",
+        }).lean();
+
+        // Score the exact pet each adopter applied for, even if it's no longer "available"
+        const appliedIds = Object.values(latestApplication)
+            .map((application) => application.animalId)
+            .filter(Boolean);
+
+        const appliedAnimals = await Animal.find({ _id: { $in: appliedIds } }).lean();
+        const animalById = new Map(appliedAnimals.map((animal) => [String(animal._id), animal]));
+
+        // shortcut: AI calls on every load; save scores on QuizResponse if this gets slow
+        const withMatches = await Promise.all(
+            latest.map(async (response) => {
+                const application = latestApplication[response.adopterEmail] || null;
+                const appliedAnimal = application && animalById.get(String(application.animalId));
+                const appliedMatch = appliedAnimal
+                    ? await calculateAnimalMatch(appliedAnimal, response)
+                    : null;
+
+                return {
+                    ...response,
+                    latestApplication: application,
+                    aiMatches: (await generateMatches(animals, response)).map(
+                        ({ animalId, score, animal }) => ({
+                            animalId,
+                            score,
+                            name: animal.name,
+                            type: animal.type,
+                        })
+                    ),
+                    appliedScore: appliedMatch?.score ?? null,
+                    // why there's no score: "Insufficient Behavioral Data" or "AI Prediction Unavailable"
+                    appliedScoreNote: appliedMatch?.score == null
+                        ? appliedMatch?.tier || "Pet not found"
+                        : null,
+                    appliedAnimal: appliedAnimal
+                        ? {
+                            name: appliedAnimal.name,
+                            type: appliedAnimal.type,
+                            breed: appliedAnimal.breed,
+                            age: appliedAnimal.age,
+                            gender: appliedAnimal.gender,
+                            image: appliedAnimal.image,
+                            adoptionStatus: appliedAnimal.adoptionStatus,
+                        }
+                        : null,
+                    appliedFactors: appliedMatch?.factorResults || null,
+                    appliedConflicts: appliedMatch?.criticalConflicts || [],
+                };
+            })
+        );
+
         return res.status(200).json({
             success: true,
-            responses: latest.map((response) => ({
-                ...response,
-                latestApplication: latestApplication[response.adopterEmail] || null,
-            })),
+            responses: withMatches,
         });
     } catch (error) {
         console.error("Get quiz responses error:", error);
