@@ -8,6 +8,7 @@ const asyncHandler = require("../middleware/asyncHandler");
 
 const analyticsController = require("../controllers/analyticsController");
 const intakeForecastController = require("../controllers/intakeForecastController");
+const foodForecastController = require("../controllers/foodInventoryController");
 
 router.get(
     "/overview",
@@ -21,6 +22,13 @@ router.get(
     verifyToken,
     authorizeRoles("admin", "staff"),
     asyncHandler(intakeForecastController.getIntakeForecast)
+);
+
+router.get(
+    "/food-forecast",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(foodForecastController.getFoodForecast)
 );
 
 module.exports = router;

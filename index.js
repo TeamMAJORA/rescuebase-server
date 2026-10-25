@@ -39,6 +39,7 @@ const startVaccinationReminders = require("./jobs/vaccinationReminders");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const activityLogRoutes = require("./routes/activityLogRoutes");
 const globalSettingsRoutes = require("./routes/globalSettingsRoutes");
+const foodInventoryRoutes = require("./routes/foodInventoryRoutes");
 
 //Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
@@ -102,6 +103,7 @@ app.use("/api/animal-transfers", animalTransferRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/settings", globalSettingsRoutes);
+app.use("/api/food-inventory", foodInventoryRoutes);
 
 // Image route
 app.use("/api/uploads", uploadRoutes);
