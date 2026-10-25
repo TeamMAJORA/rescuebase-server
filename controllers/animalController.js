@@ -153,6 +153,7 @@ exports.createAnimal = async (req, res) => {
         ).trim(),
         latitude: req.body.latitude ?? null,
         longitude: req.body.longitude ?? null,
+        intakeSource: ["field", "desk"].includes(req.body.intakeSource) ? req.body.intakeSource : "",
         rejectionReason: "",
         createdByName: adminName,
         createdByEmail: adminEmail,
@@ -426,6 +427,8 @@ exports.updateAnimal = async (req, res) => {
         "adoptionStatus",
         "fosterStatus",
         "location",
+        "latitude",
+        "longitude",
     ];
 
     const allowedUpdates = {};
