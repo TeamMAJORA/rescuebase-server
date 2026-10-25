@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
         contactEmail: "",
         contactPhone: "",
         timezone: "Asia/Manila",
+        shelterCapacity: 30,
     },
 
     security: {
