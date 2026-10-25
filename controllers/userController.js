@@ -6,6 +6,107 @@ const Notification = require("../models/Notifications");
 const {
     sendRoleApplicationEmail,
 } = require("../services/emailService");
+const { validatePassword } = require("../utils/passwordPolicy");
+
+const EMAIL_PREF_KEYS = ["adoption", "petAvailable", "foster", "lostFound", "donation", "rescue", "feedback"];
+
+function meError(message, statusCode = 400) {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+}
+
+async function findMe(req, withPassword = false) {
+    const query = User.findById(req.user?.id);
+    const user = await (withPassword ? query.select("+password") : query);
+    if (!user) throw meError("Account not found.", 404);
+    return user;
+}
+
+function meResponse(user) {
+    const clean = cleanUser(user);
+    clean.hasPassword = Boolean(user.password) || user.provider === "local";
+    delete clean.password;
+    return clean;
+}
+
+// GET /api/users/me
+exports.getMe = async (req, res) => {
+    const user = await findMe(req, true);
+    return res.status(200).json({ success: true, user: meResponse(user) });
+};
+
+// PATCH /api/users/me  { name, username, profileImage }
+exports.updateMe = async (req, res) => {
+    const user = await findMe(req, true);
+
+    if (req.body.name !== undefined) {
+        const name = String(req.body.name).trim();
+        if (!name) throw meError("Name can't be empty.");
+        if (name.length > 80) throw meError("Name is too long (80 characters max).");
+        user.name = name;
+    }
+
+    if (req.body.username !== undefined) {
+        const username = String(req.body.username).trim();
+        if (!/^[a-zA-Z0-9._]{3,30}$/.test(username)) {
+            throw meError("Username must be 3–30 letters, numbers, dots or underscores.");
+        }
+        const taken = await User.exists({ username, _id: { $ne: user._id } });
+        if (taken) throw meError("That username is already taken.", 409);
+        user.username = username;
+    }
+
+    if (req.body.profileImage !== undefined) {
+        const image = String(req.body.profileImage).trim();
+        if (image && !/^https:\/\//.test(image)) throw meError("Profile photo must be an uploaded image link.");
+        user.profileImage = image;
+    }
+
+    await user.save();
+    return res.status(200).json({ success: true, message: "Profile updated.", user: meResponse(user) });
+};
+
+// PATCH /api/users/me/password  { currentPassword, newPassword }
+exports.changeMyPassword = async (req, res) => {
+    const user = await findMe(req, true);
+    const currentPassword = String(req.body.currentPassword || "");
+    const newPassword = String(req.body.newPassword || "");
+
+    if (user.password) {
+        const ok = await bcrypt.compare(currentPassword, user.password);
+        if (!ok) throw meError("Your current password is incorrect.", 401);
+    }
+
+    if (currentPassword && currentPassword === newPassword) {
+        throw meError("Your new password must be different from the current one.");
+    }
+
+    await validatePassword(newPassword);
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    if (user.provider !== "local" && !user.firebaseUid) user.provider = "local";
+    await user.save();
+
+    return res.status(200).json({ success: true, message: "Password changed.", user: meResponse(user) });
+};
+
+// PATCH /api/users/me/notifications  { emailPrefs: { adoption: true, ... } }
+exports.updateMyNotifications = async (req, res) => {
+    const user = await findMe(req, true);
+    const prefs = req.body?.emailPrefs;
+
+    if (!prefs || typeof prefs !== "object") throw meError("Send your email choices as emailPrefs.");
+
+    EMAIL_PREF_KEYS.forEach((key) => {
+        if (typeof prefs[key] === "boolean") {
+            user.set(`emailPrefs.${key}`, prefs[key]);
+        }
+    });
+
+    await user.save();
+    return res.status(200).json({ success: true, message: "Notification settings saved.", user: meResponse(user) });
+};
 
 exports.getAllUsers = async (req, res) => {
     const users = await User.find()
@@ -44,11 +145,14 @@ exports.getStaffList = async (req, res) => {
 
 // Active volunteers for the Rescue page dropdown (admin and staff)
 exports.getVolunteerList = async (req, res) => {
+    // ?includeStaff=1 also lists staff (used when assigning rescue tasks)
+    const roles = String(req.query.includeStaff || "") === "1" ? ["volunteer", "staff"] : ["volunteer"];
+
     const volunteers = await User.find({
-        role: "volunteer",
+        role: { $in: roles },
         status: { $in: ["active", null] },
     })
-        .select("name username email")
+        .select("name username email role")
         .sort({ name: 1 });
 
     return res.status(200).json({
@@ -58,6 +162,7 @@ exports.getVolunteerList = async (req, res) => {
             name: user.name || user.username || "Unnamed",
             username: user.username,
             email: user.email,
+            role: user.role,
         })),
     });
 };

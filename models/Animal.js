@@ -165,6 +165,13 @@ const animalSchema = new mongoose.Schema(
             default: null,
         },
 
+        // Where the intake was saved from: "field" = phone, "desk" = computer, "" = older records
+        intakeSource: {
+            type: String,
+            enum: ["", "field", "desk"],
+            default: "",
+        },
+
         longitude: {
             type: Number,
             default: null,

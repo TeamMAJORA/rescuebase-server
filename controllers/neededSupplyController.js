@@ -2,13 +2,16 @@ const mongoose = require("mongoose");
 
 const NeededSupply = require("../models/NeededSupply");
 
+const SUPPLY_STATUSES = ["active", "fulfilled", "inactive"];
+
+// Status only uses the model's values. Fully received closes it automatically;
+// a closed item that drops below the needed count goes back to active.
 function updateSupplyStatus(supply) {
+    if (supply.status === "inactive") return;
     if (supply.quantityReceived >= supply.quantityNeeded) {
         supply.status = "fulfilled";
-    } else if (supply.quantityReceived > 0) {
-        supply.status = "partially_fulfilled";
-    } else {
-        supply.status = "needed";
+    } else if (supply.status === "fulfilled") {
+        supply.status = "active";
     }
 }
 
@@ -107,12 +110,20 @@ exports.updateSupply = async (req, res) => {
 
     const allowedFields = [
         "shelter",
-        "item",
+        "name",
+        "category",
+        "priority",
+        "description",
         "quantityNeeded",
         "quantityReceived",
-        "notes",
-        "status",
     ];
+
+    if (req.body.status !== undefined && !SUPPLY_STATUSES.includes(req.body.status)) {
+        return res.status(400).json({
+            success: false,
+            message: "Invalid supply status.",
+        });
+    }
 
     for (const field of allowedFields) {
         if (req.body[field] !== undefined) {
@@ -130,10 +141,10 @@ exports.updateSupply = async (req, res) => {
         });
     }
 
-    if (
-        req.body.status === undefined ||
-        req.body.status !== "cancelled"
-    ) {
+    if (req.body.status !== undefined) {
+        // Close / Reopen / Inactive chosen by staff wins
+        supply.status = req.body.status;
+    } else {
         updateSupplyStatus(supply);
     }
 

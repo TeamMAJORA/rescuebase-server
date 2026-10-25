@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
         contactEmail: "",
         contactPhone: "",
         timezone: "Asia/Manila",
+        shelterCapacity: 30,
     },
     security: {
         maxLoginAttempts: 5,
@@ -37,6 +38,7 @@ const ALLOWED_FIELDS = {
         "contactEmail",
         "contactPhone",
         "timezone",
+        "shelterCapacity",
     ],
     security: [
         "maxLoginAttempts",
@@ -126,6 +128,7 @@ function validateAndNormalize(body) {
     };
 
     const numberFields = {
+        "general.shelterCapacity": { min: 1, max: 10000 },
         "security.maxLoginAttempts": { min: 1, max: 20 },
         "security.lockoutMinutes": { min: 1, max: 1440 },
         "security.sessionTimeoutMinutes": {

@@ -2,6 +2,8 @@ const mongoose = require("mongoose");
 
 const Feedback = require("../models/Feedback");
 const User = require("../models/User");
+const Notification = require("../models/Notifications");
+const { sendFeedbackReplyEmail } = require("../services/emailService");
 
 exports.createFeedback = async (req, res) => {
     const userId = req.user?.id;
@@ -89,7 +91,21 @@ exports.getAllFeedback = async (req, res) => {
         filter.status = status;
     }
 
-    const feedback = await Feedback.find(filter).sort({ createdAt: -1 });
+    const rows = await Feedback.find(filter).sort({ createdAt: -1 }).lean();
+
+    // Attach each sender's current profile photo (matched by account id, then email)
+    const ids = rows.map((row) => row.user).filter(Boolean);
+    const emails = rows.map((row) => String(row.userEmail || "").toLowerCase()).filter(Boolean);
+    const people = await User.find({ $or: [{ _id: { $in: ids } }, { email: { $in: emails } }] })
+        .select("email profileImage")
+        .lean();
+    const byId = new Map(people.map((person) => [String(person._id), person.profileImage || ""]));
+    const byEmail = new Map(people.map((person) => [String(person.email || "").toLowerCase(), person.profileImage || ""]));
+
+    const feedback = rows.map((row) => ({
+        ...row,
+        userImage: (row.user && byId.get(String(row.user))) || byEmail.get(String(row.userEmail || "").toLowerCase()) || "",
+    }));
 
     return res.status(200).json({
         success: true,
@@ -116,6 +132,83 @@ exports.getFeedbackById = async (req, res) => {
 
     return res.status(200).json({
         success: true,
+        feedback,
+    });
+};
+
+// PATCH /api/feedback/:id/reply  (admin, staff)
+exports.replyToFeedback = async (req, res) => {
+    const feedbackId = String(req.params.id || "").trim();
+    const reply = String(req.body?.reply || "").trim();
+
+    if (!mongoose.isValidObjectId(feedbackId)) {
+        const e = new Error("Invalid feedback ID.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (!reply) {
+        const e = new Error("Write a reply first.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (reply.length > 2000) {
+        const e = new Error("Reply is too long (2000 characters max).");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const feedback = await Feedback.findById(feedbackId);
+
+    if (!feedback) {
+        const e = new Error("Feedback not found.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    const replier = await User.findById(req.user?.id).select("name username").lean();
+
+    feedback.reply = reply;
+    feedback.repliedAt = new Date();
+    feedback.repliedBy = req.user?.id || null;
+    feedback.repliedByName = replier?.name || replier?.username || "RescueBase staff";
+    await feedback.save();
+
+    // In-app notification (never blocks the reply)
+    let notified = false;
+    try {
+        await Notification.create({
+            user: feedback.user,
+            title: "We replied to your feedback",
+            message: reply.length > 180 ? `${reply.slice(0, 177)}...` : reply,
+            type: "general",
+        });
+        notified = true;
+    } catch (error) {
+        console.error("Feedback reply notification failed:", error.message);
+    }
+
+    // Email (never blocks the reply)
+    let emailed = false;
+    if (feedback.userEmail) {
+        try {
+            await sendFeedbackReplyEmail(feedback.userEmail, feedback.userName, feedback.message, reply);
+            emailed = true;
+        } catch (error) {
+            console.error("Feedback reply email failed:", error.message);
+        }
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: emailed
+            ? "Reply sent by email and notification."
+            : notified
+                ? "Reply saved and the user was notified, but the email could not be sent."
+                : "Reply saved, but the user could not be notified.",
+        emailed,
+        notified,
         feedback,
     });
 };
