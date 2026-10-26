@@ -2,13 +2,18 @@ const mongoose = require("mongoose");
 
 const NeededSupply = require("../models/NeededSupply");
 
-function updateSupplyStatus(supply) {
-    if (supply.quantityReceived >= supply.quantityNeeded) {
+// Status values must match the model enum: active, fulfilled, inactive
+function updateSupplyStatus(supply, requestedStatus) {
+    if (["active", "fulfilled", "inactive"].includes(requestedStatus)) {
+        supply.status = requestedStatus;
+    }
+
+    // Fully received supplies close automatically (unless hidden on purpose)
+    if (
+        supply.status !== "inactive" &&
+        supply.quantityReceived >= supply.quantityNeeded
+    ) {
         supply.status = "fulfilled";
-    } else if (supply.quantityReceived > 0) {
-        supply.status = "partially_fulfilled";
-    } else {
-        supply.status = "needed";
     }
 }
 
@@ -106,12 +111,12 @@ exports.updateSupply = async (req, res) => {
     }
 
     const allowedFields = [
-        "shelter",
-        "item",
+        "name",
+        "category",
         "quantityNeeded",
         "quantityReceived",
-        "notes",
-        "status",
+        "priority",
+        "description",
     ];
 
     for (const field of allowedFields) {
@@ -120,7 +125,12 @@ exports.updateSupply = async (req, res) => {
         }
     }
 
+    supply.quantityNeeded = Number(supply.quantityNeeded);
+    supply.quantityReceived = Number(supply.quantityReceived || 0);
+
     if (
+        !Number.isFinite(supply.quantityNeeded) ||
+        !Number.isFinite(supply.quantityReceived) ||
         supply.quantityNeeded < 1 ||
         supply.quantityReceived < 0
     ) {
@@ -130,12 +140,7 @@ exports.updateSupply = async (req, res) => {
         });
     }
 
-    if (
-        req.body.status === undefined ||
-        req.body.status !== "cancelled"
-    ) {
-        updateSupplyStatus(supply);
-    }
+    updateSupplyStatus(supply, req.body.status);
 
     await supply.save();
 
