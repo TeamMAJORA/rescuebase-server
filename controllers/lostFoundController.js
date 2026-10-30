@@ -1,6 +1,7 @@
 const GISLocation = require("../models/GISLocation");
 const LostFoundReport = require("../models/LostFoundReport");
 const LedgerEntry = require("../models/LedgerEntry");
+const LostFoundMatch = require("../models/LostFoundMatch");
 const { sendLostFoundClaimEmail, sendLostFoundReunitedEmail } = require("../services/emailService");
 const { generatematches } = require("../services/lostFoundMatchingService");
 
@@ -565,5 +566,286 @@ exports.markReunited = async (req, res) => {
         message:
             "Lost and found case marked as reunited.",
         report,
+    });
+};
+
+exports.getPossibleMatches = async (req, res) => {
+    const page = Math.max(
+        1,
+        parseInt(req.query.page, 10) || 1
+    );
+
+    const limit = Math.min(
+        100,
+        Math.max(1, parseInt(req.query.limit, 10) || 20)
+    );
+
+    const skip = (page - 1) * limit;
+
+    const [matches, total] = await Promise.all([
+        LostFoundMatch.find({
+            status: "suggested",
+        })
+            .populate("reportA")
+            .populate("reportB")
+            .sort({
+                score: -1,
+                createdAt: -1,
+            })
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+
+        LostFoundMatch.countDocuments({
+            status: "suggested",
+        }),
+    ]);
+
+    return res.json({
+        success: true,
+        matches,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+        },
+    });
+};
+
+
+exports.reviewPossibleMatch = async (req, res) => {
+    const matchId = req.params.matchId;
+
+    const decision = String(
+        req.body.decision || ""
+    )
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+    const allowedDecisions = [
+        "confirm",
+        "not_a_match",
+    ];
+
+    if (!allowedDecisions.includes(decision)) {
+        const error = new Error(
+            "Decision must be confirm or not_a_match."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const match = await LostFoundMatch.findById(matchId);
+
+    if (!match) {
+        const error = new Error(
+            "Possible match not found."
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (match.status !== "suggested") {
+        const error = new Error(
+            `This match has already been ${match.status}.`
+        );
+
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const reportA = await LostFoundReport.findById(
+        match.reportA
+    );
+
+    const reportB = await LostFoundReport.findById(
+        match.reportB
+    );
+
+    if (!reportA || !reportB) {
+        const error = new Error(
+            "One or both reports associated with this match no longer exist."
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (decision === "confirm") {
+        const validPair =
+            reportA.reportType === "lost" &&
+            reportB.reportType === "found" ||
+            reportA.reportType === "found" &&
+            reportB.reportType === "lost";
+
+        if (!validPair) {
+            const error = new Error(
+                "Only a Lost and Found report pair can be confirmed."
+            );
+
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const unavailableStatuses = [
+            "matched",
+            "reunited",
+            "claimed",
+            "rejected",
+        ];
+
+        if (
+            unavailableStatuses.includes(reportA.status) ||
+            unavailableStatuses.includes(reportB.status)
+        ) {
+            const error = new Error(
+                "One or both reports are no longer available for matching."
+            );
+
+            error.statusCode = 409;
+            throw error;
+        }
+
+        const speciesA = String(reportA.species || "")
+            .trim()
+            .toLowerCase();
+
+        const speciesB = String(reportB.species || "")
+            .trim()
+            .toLowerCase();
+
+        if (speciesA !== speciesB) {
+            const error = new Error(
+                "The reports have different animal species."
+            );
+
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const reviewerName = getActorName(req);
+        const reviewerEmail = getActorEmail(req);
+
+        const reviewerId =
+            req.user?.id ||
+            req.user?._id ||
+            null;
+
+        reportA.status = "matched";
+        reportB.status = "matched";
+
+        reportA.matchStatus = "confirmed";
+        reportB.matchStatus = "confirmed";
+
+        await Promise.all([
+            reportA.save(),
+            reportB.save(),
+        ]);
+
+        match.status = "confirmed";
+        match.reviewedBy = reviewerId;
+        match.reviewedAt = new Date();
+        match.reviewNotes = String(
+            req.body.reviewNotes || ""
+        ).trim();
+
+        await match.save();
+
+        await LostFoundMatch.updateMany(
+            {
+                _id: { $ne: match._id },
+                status: "suggested",
+                $or: [
+                    {
+                        reportA: {
+                            $in: [reportA._id, reportB._id],
+                        },
+                    },
+                    {
+                        reportB: {
+                            $in: [reportA._id, reportB._id],
+                        },
+                    },
+                ],
+            },
+            {
+                $set: {
+                    status: "not_a_match",
+                    reviewedAt: new Date(),
+                    reviewNotes:
+                        "Closed because one of the reports was matched.",
+                },
+            }
+        );
+
+        await LedgerEntry.create({
+            type: "lost_found",
+            action: "lost_found_match_confirmed",
+            actorName: reviewerName,
+            actorEmail: reviewerEmail,
+            targetType: "LostFoundMatch",
+            targetId: match._id.toString(),
+            description:
+                `${reviewerName} confirmed a Lost & Found report match.`,
+            status: "confirmed",
+            metadata: {
+                matchId: match._id,
+                reportA: reportA._id,
+                reportB: reportB._id,
+                score: match.score,
+            },
+        });
+
+        return res.json({
+            success: true,
+            message: "Possible match confirmed successfully.",
+            match,
+            reports: [
+                reportA,
+                reportB,
+            ],
+        });
+    }
+
+    match.status = "not_a_match";
+    match.reviewedBy =
+        req.user?.id ||
+        req.user?._id ||
+        null;
+
+    match.reviewedAt = new Date();
+
+    match.reviewNotes = String(
+        req.body.reviewNotes || ""
+    ).trim();
+
+    await match.save();
+
+    await LedgerEntry.create({
+        type: "lost_found",
+        action: "lost_found_match_rejected",
+        actorName: getActorName(req),
+        actorEmail: getActorEmail(req),
+        targetType: "LostFoundMatch",
+        targetId: match._id.toString(),
+        description:
+            `${getActorName(req)} marked a suggested Lost & Found pair as not a match.`,
+        status: "not_a_match",
+        metadata: {
+            matchId: match._id,
+            reportA: reportA._id,
+            reportB: reportB._id,
+            score: match.score,
+        },
+    });
+
+    return res.json({
+        success: true,
+        message: "Candidate pair marked as not a match.",
+        match,
     });
 };

@@ -116,4 +116,22 @@ router.delete(
     )
 );
 
+router.get(
+    "/matches",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        lostFoundController.getPossibleMatches
+    )
+);
+
+router.patch(
+    "/matches/:matchId/decision",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        lostFoundController.reviewPossibleMatch
+    )
+);
+
 module.exports = router;
