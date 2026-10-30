@@ -23,6 +23,12 @@ exports.getAllPaymentMethods = async (req, res) => {
 };
 
 exports.createPaymentMethod = async (req, res) => {
+    if (!["admin", "staff"].includes(req.user?.role)) {
+        return res.status(403).json({
+            success: false,
+            message: "You are not authorized to create payment methods.",
+        });
+    }
     const {
         method_type,
         account_name,
