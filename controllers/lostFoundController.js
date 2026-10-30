@@ -2,8 +2,14 @@ const GISLocation = require("../models/GISLocation");
 const LostFoundReport = require("../models/LostFoundReport");
 const LedgerEntry = require("../models/LedgerEntry");
 const LostFoundMatch = require("../models/LostFoundMatch");
-const { sendLostFoundClaimEmail, sendLostFoundReunitedEmail } = require("../services/emailService");
-const { generatematches } = require("../services/lostFoundMatchingService");
+const User = require("../models/User");
+const Notification = require("../models/Notifications");
+const {
+    sendLostFoundClaimEmail,
+    sendLostFoundReunitedEmail,
+    sendLostFoundMatchEmail,
+} = require("../services/emailService");
+const { generateMatches } = require("../services/lostFoundMatchingService");
 
 function getActorName(req) {
     return String(req.user?.name || req.user?.username || "User").trim();
@@ -11,6 +17,64 @@ function getActorName(req) {
 
 function getActorEmail(req) {
     return String(req.user?.email || "").trim().toLowerCase();
+}
+
+async function notifyLostFoundMatchOwners(reportA, reportB) {
+    const reports = [
+        { owner: reportA, other: reportB },
+        { owner: reportB, other: reportA },
+    ];
+
+    for (const { owner, other } of reports) {
+        const email = String(owner.reporterEmail || "")
+            .trim()
+            .toLowerCase();
+
+        if (!email) continue;
+
+        const petName =
+            owner.petName || other.petName || "your reported pet";
+
+        // In-app notification
+        try {
+            const user = await User.findOne({ email }).select("_id email");
+
+            if (user) {
+                await Notification.create({
+                    user: user._id,
+                    title: "Lost & Found Match Confirmed",
+                    message:
+                        `A matching ${other.reportType} report for ${petName} ` +
+                        "has been confirmed by RescueBase staff.",
+                    type: "lost_found_update",
+                });
+            } else {
+                console.warn(
+                    `Lost & Found notification skipped: no user found for ${email}`
+                );
+            }
+        } catch (error) {
+            console.error(
+                `Lost & Found in-app notification failed for ${email}:`,
+                error
+            );
+        }
+
+        // Email notification
+        try {
+            await sendLostFoundMatchEmail(
+                email,
+                petName,
+                other.reportType,
+                other.location
+            );
+        } catch (error) {
+            console.error(
+                `Lost & Found match email failed for ${email}:`,
+                error
+            );
+        }
+    }
 }
 
 exports.createReport = async (req, res) => {
@@ -754,6 +818,8 @@ exports.reviewPossibleMatch = async (req, res) => {
         ).trim();
 
         await match.save();
+
+        await notifyLostFoundMatchOwners(reportA, reportB);
 
         await LostFoundMatch.updateMany(
             {

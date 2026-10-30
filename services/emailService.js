@@ -79,8 +79,8 @@ async function sendApplicationUpdateEmail(email, status, applicationType = "appl
 
                 <p>
                     ${status === "approved"
-                        ? "If you are already logged in, please log out and log in again to open your new dashboard."
-                        : "Please log in to RescueBase to view the latest details."}
+                ? "If you are already logged in, please log out and log in again to open your new dashboard."
+                : "Please log in to RescueBase to view the latest details."}
                 </p>
 
                 <p>— RescueBase</p>
@@ -388,16 +388,15 @@ async function sendRoleApplicationEmail(
                     <strong>${status}</strong>.
                 </p>
 
-                ${
-                    !approved && rejectionReason
-                        ? `
+                ${!approved && rejectionReason
+                ? `
                             <p>
                                 <strong>Reason:</strong>
                                 ${rejectionReason}
                             </p>
                         `
-                        : ""
-                }
+                : ""
+            }
 
                 <p>
                     Please log in to RescueBase to view
@@ -500,6 +499,47 @@ function gated(send, category, pickEmail = (args) => args[0]) {
     };
 }
 
+async function sendLostFoundMatchEmail(
+    email,
+    petName,
+    matchedReportType,
+    matchedLocation
+) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase Lost & Found - Possible Pet Match Confirmed",
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Lost & Found Match Confirmed</h2>
+
+                <p>
+                    Good news! A possible match for
+                    <strong>${petName || "your reported pet"}</strong>
+                    has been confirmed by RescueBase staff.
+                </p>
+
+                <p>
+                    The matching report is a
+                    <strong>${matchedReportType}</strong> report.
+                </p>
+
+                <p>
+                    <strong>Reported location:</strong>
+                    ${matchedLocation || "Not specified"}
+                </p>
+
+                <p>
+                    Please log in to RescueBase to view the latest details
+                    and coordinate with the other report owner.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
 module.exports = {
     // Always sent (security / account)
     sendOtpEmail,
@@ -517,6 +557,7 @@ module.exports = {
     sendLostFoundReunitedEmail: gated(sendLostFoundReunitedEmail, "lostFound"),
     sendRescueAssignmentEmail: gated(sendRescueAssignmentEmail, "rescue"),
     sendFeedbackReplyEmail: gated(sendFeedbackReplyEmail, "feedback"),
+    sendLostFoundMatchEmail: gated(sendLostFoundMatchEmail, "lostFound"),
     sendDonationConfirmationEmail: gated(
         sendDonationConfirmationEmail,
         "donation",
