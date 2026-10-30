@@ -113,6 +113,49 @@ const globalSettingsSchema = new mongoose.Schema(
             },
         },
 
+        donationDropOff: {
+            enabled: {
+                type: Boolean,
+                default: false,
+            },
+            city: {
+                type: String,
+                default: "Cebu",
+                trim: true,
+                maxlength: 100,
+            },
+            address: {
+                type: String,
+                default: "",
+                trim: true,
+                maxlength: 500,
+            },
+            contactPerson: {
+                type: String,
+                default: "",
+                trim: true,
+                maxlength: 150,
+            },
+            contactNumber: {
+                type: String,
+                default: "",
+                trim: true,
+                maxlength: 30,
+            },
+            operatingHours: {
+                type: String,
+                default: "",
+                trim: true,
+                maxlength: 150,
+            },
+            instructions: {
+                type: String,
+                default: "",
+                trim: true,
+                maxlength: 1000,
+            },
+        },
+
         updatedBy: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
