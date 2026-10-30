@@ -134,4 +134,20 @@ router.patch(
     )
 );
 
+router.patch(
+    "/reports/:id/claim/cancel",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff",
+        "foster",
+        "adopter",
+        "volunteer"
+    ),
+    asyncHandler(
+        lostFoundController.cancelClaim
+    )
+);
+
+
 module.exports = router;

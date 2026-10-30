@@ -915,3 +915,78 @@ exports.reviewPossibleMatch = async (req, res) => {
         match,
     });
 };
+
+
+exports.cancelClaim = async (req, res) => {
+    const report = await LostFoundReport.findById(req.params.id);
+
+    if (!report) {
+        const error = new Error("Lost and found report not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const claimantEmail = getActorEmail(req);
+
+    if (!claimantEmail) {
+        const error = new Error("Authenticated user email is missing.");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    if (
+        String(report.claimedByEmail || "").trim().toLowerCase() !==
+        claimantEmail
+    ) {
+        const error = new Error(
+            "You are not authorized to cancel this claim."
+        );
+        error.statusCode = 403;
+        throw error;
+    }
+
+    if (report.claimStatus !== "pending") {
+        const error = new Error(
+            "Only pending claims can be cancelled."
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const claimantName = getActorName(req);
+
+    report.claimStatus = "none";
+    report.status =
+        report.matchStatus === "confirmed" ? "matched" : "open";
+
+    report.claimedByName = "";
+    report.claimedByEmail = "";
+    report.claimNotes = "";
+
+    await report.save();
+
+    await LedgerEntry.create({
+        type: "lost_found",
+        action: "lost_found_claim_cancelled",
+        actorName: claimantName,
+        actorEmail: claimantEmail,
+        targetType: "LostFoundReport",
+        targetId: report._id.toString(),
+        description:
+            `${claimantName} cancelled their pending claim for ` +
+            `${report.petName || report.species}.`,
+        status: report.status,
+        metadata: {
+            petName: report.petName,
+            species: report.species,
+            reportType: report.reportType,
+            reporterEmail: report.reporterEmail,
+        },
+    });
+
+    return res.json({
+        success: true,
+        message: "Your pending claim has been cancelled.",
+        report,
+    });
+};
