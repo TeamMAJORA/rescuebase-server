@@ -91,6 +91,15 @@ router.patch(
     )
 );
 
+router.patch(
+    "/reports/:id/reunited",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        lostFoundController.markReportReunited
+    )
+);
+
 router.delete(
     "/reports/:reportId",
     verifyToken,
