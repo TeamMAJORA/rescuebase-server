@@ -161,7 +161,7 @@ const updateInventory = async (req, res) => {
             id,
             { $set: updates },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -238,7 +238,7 @@ const adjustStock = async (req, res) => {
             $inc: { quantityInStock: adjustment },
         },
         {
-            new: true,
+            returnDocument: "after",
             runValidators: true,
         }
     );

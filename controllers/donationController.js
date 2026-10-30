@@ -17,7 +17,7 @@ async function changeSupplyReceived(supplyId, delta, req) {
     const supply = await NeededSupply.findByIdAndUpdate(
         supplyId,
         { $inc: { quantityReceived: delta } },
-        { new: true }
+        { returnDocument: "after" }
     );
 
     await changeLinkedFoodStock(supply, delta, req);
@@ -475,7 +475,7 @@ exports.deleteDonation = async (req, res) => {
                 },
             },
             {
-                new: true,
+                returnDocument: "after",
             }
         );
 

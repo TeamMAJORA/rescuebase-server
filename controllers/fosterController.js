@@ -1870,7 +1870,7 @@ exports.handleReturnRequest = async (req, res) => {
     const assignment = await FosterAssignment.findOneAndUpdate(
         { _id: req.params.id, status: "active", "returnRequest.status": "pending" },
         { $set: set },
-        { new: true }
+        { returnDocument: "after" }
     );
 
     if (!assignment) {
