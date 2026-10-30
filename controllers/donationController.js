@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const Donation = require("../models/Donations");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
-const { sendDonationConfirmationEmail }= require("../services/emailService");
+const { sendDonationConfirmationEmail } = require("../services/emailService");
 const NeededSupply = require("../models/NeededSupply.js")
 
 
@@ -19,6 +19,40 @@ exports.createDonation = async (req, res) => {
     const donationType = String(
         req.body.donationType || ""
     ).trim();
+
+    const proofOfPayment = String(
+        req.body.proofOfPayment || ""
+    ).trim();
+
+    const paymentMethod = String(
+        req.body.paymentMethod || ""
+    ).trim();
+
+    if (donationType === "Money") {
+        if (amount <= 0) {
+            const error = new Error(
+                "Money donations must have an amount greater than zero."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (!proofOfPayment) {
+            const error = new Error(
+                "Proof of payment is required for money donations."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (!paymentMethod) {
+            const error = new Error(
+                "Payment method is required for money donations."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+    }
 
     if (!donorName) {
         const error = new Error(
@@ -77,6 +111,14 @@ exports.createDonation = async (req, res) => {
 
     const creator = await User.findById(creatorId).select("name username email role");
 
+    if (creator?.role === "volunteer") {
+        const error = new Error(
+            "Volunteer accounts are not permitted to submit donations."
+        );
+        error.statusCode = 403;
+        throw error;
+    }
+
     if (!creator) {
         const error = new Error(
             "Authenticated user account was not found."
@@ -103,13 +145,15 @@ exports.createDonation = async (req, res) => {
         notes: String(
             req.body.notes || ""
         ).trim(),
-        paymentMethod: String(req.body.paymentMethod || "").trim(),
-        paymentStatus: donationType === "Money" ? "pending" : "not_required",
-        paymentReference: String(req.body.paymentReference || "").trim(),
-        proofOfPayment: String(req.body.proofOfPayment || "").trim(),
-        status: String(req.body.status || "pending")
-            .trim()
-            .toLowerCase(),
+        paymentMethod,
+        paymentStatus: donationType === "Money"
+            ? "pending"
+            : "not_required",
+        paymentReference: String(
+            req.body.paymentReference || ""
+        ).trim(),
+        proofOfPayment,
+        status: "pending",
         createdByName: creatorName,
         createdByEmail: creatorEmail,
         neededSupplyId: req.body.neededSupplyId || null,
@@ -358,31 +402,57 @@ exports.deleteDonation = async (req, res) => {
     ).trim();
 
     if (!mongoose.isValidObjectId(donationId)) {
-        const error = new Error(
-            "Invalid donation ID."
-        );
-
+        const error = new Error("Invalid donation ID.");
         error.statusCode = 400;
         throw error;
     }
 
-    const donation =
-        await Donation.findByIdAndDelete(
-            donationId
-        );
+    const donation = await Donation.findById(donationId);
 
     if (!donation) {
-        const error = new Error(
-            "Donation record not found."
-        );
-
+        const error = new Error("Donation record not found.");
         error.statusCode = 404;
         throw error;
     }
 
+    if (
+        donation.status === "received" &&
+        donation.neededSupplyId
+    ) {
+        const receivedQuantity = Number(
+            donation.quantity || 0
+        );
+
+        const supply = await NeededSupply.findOneAndUpdate(
+            {
+                _id: donation.neededSupplyId,
+                quantityReceived: {
+                    $gte: receivedQuantity,
+                },
+            },
+            {
+                $inc: {
+                    quantityReceived: -receivedQuantity,
+                },
+            },
+            {
+                new: true,
+            }
+        );
+
+        if (!supply) {
+            const error = new Error(
+                "Could not reverse the received quantity. The linked supply may be missing or its recorded total is insufficient."
+            );
+            error.statusCode = 409;
+            throw error;
+        }
+    }
+
+    await Donation.findByIdAndDelete(donationId);
+
     return res.status(200).json({
         success: true,
-        message:
-            "Donation record deleted successfully.",
+        message: "Donation record deleted and totals updated successfully.",
     });
 };
