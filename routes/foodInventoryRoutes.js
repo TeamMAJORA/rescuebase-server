@@ -15,6 +15,11 @@ router.get(
     asyncHandler(foodInventoryController.getInventory)
 );
 
+router.get(
+    "/history",
+    asyncHandler(foodInventoryController.getSuppliesHistory)
+);
+
 router.post(
     "/",
     asyncHandler(foodInventoryController.createInventory)
@@ -33,6 +38,11 @@ router.post(
 router.get(
     "/:id/history",
     asyncHandler(foodInventoryController.getAdjustmentHistory)
+);
+
+router.delete(
+    "/:id",
+    asyncHandler(foodInventoryController.deleteInventory)
 );
 
 module.exports = router;

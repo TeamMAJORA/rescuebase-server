@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const FoodInventory = require("../models/FoodInventory");
+const NeededSupply = require("../models/NeededSupply");
 
 
 const MAX_FOOD_STOCK_KG = 100000;
@@ -332,7 +333,95 @@ const getAdjustmentHistory = async (req, res) => {
     });
 };
 
+// Remove a food item (e.g. added by mistake). Needed-supply requests made for it
+// stay, but are unlinked so received donations no longer change any stock.
+const deleteInventory = async (req, res) => {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+            message: "Invalid inventory item ID.",
+        });
+    }
+
+    const item = await FoodInventory.findByIdAndDelete(id);
+
+    if (!item) {
+        return res.status(404).json({
+            message: "Food inventory item not found.",
+        });
+    }
+
+    await NeededSupply.updateMany(
+        { foodInventoryId: item._id },
+        { $set: { foodInventoryId: null } }
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: `${item.name} was deleted.`,
+    });
+};
+
+// Supplies > History: every food stock change and every supply request, newest first
+const HISTORY_LIMIT = 300;
+
+const getSuppliesHistory = async (req, res) => {
+    const [foods, requests] = await Promise.all([
+        FoodInventory.find()
+            .select("name adjustmentHistory")
+            .populate("adjustmentHistory.adjustedBy", "name username email")
+            .lean(),
+        NeededSupply.find()
+            .select("name quantityNeeded foodInventoryId createdAt createdByName createdByEmail")
+            .lean(),
+    ]);
+
+    const entries = [];
+
+    foods.forEach((food) => {
+        (food.adjustmentHistory || []).forEach((change) => {
+            const by = change.adjustedBy;
+            entries.push({
+                _id: String(change._id),
+                kind: "stock",
+                date: change.adjustedAt,
+                item: food.name,
+                action: change.action,
+                quantity: change.quantity,
+                previousStock: change.previousStock,
+                newStock: change.newStock,
+                detail: [change.reason, change.note].filter(Boolean).join(" · "),
+                by: by?.name || by?.username || by?.email || "",
+            });
+        });
+    });
+
+    requests.forEach((request) => {
+        entries.push({
+            _id: String(request._id),
+            kind: "request",
+            date: request.createdAt,
+            item: request.name,
+            quantity: request.quantityNeeded,
+            unit: request.foodInventoryId ? "kg" : "",
+            detail: "Added to Needed supplies",
+            by: request.createdByName || request.createdByEmail || "",
+        });
+    });
+
+    entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return res.status(200).json({
+        success: true,
+        total: entries.length,
+        history: entries.slice(0, HISTORY_LIMIT),
+    });
+};
+
 module.exports = {
+    getSuppliesHistory,
+    deleteInventory,
     getInventory,
     createInventory,
     updateInventory,
