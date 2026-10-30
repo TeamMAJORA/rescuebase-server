@@ -428,12 +428,11 @@ exports.claimReport = async (req, res) => {
     });
 };
 
+
 exports.reviewClaim = async (req, res) => {
-    // "revoked" = take back an approved claim (claimant never came)
     const allowedStatuses = [
         "approved",
         "rejected",
-        "revoked",
     ];
 
     const requested = String(
@@ -441,10 +440,7 @@ exports.reviewClaim = async (req, res) => {
     ).trim().toLowerCase();
 
     if (!allowedStatuses.includes(requested)) {
-        const error = new Error(
-            "Invalid claim status."
-        );
-
+        const error = new Error("Invalid claim status.");
         error.statusCode = 400;
         throw error;
     }
@@ -454,39 +450,24 @@ exports.reviewClaim = async (req, res) => {
     );
 
     if (!report) {
-        const error = new Error(
-            "Lost and found report not found."
-        );
-
+        const error = new Error("Lost and found report not found.");
         error.statusCode = 404;
         throw error;
     }
 
-    if (requested === "revoked") {
-        if (report.claimStatus !== "approved" || report.status === "reunited") {
-            const error = new Error(
-                "Only an approved claim that isn't reunited yet can be revoked."
-            );
-
-            error.statusCode = 400;
-            throw error;
-        }
-    } else if (report.claimStatus !== "pending") {
+    if (report.claimStatus !== "pending") {
         const error = new Error(
             "This report does not have a pending claim."
         );
-
         error.statusCode = 400;
         throw error;
     }
 
-    // A revoked claim is saved as rejected and the report opens again
-    const claimStatus = requested === "revoked" ? "rejected" : requested;
-
     const reviewerName = getActorName(req);
     const reviewerEmail = getActorEmail(req);
     const claimantEmailForMail = report.claimedByEmail;
-    report.claimStatus = claimStatus;
+
+    report.claimStatus = requested;
 
     report.reviewedByName = reviewerName;
     report.reviewedByEmail = reviewerEmail;
@@ -498,11 +479,15 @@ exports.reviewClaim = async (req, res) => {
         ""
     ).trim();
 
-    if (claimStatus === "approved") {
-        report.status = "claimed";
+    if (requested === "approved") {
+        // Approval now completes the entire reunion process.
+        report.status = "reunited";
+        report.reunitedAt = new Date();
     } else {
+        // Rejected claims restore report availability.
         report.status =
-            report.matchStatus === "suggested"
+            report.matchStatus === "confirmed" ||
+                report.matchStatus === "suggested"
                 ? "matched"
                 : "open";
 
@@ -514,7 +499,9 @@ exports.reviewClaim = async (req, res) => {
 
     await LedgerEntry.create({
         type: "lost_found",
-        action: "lost_found_claim_reviewed",
+        action: requested === "approved"
+            ? "lost_found_case_reunited"
+            : "lost_found_claim_reviewed",
 
         actorName: reviewerName,
         actorEmail: reviewerEmail,
@@ -523,29 +510,39 @@ exports.reviewClaim = async (req, res) => {
         targetId: report._id.toString(),
 
         description:
-            `${report.petName || report.species} claim was ${claimStatus}.`,
+            requested === "approved"
+                ? `${report.petName || report.species} was approved and marked as reunited.`
+                : `${report.petName || report.species} claim was rejected.`,
 
         status: report.status,
 
         metadata: {
-            claimStatus,
-            claimedByEmail:
-                report.claimedByEmail,
-            reviewNotes:
-                report.claimNotes,
+            claimStatus: requested,
+            claimedByEmail: claimantEmailForMail,
+            reviewNotes: report.claimNotes,
+            reunitedAt: report.reunitedAt,
         },
     });
 
-    await sendLostFoundClaimEmail(
-        claimantEmailForMail,
-        report.petName || report.species,
-        claimStatus
-    );
+    if (requested === "approved") {
+        await sendLostFoundReunitedEmail(
+            report.reporterEmail,
+            report.petName || report.species
+        );
+    } else {
+        await sendLostFoundClaimEmail(
+            claimantEmailForMail,
+            report.petName || report.species,
+            requested
+        );
+    }
 
     return res.json({
         success: true,
         message:
-            `Lost and found claim ${claimStatus}.`,
+            requested === "approved"
+                ? "Claim approved. Lost and found case marked as reunited."
+                : "Lost and found claim rejected.",
         report,
     });
 };
