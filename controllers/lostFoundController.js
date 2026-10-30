@@ -2,6 +2,7 @@ const GISLocation = require("../models/GISLocation");
 const LostFoundReport = require("../models/LostFoundReport");
 const LedgerEntry = require("../models/LedgerEntry");
 const { sendLostFoundClaimEmail, sendLostFoundReunitedEmail } = require("../services/emailService");
+const { generatematches } = require("../services/lostFoundMatchingService");
 
 function getActorName(req) {
     return String(req.user?.name || req.user?.username || "User").trim();
@@ -50,6 +51,26 @@ exports.createReport = async (req, res) => {
         throw e;
     }
 
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+
+    const hasValidCoordinates =
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        Math.abs(latitude) <= 90 &&
+        Math.abs(longitude) <= 180 &&
+        (latitude !== 0 || longitude !== 0);
+
+    const coordinates = hasValidCoordinates
+        ? { latitude, longitude }
+        : { latitude: null, longitude: null };
+
+    const eventDateValue =
+        req.body.eventDate ||
+        req.body.dateLost ||
+        req.body.dateFound ||
+        null;
+
     const report = await LostFoundReport.create({
         reporterName,
         reporterEmail,
@@ -69,14 +90,24 @@ exports.createReport = async (req, res) => {
         photoUrl: String(
             req.body.photoUrl || ""
         ).trim(),
+        colour: String(
+            req.body.colour || req.body.color || ""
+        ).trim(),
+
+        size: String(
+            req.body.size || ""
+        ).trim(),
+
+        sex: String(
+            req.body.sex || ""
+        ).trim(),
+
+        coordinates,
+        eventDate: eventDateValue,
         status: "open",
         matchStatus: "none",
         claimStatus: "none",
     });
-
-    // Pin on the GIS map when the reporter dropped one (never blocks the report)
-    const latitude = Number(req.body.latitude);
-    const longitude = Number(req.body.longitude);
 
     if (
         Number.isFinite(latitude) && Number.isFinite(longitude) &&
@@ -122,11 +153,30 @@ exports.createReport = async (req, res) => {
         },
     });
 
+    let matchingResult = {
+        success: false,
+        matchesCreated: 0,
+    };
+
+    try {
+        matchingResult = await generateMatches(report._id);
+
+        console.log(
+            `[LostFound] Generated ${matchingResult.matchesCreated} suggestions for report ${report._id}`
+        );
+    } catch (matchingError) {
+        console.error(
+            "[LostFound] Automatic matching failed:",
+            matchingError
+        );
+    }
+
     return res.status(201).json({
         success: true,
         message:
             `${report.reportType === "lost" ? "Lost" : "Found"} pet report submitted successfully.`,
         report,
+        matching: matchingResult,
     });
 };
 
@@ -372,7 +422,7 @@ exports.reviewClaim = async (req, res) => {
     const reviewerEmail = getActorEmail(req);
     const claimantEmailForMail = report.claimedByEmail;
     report.claimStatus = claimStatus;
-    
+
     report.reviewedByName = reviewerName;
     report.reviewedByEmail = reviewerEmail;
     report.reviewedAt = new Date();
@@ -421,7 +471,7 @@ exports.reviewClaim = async (req, res) => {
         },
     });
 
-        await sendLostFoundClaimEmail(
+    await sendLostFoundClaimEmail(
         claimantEmailForMail,
         report.petName || report.species,
         claimStatus

@@ -39,6 +39,24 @@ const lostFoundReportSchema = new mongoose.Schema(
             trim: true,
         },
 
+        colour: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        size: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        sex: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
         description: {
             type: String,
             required: true,
@@ -49,6 +67,26 @@ const lostFoundReportSchema = new mongoose.Schema(
             type: String,
             required: true,
             trim: true,
+        },
+
+        coordinates: {
+            latitude: {
+                type: Number,
+                min: -90,
+                max: 90,
+                default: null,
+            },
+            longitude: {
+                type: Number,
+                min: -180,
+                max: 180,
+                default: null,
+            },
+        },
+
+        eventDate: {
+            type: Date,
+            default: null,
         },
 
         dateReported: {
@@ -73,7 +111,6 @@ const lostFoundReportSchema = new mongoose.Schema(
             default: "open",
         },
 
-        // Used later by the matching system
         matchStatus: {
             type: String,
             enum: [
@@ -84,7 +121,6 @@ const lostFoundReportSchema = new mongoose.Schema(
             default: "none",
         },
 
-        // Used when Admin/Staff verifies a claim
         claimStatus: {
             type: String,
             enum: [
