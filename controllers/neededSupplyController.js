@@ -25,6 +25,22 @@ exports.getAllSupplies = async (req, res) => {
     });
 };
 
+const MAX_SUPPLY_QUANTITY = 10000;
+
+function hasInvalidSupplyQuantities(quantityNeeded, quantityReceived) {
+    const needed = Number(quantityNeeded);
+    const received = Number(quantityReceived || 0);
+
+    return (
+        !Number.isFinite(needed) ||
+        needed < 1 ||
+        needed > MAX_SUPPLY_QUANTITY ||
+        !Number.isFinite(received) ||
+        received < 0 ||
+        received > MAX_SUPPLY_QUANTITY
+    );
+}
+
 exports.createSupply = async (req, res) => {
     const {
         name,
@@ -63,6 +79,13 @@ exports.createSupply = async (req, res) => {
         return res.status(400).json({
             success: false,
             message: "Supply category is required",
+        });
+    }
+
+    if (hasInvalidSupplyQuantities(quantityNeeded, quantityReceived)) {
+        return res.status(400).json({
+            success: false,
+            message: `Quantities must be between 0 and ${MAX_SUPPLY_QUANTITY.toLocaleString()} (needed at least 1).`,
         });
     }
 
@@ -131,13 +154,10 @@ exports.updateSupply = async (req, res) => {
         }
     }
 
-    if (
-        supply.quantityNeeded < 1 ||
-        supply.quantityReceived < 0
-    ) {
+    if (hasInvalidSupplyQuantities(supply.quantityNeeded, supply.quantityReceived)) {
         return res.status(400).json({
             success: false,
-            message: "Invalid supply quantities.",
+            message: `Quantities must be between 0 and ${MAX_SUPPLY_QUANTITY.toLocaleString()} (needed at least 1).`,
         });
     }
 

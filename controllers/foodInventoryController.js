@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 const FoodInventory = require("../models/FoodInventory");
 
+
+const MAX_FOOD_STOCK_KG = 100000;
+const MAX_FOOD_RATE_KG = 50;
 const getUserId = (req) =>
     req.user?._id || req.user?.id || req.user?.userId || null;
 
@@ -38,8 +41,10 @@ const createInventory = async (req, res) => {
     if (
         !Number.isFinite(stock) ||
         stock < 0 ||
+        stock > MAX_FOOD_STOCK_KG ||
         !Number.isFinite(rate) ||
         rate < 0 ||
+        rate > MAX_FOOD_RATE_KG ||
         !Number.isFinite(days) ||
         days < 1 ||
         !Number.isInteger(days)
@@ -123,10 +128,11 @@ const updateInventory = async (req, res) => {
 
         if (
             !Number.isFinite(updates.foodRatePerAnimalPerDay) ||
-            updates.foodRatePerAnimalPerDay < 0
+            updates.foodRatePerAnimalPerDay < 0 ||
+            updates.foodRatePerAnimalPerDay > MAX_FOOD_RATE_KG
         ) {
             return res.status(400).json({
-                message: "Food rate must be a valid non-negative number.",
+                message: `Food rate must be between 0 and ${MAX_FOOD_RATE_KG} kg.`,
             });
         }
     }
@@ -200,9 +206,9 @@ const adjustStock = async (req, res) => {
         });
     }
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_FOOD_STOCK_KG) {
         return res.status(400).json({
-            message: "Adjustment quantity must be greater than zero.",
+            message: `Adjustment quantity must be between 0 and ${MAX_FOOD_STOCK_KG.toLocaleString()} kg.`,
         });
     }
 
@@ -217,12 +223,16 @@ const adjustStock = async (req, res) => {
 
     const adjustment = action === "add" ? amount : -amount;
 
+    // Adding must not push the stock past the limit
+    const stockLimitFilter =
+        action === "add"
+            ? { quantityInStock: { $lte: MAX_FOOD_STOCK_KG - amount } }
+            : { quantityInStock: { $gte: amount } };
+
     const item = await FoodInventory.findOneAndUpdate(
         {
             _id: id,
-            ...(action === "remove"
-                ? { quantityInStock: { $gte: amount } }
-                : {}),
+            ...stockLimitFilter,
         },
         {
             $inc: { quantityInStock: adjustment },
@@ -243,7 +253,10 @@ const adjustStock = async (req, res) => {
         }
 
         return res.status(400).json({
-            message: "Insufficient stock for this removal.",
+            message:
+                action === "add"
+                    ? `Stock cannot go above ${MAX_FOOD_STOCK_KG.toLocaleString()} kg.`
+                    : "Insufficient stock for this removal.",
         });
     }
 

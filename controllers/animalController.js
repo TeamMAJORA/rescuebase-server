@@ -59,9 +59,10 @@ exports.createAnimal = async (req, res) => {
     }
 
     const age = Number(req.body.age || 0);
+    const MAX_ANIMAL_AGE_YEARS = 100;
 
-    if (Number.isNaN(age) || age < 0) {
-        const error = new Error("Invalid animal age.");
+    if (Number.isNaN(age) || age < 0 || age > MAX_ANIMAL_AGE_YEARS) {
+        const error = new Error(`Animal age must be between 0 and ${MAX_ANIMAL_AGE_YEARS} years.`);
         error.statusCode = 400;
         throw error;
     }
@@ -442,9 +443,9 @@ exports.updateAnimal = async (req, res) => {
     if (allowedUpdates.age !== undefined) {
         const age = Number(allowedUpdates.age);
 
-        if (Number.isNaN(age) || age < 0) {
+        if (Number.isNaN(age) || age < 0 || age > 100) {
             const error = new Error(
-                "Invalid animal age."
+                "Animal age must be between 0 and 100 years."
             );
             error.statusCode = 400;
             throw error;

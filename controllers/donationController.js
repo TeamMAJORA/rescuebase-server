@@ -6,6 +6,9 @@ const Notification = require("../models/Notifications");
 const { sendDonationConfirmationEmail } = require("../services/emailService");
 const NeededSupply = require("../models/NeededSupply.js")
 
+const MAX_DONATION_AMOUNT = 999999;
+const MAX_DONATION_QUANTITY = 1000;
+
 
 exports.createDonation = async (req, res) => {
     const donorName = String(
@@ -52,17 +55,17 @@ exports.createDonation = async (req, res) => {
         req.body.quantity || 1
     );
 
-    if (Number.isNaN(amount) || amount < 0) {
+    if (Number.isNaN(amount) || amount < 0 || amount > MAX_DONATION_AMOUNT) {
         const error = new Error(
-            "Invalid donation amount."
+            `Donation amount must be between 0 and ${MAX_DONATION_AMOUNT.toLocaleString()}.`
         );
         error.statusCode = 400;
         throw error;
     }
 
-    if (Number.isNaN(quantity) || quantity < 1) {
+    if (Number.isNaN(quantity) || quantity < 1 || quantity > MAX_DONATION_QUANTITY) {
         const error = new Error(
-            "Invalid donation quantity."
+            `Donation quantity must be between 1 and ${MAX_DONATION_QUANTITY.toLocaleString()}.`
         );
 
         error.statusCode = 400;
@@ -282,9 +285,9 @@ exports.updateDonation = async (req, res) => {
     if (allowedUpdates.amount !== undefined) {
         const amount = Number(allowedUpdates.amount);
 
-        if (Number.isNaN(amount) || amount < 0) {
+        if (Number.isNaN(amount) || amount < 0 || amount > MAX_DONATION_AMOUNT) {
             const error = new Error(
-                "Invalid donation amount."
+                `Donation amount must be between 0 and ${MAX_DONATION_AMOUNT.toLocaleString()}.`
             );
             error.statusCode = 400;
             throw error;
@@ -296,9 +299,9 @@ exports.updateDonation = async (req, res) => {
     if (allowedUpdates.quantity !== undefined) {
         const quantity = Number(allowedUpdates.quantity);
 
-        if (Number.isNaN(quantity) || quantity < 1) {
+        if (Number.isNaN(quantity) || quantity < 1 || quantity > MAX_DONATION_QUANTITY) {
             const error = new Error(
-                "Invalid donation quantity."
+                `Donation quantity must be between 1 and ${MAX_DONATION_QUANTITY.toLocaleString()}.`
             );
             error.statusCode = 400;
             throw error;

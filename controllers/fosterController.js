@@ -839,6 +839,23 @@ exports.submitAssignmentUpdate = async (req, res) => {
         throw error;
     }
 
+    const MAX_WEIGHT_KG = 150;
+    const weightValue = Number(req.body.weight);
+
+    if (
+        req.body.weight !== "" &&
+        req.body.weight !== undefined &&
+        req.body.weight !== null &&
+        (Number.isNaN(weightValue) || weightValue < 0 || weightValue > MAX_WEIGHT_KG)
+    ) {
+        const error = new Error(
+            `Weight must be between 0 and ${MAX_WEIGHT_KG} kg.`
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
     const assignment =
         await FosterAssignment.findOne({
             _id: assignmentId,
