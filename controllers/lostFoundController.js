@@ -332,6 +332,15 @@ exports.claimReport = async (req, res) => {
         throw error;
     }
 
+    if (String(report.reportType || "").toLowerCase() === "lost") {
+        const error = new Error(
+            "Claims cannot be submitted on Lost reports. Only Found reports can be claimed."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
     const claimantName = getActorName(req);
     const claimantEmail = getActorEmail(req);
 
