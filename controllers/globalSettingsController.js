@@ -30,6 +30,16 @@ const DEFAULT_SETTINGS = {
             "RESCUEBASE is temporarily undergoing maintenance. Please try again later.",
         allowAdminAccess: true,
     },
+
+    donationDropOff: {
+        enabled: false,
+        city: "Cebu",
+        address: "",
+        contactPerson: "",
+        contactNumber: "",
+        operatingHours: "",
+        instructions: "",
+    },
 };
 
 const ALLOWED_FIELDS = {
@@ -58,6 +68,16 @@ const ALLOWED_FIELDS = {
         "enabled",
         "message",
         "allowAdminAccess",
+    ],
+
+    donationDropOff: [
+        "enabled",
+        "city",
+        "address",
+        "contactPerson",
+        "contactNumber",
+        "operatingHours",
+        "instructions",
     ],
 };
 
@@ -125,6 +145,12 @@ function validateAndNormalize(body) {
         "general.contactPhone": { max: 30 },
         "general.timezone": { max: 100 },
         "maintenance.message": { max: 500 },
+        "donationDropOff.city": { max: 100 },
+        "donationDropOff.address": { max: 500 },
+        "donationDropOff.contactPerson": { max: 150 },
+        "donationDropOff.contactNumber": { max: 30 },
+        "donationDropOff.operatingHours": { max: 150 },
+        "donationDropOff.instructions": { max: 1000 },
     };
 
     const numberFields = {
@@ -269,6 +295,12 @@ exports.getGlobalSettings = async (req, res) => {
                 ...DEFAULT_SETTINGS.maintenance,
                 ...(settings.maintenance || {}),
             },
+
+            donationDropOff: {
+                ...DEFAULT_SETTINGS.donationDropOff,
+                ...(settings.donationDropOff || {}),
+            },
+
             updatedAt: settings.updatedAt,
         },
     });
@@ -302,6 +334,7 @@ exports.updateGlobalSettings = async (req, res) => {
             setDefaultsOnInsert: true,
             runValidators: true,
         }
+
     ).lean();
 
     res.status(200).json({
@@ -325,6 +358,11 @@ exports.updateGlobalSettings = async (req, res) => {
                 ...DEFAULT_SETTINGS.maintenance,
                 ...(settings.maintenance || {}),
             },
+            donationDropOff: {
+                ...DEFAULT_SETTINGS.donationDropOff,
+                ...(settings.donationDropOff || {}),
+            },
+
             updatedAt: settings.updatedAt,
         },
     });
