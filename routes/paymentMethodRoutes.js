@@ -10,7 +10,7 @@ const authoriseRoles = require("../middleware/authoriseRoles");
 router.get(
     "/",
     verifyToken,
-    authoriseRoles("admin", "staff","adopter", "foster"),
+    authoriseRoles("admin", "staff", "adopter", "foster"),
     asyncHandler(
         paymentMethodController.getPaymentMethods
     )
@@ -28,7 +28,7 @@ router.get(
 router.post(
     "/",
     verifyToken,
-    authoriseRoles("admin", "staff", "adopter", "foster"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         paymentMethodController.createPaymentMethod
     )
