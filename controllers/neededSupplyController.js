@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const NeededSupply = require("../models/NeededSupply");
+const FoodInventory = require("../models/FoodInventory");
 
 const SUPPLY_STATUSES = ["active", "fulfilled", "inactive"];
 
@@ -82,6 +83,29 @@ exports.createSupply = async (req, res) => {
         });
     }
 
+    // shortcut for "Request more" from Food Storage
+    let foodInventoryId = null;
+
+    if (req.body.foodInventoryId) {
+        if (!mongoose.isValidObjectId(req.body.foodInventoryId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid food item.",
+            });
+        }
+
+        const foodItem = await FoodInventory.exists({ _id: req.body.foodInventoryId });
+
+        if (!foodItem) {
+            return res.status(404).json({
+                success: false,
+                message: "Food item not found.",
+            });
+        }
+
+        foodInventoryId = req.body.foodInventoryId;
+    }
+
     if (hasInvalidSupplyQuantities(quantityNeeded, quantityReceived)) {
         return res.status(400).json({
             success: false,
@@ -99,6 +123,7 @@ exports.createSupply = async (req, res) => {
         status: supplyStatus,
         createdByName: req.user?.name || "",
         createdByEmail: req.user?.email || "",
+        foodInventoryId,
     });
 
     res.status(201).json({

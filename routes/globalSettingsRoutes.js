@@ -42,6 +42,27 @@ router.get("/contact", verifyToken, asyncHandler(async (req, res) => {
     });
 }));
 
+// Public (landing page and donation page): where to bring item donations
+router.get("/drop-off", asyncHandler(async (req, res) => {
+    const settings = await getSettingsDocument();
+    const dropOff = settings?.donationDropOff || {};
+
+    res.set("Cache-Control", "no-store");
+
+    return res.status(200).json({
+        success: true,
+        dropOff: {
+            enabled: Boolean(dropOff.enabled),
+            city: dropOff.enabled ? String(dropOff.city || "") : "",
+            address: dropOff.enabled ? String(dropOff.address || "") : "",
+            contactPerson: dropOff.enabled ? String(dropOff.contactPerson || "") : "",
+            contactNumber: dropOff.enabled ? String(dropOff.contactNumber || "") : "",
+            operatingHours: dropOff.enabled ? String(dropOff.operatingHours || "") : "",
+            instructions: dropOff.enabled ? String(dropOff.instructions || "") : "",
+        },
+    });
+}));
+
 // Shelter capacity for the dashboard (admin and staff)
 router.get("/capacity", verifyToken, asyncHandler(async (req, res) => {
     const settings = await getSettingsDocument();

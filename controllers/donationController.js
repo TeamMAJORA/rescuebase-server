@@ -5,6 +5,49 @@ const User = require("../models/User");
 const Notification = require("../models/Notifications");
 const { sendDonationConfirmationEmail } = require("../services/emailService");
 const NeededSupply = require("../models/NeededSupply.js")
+const FoodInventory = require("../models/FoodInventory");
+
+const MAX_FOOD_STOCK_KG = 100000;
+
+// updates the quantityReceived field of a supply
+// item, the same amount (kg) is added to / taken from that food's stock.
+async function changeSupplyReceived(supplyId, delta, req) {
+    if (!supplyId || !delta) return;
+
+    const supply = await NeededSupply.findByIdAndUpdate(
+        supplyId,
+        { $inc: { quantityReceived: delta } },
+        { new: true }
+    );
+
+    await changeLinkedFoodStock(supply, delta, req);
+}
+
+// Adds / removes kg on the Food Storage item a supply is linked to (if any)
+async function changeLinkedFoodStock(supply, delta, req) {
+    if (!supply?.foodInventoryId || !delta) return;
+
+    const food = await FoodInventory.findById(supply.foodInventoryId);
+    if (!food) return;
+
+    const previousStock = Number(food.quantityInStock) || 0;
+    const newStock = Math.min(MAX_FOOD_STOCK_KG, Math.max(0, previousStock + delta));
+    const changed = Math.abs(newStock - previousStock);
+
+    if (!changed) return;
+
+    food.quantityInStock = newStock;
+    food.adjustmentHistory.push({
+        action: newStock > previousStock ? "add" : "remove",
+        quantity: changed,
+        previousStock,
+        newStock,
+        reason: newStock > previousStock ? "Donation received" : "Donation reversed",
+        note: `Needed supply: ${supply.name}`,
+        adjustedBy: req.user?.id || null,
+    });
+    await food.save();
+}
 
 const MAX_DONATION_AMOUNT = 999999;
 const MAX_DONATION_QUANTITY = 1000;
@@ -353,24 +396,9 @@ exports.updateDonation = async (req, res) => {
             newSupplyId !== oldSupplyId;
 
         if (shouldRemoveOldQuantity) {
-            await NeededSupply.findByIdAndUpdate(
-                oldSupplyId,
-                {
-                    $inc: {
-                        quantityReceived: -oldQuantity,
-                    },
-                }
-            );
+            await changeSupplyReceived(oldSupplyId, -oldQuantity, req);
         } else if (newQuantity !== oldQuantity) {
-            await NeededSupply.findByIdAndUpdate(
-                oldSupplyId,
-                {
-                    $inc: {
-                        quantityReceived:
-                            newQuantity - oldQuantity,
-                    },
-                }
-            );
+            await changeSupplyReceived(oldSupplyId, newQuantity - oldQuantity, req);
         }
     }
 
@@ -380,14 +408,7 @@ exports.updateDonation = async (req, res) => {
             newSupplyId !== oldSupplyId;
 
         if (shouldAddNewQuantity) {
-            await NeededSupply.findByIdAndUpdate(
-                newSupplyId,
-                {
-                    $inc: {
-                        quantityReceived: newQuantity,
-                    },
-                }
-            );
+            await changeSupplyReceived(newSupplyId, newQuantity, req);
         }
     }
 
@@ -465,6 +486,8 @@ exports.deleteDonation = async (req, res) => {
             error.statusCode = 409;
             throw error;
         }
+
+        await changeLinkedFoodStock(supply, -receivedQuantity, req);
     }
 
     await Donation.findByIdAndDelete(donationId);
