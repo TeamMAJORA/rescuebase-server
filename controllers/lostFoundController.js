@@ -19,6 +19,21 @@ function getActorEmail(req) {
     return String(req.user?.email || "").trim().toLowerCase();
 }
 
+function preventStaffAdmin(req) {
+    const role = String(req.user?.role || "")
+        .trim()
+        .toLowerCase();
+
+    if (role === "admin" || role === "staff") {
+        const error = new Error(
+            "Staff and Admin accounts cannot submit Lost & Found reports or claims."
+        );
+
+        error.statusCode = 403;
+        throw error;
+    }
+}
+
 async function notifyLostFoundMatchOwners(reportA, reportB) {
     const reports = [
         { owner: reportA, other: reportB },
@@ -78,10 +93,45 @@ async function notifyLostFoundMatchOwners(reportA, reportB) {
 }
 
 exports.createReport = async (req, res) => {
+    preventStaffAdmin(req);
+
+    const allowedColours = [
+        "Black",
+        "White",
+        "Brown",
+        "Tan",
+        "Gray",
+        "Grey",
+        "Cream",
+        "Golden",
+        "Orange",
+        "Red",
+        "Mixed",
+        "Other",
+    ];
+
+    const allowedSizes = [
+        "Small",
+        "Medium",
+        "Large",
+        "Extra Large",
+    ];
+
+    const allowedSexes = [
+        "Male",
+        "Female",
+        "Unknown",
+    ];
+
     const reportType = String(req.body.reportType || "").trim().toLowerCase();
     const species = String(req.body.species || "").trim();
     const description = String(req.body.description || "").trim();
     const location = String(req.body.location || "").trim();
+    const size = String(req.body.size || "").trim();
+    const sex = String(req.body.sex || "").trim();
+    const colour = String(
+        req.body.colour || req.body.color || ""
+    ).trim();
 
     if (!["lost", "found"].includes(reportType)) {
         const e = new Error("Report type must be either lost or found.");
@@ -105,6 +155,24 @@ exports.createReport = async (req, res) => {
         const e = new Error("Location is required.");
         e.statusCode = 400;
         throw e;
+    }
+
+    if (colour && !allowedColours.includes(colour)) {
+        const error = new Error("Invalid pet colour.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (size && !allowedSizes.includes(size)) {
+        const error = new Error("Invalid pet size.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (sex && !allowedSexes.includes(sex)) {
+        const error = new Error("Invalid pet sex.");
+        error.statusCode = 400;
+        throw error;
     }
 
     const reporterName = getActorName(req);
@@ -140,33 +208,16 @@ exports.createReport = async (req, res) => {
         reporterName,
         reporterEmail,
         reportType,
-        petName: String(
-            req.body.petName || ""
-        ).trim(),
+        petName: String(req.body.petName || "").trim(),
         species,
-        breed: String(
-            req.body.breed || ""
-        ).trim(),
+        breed: String(req.body.breed || "").trim(),
         description,
         location,
-        dateReported:
-            req.body.dateReported ||
-            new Date(),
-        photoUrl: String(
-            req.body.photoUrl || ""
-        ).trim(),
-        colour: String(
-            req.body.colour || req.body.color || ""
-        ).trim(),
-
-        size: String(
-            req.body.size || ""
-        ).trim(),
-
-        sex: String(
-            req.body.sex || ""
-        ).trim(),
-
+        dateReported: req.body.dateReported || new Date(),
+        photoUrl: String(req.body.photoUrl || "").trim(),
+        colour,
+        size,
+        sex,
         coordinates,
         eventDate: eventDateValue,
         status: "open",
@@ -319,6 +370,8 @@ exports.deleteReport = async (req, res) => {
 };
 
 exports.claimReport = async (req, res) => {
+    preventStaffAdmin(req);
+
     const report = await LostFoundReport.findById(
         req.params.id
     );
@@ -841,6 +894,8 @@ exports.reviewPossibleMatch = async (req, res) => {
 
 
 exports.cancelClaim = async (req, res) => {
+    preventStaffAdmin(req);
+
     const report = await LostFoundReport.findById(req.params.id);
 
     if (!report) {

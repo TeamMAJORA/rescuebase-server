@@ -12,11 +12,9 @@ router.post(
     "/reports",
     verifyToken,
     authorizeRoles(
-        "admin",
-        "staff",
-        "foster",
         "adopter",
-        "volunteer"
+        "volunteer",
+        "foster"
     ),
     asyncHandler(
         lostFoundController.createReport
@@ -72,11 +70,9 @@ router.post(
     "/reports/:id/claim",
     verifyToken,
     authorizeRoles(
-        "admin",
-        "staff",
-        "foster",
         "adopter",
-        "volunteer"
+        "volunteer",
+        "foster"
     ),
     asyncHandler(
         lostFoundController.claimReport
@@ -126,11 +122,9 @@ router.patch(
     "/reports/:id/claim/cancel",
     verifyToken,
     authorizeRoles(
-        "admin",
-        "staff",
-        "foster",
         "adopter",
-        "volunteer"
+        "volunteer",
+        "foster"
     ),
     asyncHandler(
         lostFoundController.cancelClaim

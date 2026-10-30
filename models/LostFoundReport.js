@@ -168,6 +168,54 @@ const lostFoundReportSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+
+
+        colour: {
+            type: String,
+            enum: [
+                "",
+                "Black",
+                "White",
+                "Brown",
+                "Tan",
+                "Gray",
+                "Grey",
+                "Cream",
+                "Golden",
+                "Orange",
+                "Red",
+                "Mixed",
+                "Other",
+            ],
+            default: "",
+            trim: true,
+        },
+
+        size: {
+            type: String,
+            enum: [
+                "",
+                "Small",
+                "Medium",
+                "Large",
+                "Extra Large",
+            ],
+            default: "",
+            trim: true,
+        },
+
+        sex: {
+            type: String,
+            enum: [
+                "",
+                "Male",
+                "Female",
+                "Unknown",
+            ],
+            default: "",
+            trim: true,
+        },
+
     },
     {
         timestamps: true,
