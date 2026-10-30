@@ -104,6 +104,15 @@ router.patch("/drop-off", verifyToken, authorizeRoles("admin", "staff"), asyncHa
         update[`donationDropOff.${field}`] = value;
     }
 
+    const contactNumber = update["donationDropOff.contactNumber"];
+
+    if (contactNumber && !/^09\d{9}$/.test(contactNumber)) {
+        return res.status(400).json({
+            success: false,
+            message: "Contact number must be an 11-digit mobile number starting with 09.",
+        });
+    }
+
     if (update["donationDropOff.enabled"] && !update["donationDropOff.address"]) {
         return res.status(400).json({ success: false, message: "Add an address before showing the drop-off details." });
     }
