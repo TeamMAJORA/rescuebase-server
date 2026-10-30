@@ -28,32 +28,6 @@ exports.createDonation = async (req, res) => {
         req.body.paymentMethod || ""
     ).trim();
 
-    if (donationType === "Money") {
-        if (amount <= 0) {
-            const error = new Error(
-                "Money donations must have an amount greater than zero."
-            );
-            error.statusCode = 400;
-            throw error;
-        }
-
-        if (!proofOfPayment) {
-            const error = new Error(
-                "Proof of payment is required for money donations."
-            );
-            error.statusCode = 400;
-            throw error;
-        }
-
-        if (!paymentMethod) {
-            const error = new Error(
-                "Payment method is required for money donations."
-            );
-            error.statusCode = 400;
-            throw error;
-        }
-    }
-
     if (!donorName) {
         const error = new Error(
             "Donor name is required."
@@ -93,6 +67,49 @@ exports.createDonation = async (req, res) => {
 
         error.statusCode = 400;
         throw error;
+    }
+//gaw nilagay ko dito sa baba after then const of donation types
+    // Admin and staff record walk-in cash themselves, so only donors must attach proof of payment and payment method.
+    // Staff without a proof photo must give a receipt or reference number instead.
+
+    const isShelterStaff = ["admin", "staff"].includes(req.user?.role);
+
+    const paymentReference = String(
+        req.body.paymentReference || ""
+    ).trim();
+
+    if (donationType === "Money") {
+        if (amount <= 0) {
+            const error = new Error(
+                "Money donations must have an amount greater than zero."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (!isShelterStaff && !proofOfPayment) {
+            const error = new Error(
+                "Proof of payment is required for money donations."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (isShelterStaff && !proofOfPayment && !paymentReference) {
+            const error = new Error(
+                "A receipt or reference number is required when recording a money donation without proof of payment."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (!isShelterStaff && !paymentMethod) {
+            const error = new Error(
+                "Payment method is required for money donations."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
     }
 
     const creatorId = req.user?.id;
@@ -149,9 +166,7 @@ exports.createDonation = async (req, res) => {
         paymentStatus: donationType === "Money"
             ? "pending"
             : "not_required",
-        paymentReference: String(
-            req.body.paymentReference || ""
-        ).trim(),
+        paymentReference,
         proofOfPayment,
         status: "pending",
         createdByName: creatorName,
