@@ -31,6 +31,16 @@ const DEFAULT_SETTINGS = {
             "RESCUEBASE is temporarily undergoing maintenance. Please try again later.",
         allowAdminAccess: true,
     },
+
+    donationDropOff: {
+        enabled: false,
+        city: "Cebu",
+        address: "",
+        contactPerson: "",
+        contactNumber: "",
+        operatingHours: "",
+        instructions: "",
+    },
 };
 
 async function getGlobalSettings() {
@@ -70,6 +80,11 @@ async function getGlobalSettings() {
         maintenance: {
             ...DEFAULT_SETTINGS.maintenance,
             ...(document?.maintenance || {}),
+        },
+        
+        donationDropOff: {
+            ...DEFAULT_SETTINGS.donationDropOff,
+            ...(document?.donationDropOff || {}),
         },
 
         updatedAt: document?.updatedAt || null,
