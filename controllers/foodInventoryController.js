@@ -4,6 +4,7 @@ const FoodInventory = require("../models/FoodInventory");
 
 const MAX_FOOD_STOCK_KG = 100000;
 const MAX_FOOD_RATE_KG = 50;
+const FOR_ANIMALS = ["", "Dog", "Cat", "All"];
 const getUserId = (req) =>
     req.user?._id || req.user?.id || req.user?.userId || null;
 
@@ -26,7 +27,14 @@ const createInventory = async (req, res) => {
         unit = "kg",
         foodRatePerAnimalPerDay = 0.5,
         forecastDays = 30,
+        forAnimals = "",
     } = req.body;
+
+    if (!FOR_ANIMALS.includes(forAnimals)) {
+        return res.status(400).json({
+            message: "Choose who eats this food: Dogs, Cats or All animals.",
+        });
+    }
 
     if (!name || !name.trim()) {
         return res.status(400).json({
@@ -67,6 +75,7 @@ const createInventory = async (req, res) => {
             unit,
             foodRatePerAnimalPerDay: rate,
             forecastDays: days,
+            forAnimals,
         });
 
         return res.status(201).json({
@@ -98,6 +107,7 @@ const updateInventory = async (req, res) => {
         "name",
         "foodRatePerAnimalPerDay",
         "forecastDays",
+        "forAnimals",
     ];
 
     const updates = {};
@@ -106,6 +116,12 @@ const updateInventory = async (req, res) => {
         if (req.body[field] !== undefined) {
             updates[field] = req.body[field];
         }
+    }
+
+    if (updates.forAnimals !== undefined && !FOR_ANIMALS.includes(updates.forAnimals)) {
+        return res.status(400).json({
+            message: "Choose who eats this food: Dogs, Cats or All animals.",
+        });
     }
 
     if (updates.name !== undefined) {

@@ -70,6 +70,12 @@ const FoodInventorySchema = new mongoose.Schema(
             min: 0,
             default: 0.5,
         },
+        // Which animals eat this food. Empty on older items: the page guesses from the name.
+        forAnimals: {
+            type: String,
+            enum: ["", "Dog", "Cat", "All"],
+            default: "",
+        },
         forecastDays: {
             type: Number,
             required: true,
