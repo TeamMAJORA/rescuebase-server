@@ -8,7 +8,7 @@ const asyncHandler = require("../middleware/asyncHandler");
 
 const analyticsController = require("../controllers/analyticsController");
 const intakeForecastController = require("../controllers/intakeForecastController");
-const foodForecastController = require("../controllers/foodInventoryController");
+const foodForecastController = require("../controllers/foodForecastController");
 
 router.get(
     "/overview",

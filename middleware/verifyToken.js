@@ -74,7 +74,7 @@ module.exports = async function verifyToken(req, res, next) {
 
         // A deactivated (or deleted) account is signed out on its next request,
         // not only when the session runs out
-        const account = await User.findById(decoded.id).select("status").lean();
+        const account = await User.findById(decoded.id).select("status name username").lean();
 
         if (!account) {
             return res.status(401).json({
@@ -104,6 +104,8 @@ module.exports = async function verifyToken(req, res, next) {
             id: decoded.id,
             email: decoded.email,
             role,
+            name: account.name || "",
+            username: account.username || "",
         };
 
         return next();

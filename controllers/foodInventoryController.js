@@ -1,6 +1,11 @@
 const mongoose = require("mongoose");
 const FoodInventory = require("../models/FoodInventory");
+const NeededSupply = require("../models/NeededSupply");
 
+
+const MAX_FOOD_STOCK_KG = 100000;
+const MAX_FOOD_RATE_KG = 50;
+const FOR_ANIMALS = ["", "Dog", "Cat", "All"];
 const getUserId = (req) =>
     req.user?._id || req.user?.id || req.user?.userId || null;
 
@@ -23,7 +28,14 @@ const createInventory = async (req, res) => {
         unit = "kg",
         foodRatePerAnimalPerDay = 0.5,
         forecastDays = 30,
+        forAnimals = "",
     } = req.body;
+
+    if (!FOR_ANIMALS.includes(forAnimals)) {
+        return res.status(400).json({
+            message: "Choose who eats this food: Dogs, Cats or All animals.",
+        });
+    }
 
     if (!name || !name.trim()) {
         return res.status(400).json({
@@ -38,8 +50,10 @@ const createInventory = async (req, res) => {
     if (
         !Number.isFinite(stock) ||
         stock < 0 ||
+        stock > MAX_FOOD_STOCK_KG ||
         !Number.isFinite(rate) ||
         rate < 0 ||
+        rate > MAX_FOOD_RATE_KG ||
         !Number.isFinite(days) ||
         days < 1 ||
         !Number.isInteger(days)
@@ -62,6 +76,7 @@ const createInventory = async (req, res) => {
             unit,
             foodRatePerAnimalPerDay: rate,
             forecastDays: days,
+            forAnimals,
         });
 
         return res.status(201).json({
@@ -93,6 +108,7 @@ const updateInventory = async (req, res) => {
         "name",
         "foodRatePerAnimalPerDay",
         "forecastDays",
+        "forAnimals",
     ];
 
     const updates = {};
@@ -101,6 +117,12 @@ const updateInventory = async (req, res) => {
         if (req.body[field] !== undefined) {
             updates[field] = req.body[field];
         }
+    }
+
+    if (updates.forAnimals !== undefined && !FOR_ANIMALS.includes(updates.forAnimals)) {
+        return res.status(400).json({
+            message: "Choose who eats this food: Dogs, Cats or All animals.",
+        });
     }
 
     if (updates.name !== undefined) {
@@ -123,10 +145,11 @@ const updateInventory = async (req, res) => {
 
         if (
             !Number.isFinite(updates.foodRatePerAnimalPerDay) ||
-            updates.foodRatePerAnimalPerDay < 0
+            updates.foodRatePerAnimalPerDay < 0 ||
+            updates.foodRatePerAnimalPerDay > MAX_FOOD_RATE_KG
         ) {
             return res.status(400).json({
-                message: "Food rate must be a valid non-negative number.",
+                message: `Food rate must be between 0 and ${MAX_FOOD_RATE_KG} kg.`,
             });
         }
     }
@@ -155,7 +178,7 @@ const updateInventory = async (req, res) => {
             id,
             { $set: updates },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -200,9 +223,9 @@ const adjustStock = async (req, res) => {
         });
     }
 
-    if (!Number.isFinite(amount) || amount <= 0) {
+    if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_FOOD_STOCK_KG) {
         return res.status(400).json({
-            message: "Adjustment quantity must be greater than zero.",
+            message: `Adjustment quantity must be between 0 and ${MAX_FOOD_STOCK_KG.toLocaleString()} kg.`,
         });
     }
 
@@ -217,18 +240,22 @@ const adjustStock = async (req, res) => {
 
     const adjustment = action === "add" ? amount : -amount;
 
+    // Adding must not push the stock past the limit
+    const stockLimitFilter =
+        action === "add"
+            ? { quantityInStock: { $lte: MAX_FOOD_STOCK_KG - amount } }
+            : { quantityInStock: { $gte: amount } };
+
     const item = await FoodInventory.findOneAndUpdate(
         {
             _id: id,
-            ...(action === "remove"
-                ? { quantityInStock: { $gte: amount } }
-                : {}),
+            ...stockLimitFilter,
         },
         {
             $inc: { quantityInStock: adjustment },
         },
         {
-            new: true,
+            returnDocument: "after",
             runValidators: true,
         }
     );
@@ -243,7 +270,10 @@ const adjustStock = async (req, res) => {
         }
 
         return res.status(400).json({
-            message: "Insufficient stock for this removal.",
+            message:
+                action === "add"
+                    ? `Stock cannot go above ${MAX_FOOD_STOCK_KG.toLocaleString()} kg.`
+                    : "Insufficient stock for this removal.",
         });
     }
 
@@ -303,7 +333,95 @@ const getAdjustmentHistory = async (req, res) => {
     });
 };
 
+// Remove a food item (e.g. added by mistake). Needed-supply requests made for it
+// stay, but are unlinked so received donations no longer change any stock.
+const deleteInventory = async (req, res) => {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({
+            message: "Invalid inventory item ID.",
+        });
+    }
+
+    const item = await FoodInventory.findByIdAndDelete(id);
+
+    if (!item) {
+        return res.status(404).json({
+            message: "Food inventory item not found.",
+        });
+    }
+
+    await NeededSupply.updateMany(
+        { foodInventoryId: item._id },
+        { $set: { foodInventoryId: null } }
+    );
+
+    return res.status(200).json({
+        success: true,
+        message: `${item.name} was deleted.`,
+    });
+};
+
+// Supplies > History: every food stock change and every supply request, newest first
+const HISTORY_LIMIT = 300;
+
+const getSuppliesHistory = async (req, res) => {
+    const [foods, requests] = await Promise.all([
+        FoodInventory.find()
+            .select("name adjustmentHistory")
+            .populate("adjustmentHistory.adjustedBy", "name username email")
+            .lean(),
+        NeededSupply.find()
+            .select("name quantityNeeded foodInventoryId createdAt createdByName createdByEmail")
+            .lean(),
+    ]);
+
+    const entries = [];
+
+    foods.forEach((food) => {
+        (food.adjustmentHistory || []).forEach((change) => {
+            const by = change.adjustedBy;
+            entries.push({
+                _id: String(change._id),
+                kind: "stock",
+                date: change.adjustedAt,
+                item: food.name,
+                action: change.action,
+                quantity: change.quantity,
+                previousStock: change.previousStock,
+                newStock: change.newStock,
+                detail: [change.reason, change.note].filter(Boolean).join(" · "),
+                by: by?.name || by?.username || by?.email || "",
+            });
+        });
+    });
+
+    requests.forEach((request) => {
+        entries.push({
+            _id: String(request._id),
+            kind: "request",
+            date: request.createdAt,
+            item: request.name,
+            quantity: request.quantityNeeded,
+            unit: request.foodInventoryId ? "kg" : "",
+            detail: "Added to Needed supplies",
+            by: request.createdByName || request.createdByEmail || "",
+        });
+    });
+
+    entries.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    return res.status(200).json({
+        success: true,
+        total: entries.length,
+        history: entries.slice(0, HISTORY_LIMIT),
+    });
+};
+
 module.exports = {
+    getSuppliesHistory,
+    deleteInventory,
     getInventory,
     createInventory,
     updateInventory,

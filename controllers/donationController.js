@@ -5,6 +5,52 @@ const User = require("../models/User");
 const Notification = require("../models/Notifications");
 const { sendDonationConfirmationEmail } = require("../services/emailService");
 const NeededSupply = require("../models/NeededSupply.js")
+const FoodInventory = require("../models/FoodInventory");
+
+const MAX_FOOD_STOCK_KG = 100000;
+
+// updates the quantityReceived field of a supply
+// item, the same amount (kg) is added to / taken from that food's stock.
+async function changeSupplyReceived(supplyId, delta, req) {
+    if (!supplyId || !delta) return;
+
+    const supply = await NeededSupply.findByIdAndUpdate(
+        supplyId,
+        { $inc: { quantityReceived: delta } },
+        { returnDocument: "after" }
+    );
+
+    await changeLinkedFoodStock(supply, delta, req);
+}
+
+// Adds / removes kg on the Food Storage item a supply is linked to (if any)
+async function changeLinkedFoodStock(supply, delta, req) {
+    if (!supply?.foodInventoryId || !delta) return;
+
+    const food = await FoodInventory.findById(supply.foodInventoryId);
+    if (!food) return;
+
+    const previousStock = Number(food.quantityInStock) || 0;
+    const newStock = Math.min(MAX_FOOD_STOCK_KG, Math.max(0, previousStock + delta));
+    const changed = Math.abs(newStock - previousStock);
+
+    if (!changed) return;
+
+    food.quantityInStock = newStock;
+    food.adjustmentHistory.push({
+        action: newStock > previousStock ? "add" : "remove",
+        quantity: changed,
+        previousStock,
+        newStock,
+        reason: newStock > previousStock ? "Donation received" : "Donation reversed",
+        note: `Needed supply: ${supply.name}`,
+        adjustedBy: req.user?.id || null,
+    });
+    await food.save();
+}
+
+const MAX_DONATION_AMOUNT = 999999;
+const MAX_DONATION_QUANTITY = 1000;
 
 
 exports.createDonation = async (req, res) => {
@@ -27,32 +73,6 @@ exports.createDonation = async (req, res) => {
     const paymentMethod = String(
         req.body.paymentMethod || ""
     ).trim();
-
-    if (donationType === "Money") {
-        if (amount <= 0) {
-            const error = new Error(
-                "Money donations must have an amount greater than zero."
-            );
-            error.statusCode = 400;
-            throw error;
-        }
-
-        if (!proofOfPayment) {
-            const error = new Error(
-                "Proof of payment is required for money donations."
-            );
-            error.statusCode = 400;
-            throw error;
-        }
-
-        if (!paymentMethod) {
-            const error = new Error(
-                "Payment method is required for money donations."
-            );
-            error.statusCode = 400;
-            throw error;
-        }
-    }
 
     if (!donorName) {
         const error = new Error(
@@ -78,21 +98,64 @@ exports.createDonation = async (req, res) => {
         req.body.quantity || 1
     );
 
-    if (Number.isNaN(amount) || amount < 0) {
+    if (Number.isNaN(amount) || amount < 0 || amount > MAX_DONATION_AMOUNT) {
         const error = new Error(
-            "Invalid donation amount."
+            `Donation amount must be between 0 and ${MAX_DONATION_AMOUNT.toLocaleString()}.`
         );
         error.statusCode = 400;
         throw error;
     }
 
-    if (Number.isNaN(quantity) || quantity < 1) {
+    if (Number.isNaN(quantity) || quantity < 1 || quantity > MAX_DONATION_QUANTITY) {
         const error = new Error(
-            "Invalid donation quantity."
+            `Donation quantity must be between 1 and ${MAX_DONATION_QUANTITY.toLocaleString()}.`
         );
 
         error.statusCode = 400;
         throw error;
+    }
+//gaw nilagay ko dito sa baba after then const of donation types
+    // Admin and staff record walk-in cash themselves, so only donors must attach proof of payment and payment method.
+    // Staff without a proof photo must give a receipt or reference number instead.
+
+    const isShelterStaff = ["admin", "staff"].includes(req.user?.role);
+
+    const paymentReference = String(
+        req.body.paymentReference || ""
+    ).trim();
+
+    if (donationType === "Money") {
+        if (amount <= 0) {
+            const error = new Error(
+                "Money donations must have an amount greater than zero."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (!isShelterStaff && !proofOfPayment) {
+            const error = new Error(
+                "Proof of payment is required for money donations."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (isShelterStaff && !proofOfPayment && !paymentReference) {
+            const error = new Error(
+                "A receipt or reference number is required when recording a money donation without proof of payment."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+
+        if (!isShelterStaff && !paymentMethod) {
+            const error = new Error(
+                "Payment method is required for money donations."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
     }
 
     const creatorId = req.user?.id;
@@ -149,9 +212,7 @@ exports.createDonation = async (req, res) => {
         paymentStatus: donationType === "Money"
             ? "pending"
             : "not_required",
-        paymentReference: String(
-            req.body.paymentReference || ""
-        ).trim(),
+        paymentReference,
         proofOfPayment,
         status: "pending",
         createdByName: creatorName,
@@ -267,9 +328,9 @@ exports.updateDonation = async (req, res) => {
     if (allowedUpdates.amount !== undefined) {
         const amount = Number(allowedUpdates.amount);
 
-        if (Number.isNaN(amount) || amount < 0) {
+        if (Number.isNaN(amount) || amount < 0 || amount > MAX_DONATION_AMOUNT) {
             const error = new Error(
-                "Invalid donation amount."
+                `Donation amount must be between 0 and ${MAX_DONATION_AMOUNT.toLocaleString()}.`
             );
             error.statusCode = 400;
             throw error;
@@ -281,9 +342,9 @@ exports.updateDonation = async (req, res) => {
     if (allowedUpdates.quantity !== undefined) {
         const quantity = Number(allowedUpdates.quantity);
 
-        if (Number.isNaN(quantity) || quantity < 1) {
+        if (Number.isNaN(quantity) || quantity < 1 || quantity > MAX_DONATION_QUANTITY) {
             const error = new Error(
-                "Invalid donation quantity."
+                `Donation quantity must be between 1 and ${MAX_DONATION_QUANTITY.toLocaleString()}.`
             );
             error.statusCode = 400;
             throw error;
@@ -335,24 +396,9 @@ exports.updateDonation = async (req, res) => {
             newSupplyId !== oldSupplyId;
 
         if (shouldRemoveOldQuantity) {
-            await NeededSupply.findByIdAndUpdate(
-                oldSupplyId,
-                {
-                    $inc: {
-                        quantityReceived: -oldQuantity,
-                    },
-                }
-            );
+            await changeSupplyReceived(oldSupplyId, -oldQuantity, req);
         } else if (newQuantity !== oldQuantity) {
-            await NeededSupply.findByIdAndUpdate(
-                oldSupplyId,
-                {
-                    $inc: {
-                        quantityReceived:
-                            newQuantity - oldQuantity,
-                    },
-                }
-            );
+            await changeSupplyReceived(oldSupplyId, newQuantity - oldQuantity, req);
         }
     }
 
@@ -362,14 +408,7 @@ exports.updateDonation = async (req, res) => {
             newSupplyId !== oldSupplyId;
 
         if (shouldAddNewQuantity) {
-            await NeededSupply.findByIdAndUpdate(
-                newSupplyId,
-                {
-                    $inc: {
-                        quantityReceived: newQuantity,
-                    },
-                }
-            );
+            await changeSupplyReceived(newSupplyId, newQuantity, req);
         }
     }
 
@@ -436,7 +475,7 @@ exports.deleteDonation = async (req, res) => {
                 },
             },
             {
-                new: true,
+                returnDocument: "after",
             }
         );
 
@@ -447,6 +486,8 @@ exports.deleteDonation = async (req, res) => {
             error.statusCode = 409;
             throw error;
         }
+
+        await changeLinkedFoodStock(supply, -receivedQuantity, req);
     }
 
     await Donation.findByIdAndDelete(donationId);

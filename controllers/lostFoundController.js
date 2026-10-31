@@ -609,6 +609,72 @@ exports.reviewClaim = async (req, res) => {
     });
 };
 
+// Admin/staff: mark a case with an approved claim as reunited
+// the cases will be automatically marked as reunited if the claim is approvved
+exports.markReportReunited = async (req, res) => {
+    const reportId = String(req.params.id || "");
+
+    if (!/^[0-9a-fA-F]{24}$/.test(reportId)) {
+        const error = new Error("Invalid report id.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const report = await LostFoundReport.findById(reportId);
+
+    if (!report) {
+        const error = new Error("Lost and found report not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (report.status === "reunited") {
+        const error = new Error("This case is already marked as reunited.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (report.claimStatus !== "approved") {
+        const error = new Error("Only cases with an approved claim can be marked as reunited.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const reviewerName = getActorName(req);
+    const reviewerEmail = getActorEmail(req);
+
+    report.status = "reunited";
+    report.reunitedAt = new Date();
+    await report.save();
+
+    await LedgerEntry.create({
+        type: "lost_found",
+        action: "lost_found_case_reunited",
+        actorName: reviewerName,
+        actorEmail: reviewerEmail,
+        targetType: "LostFoundReport",
+        targetId: report._id.toString(),
+        description: `${report.petName || report.species} was marked as reunited.`,
+        status: report.status,
+        metadata: {
+            claimStatus: report.claimStatus,
+            claimedByEmail: report.claimedByEmail,
+            reunitedAt: report.reunitedAt,
+        },
+    });
+
+    await sendLostFoundReunitedEmail(
+        report.reporterEmail,
+        report.petName || report.species
+    );
+
+    return res.json({
+        success: true,
+        message: "Case marked as reunited.",
+        report,
+    });
+};
+
 exports.getPossibleMatches = async (req, res) => {
     const page = Math.max(
         1,

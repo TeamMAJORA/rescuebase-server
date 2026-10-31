@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 
 const NeededSupply = require("../models/NeededSupply");
+const FoodInventory = require("../models/FoodInventory");
 
 const SUPPLY_STATUSES = ["active", "fulfilled", "inactive"];
 
@@ -24,6 +25,22 @@ exports.getAllSupplies = async (req, res) => {
         supplies,
     });
 };
+
+const MAX_SUPPLY_QUANTITY = 10000;
+
+function hasInvalidSupplyQuantities(quantityNeeded, quantityReceived) {
+    const needed = Number(quantityNeeded);
+    const received = Number(quantityReceived || 0);
+
+    return (
+        !Number.isFinite(needed) ||
+        needed < 1 ||
+        needed > MAX_SUPPLY_QUANTITY ||
+        !Number.isFinite(received) ||
+        received < 0 ||
+        received > MAX_SUPPLY_QUANTITY
+    );
+}
 
 exports.createSupply = async (req, res) => {
     const {
@@ -66,6 +83,36 @@ exports.createSupply = async (req, res) => {
         });
     }
 
+    // shortcut for "Request more" from Food Storage
+    let foodInventoryId = null;
+
+    if (req.body.foodInventoryId) {
+        if (!mongoose.isValidObjectId(req.body.foodInventoryId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid food item.",
+            });
+        }
+
+        const foodItem = await FoodInventory.exists({ _id: req.body.foodInventoryId });
+
+        if (!foodItem) {
+            return res.status(404).json({
+                success: false,
+                message: "Food item not found.",
+            });
+        }
+
+        foodInventoryId = req.body.foodInventoryId;
+    }
+
+    if (hasInvalidSupplyQuantities(quantityNeeded, quantityReceived)) {
+        return res.status(400).json({
+            success: false,
+            message: `Quantities must be between 0 and ${MAX_SUPPLY_QUANTITY.toLocaleString()} (needed at least 1).`,
+        });
+    }
+
     const supply = await NeededSupply.create({
         name: supplyName,
         category: supplyCategory,
@@ -76,6 +123,7 @@ exports.createSupply = async (req, res) => {
         status: supplyStatus,
         createdByName: req.user?.name || "",
         createdByEmail: req.user?.email || "",
+        foodInventoryId,
     });
 
     res.status(201).json({
@@ -131,13 +179,10 @@ exports.updateSupply = async (req, res) => {
         }
     }
 
-    if (
-        supply.quantityNeeded < 1 ||
-        supply.quantityReceived < 0
-    ) {
+    if (hasInvalidSupplyQuantities(supply.quantityNeeded, supply.quantityReceived)) {
         return res.status(400).json({
             success: false,
-            message: "Invalid supply quantities.",
+            message: `Quantities must be between 0 and ${MAX_SUPPLY_QUANTITY.toLocaleString()} (needed at least 1).`,
         });
     }
 

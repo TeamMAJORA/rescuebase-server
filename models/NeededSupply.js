@@ -62,6 +62,13 @@ const NeededSupplySchema = new mongoose.Schema(
             ],
             default: "active",
         },
+
+        //to request more food from Food Storage
+        foodInventoryId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "FoodInventory",
+            default: null,
+        },
     },
     {
         timestamps: true,
