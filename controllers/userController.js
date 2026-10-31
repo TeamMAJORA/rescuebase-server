@@ -432,6 +432,23 @@ exports.submitRoleApplication = async (req, res) => {
 
         await user.save();
 
+        try {
+            const admins = await User.find({ role: "admin" }).select("_id");
+
+            if (admins.length) {
+                await Notification.insertMany(
+                    admins.map((admin) => ({
+                        user: admin._id,
+                        title: "New Volunteer Application",
+                        message: `${user.name || user.username || "A user"} applied to become a volunteer.`,
+                        type: "role_application",
+                    }))
+                );
+            }
+        } catch (notifyError) {
+            console.error("Notify admins of role application error:", notifyError);
+        }
+        
         return res.status(201).json({
             success: true,
             message: "Role application submitted successfully.",

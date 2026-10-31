@@ -147,6 +147,12 @@ exports.createApplication = async (req, res) => {
         },
     });
 
+    // Let admins and staff know a new application is waiting (in-app + email)
+    await notifyShelterStaff(
+        "New Foster Application",
+        `${application.applicantName} applied to become a foster caregiver.`
+    );
+
     return res.status(201).json({
         success: true,
         message: "Foster application submitted.",
