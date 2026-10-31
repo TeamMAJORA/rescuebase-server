@@ -356,6 +356,17 @@ exports.reviewApplication = async (req, res) => {
             application.status,
             "foster"
         )
+
+        await createFosterNotification(
+            application.applicantEmail,
+            application.status === "approved"
+                ? "Application Approved"
+                : "Application Rejected",
+            application.status === "approved"
+                ? "Congratulations! Your foster application has been approved. Please log out and log in again to open your Foster Dashboard."
+                : `Unfortunately, your foster application was not approved. Reason: ${application.rejectionReason}`,
+            "application_update"
+        );
     }
 
     return res.status(200).json({
@@ -752,6 +763,12 @@ exports.createAssignment = async (req, res) => {
         assignment.fosterEmail,
         "New Foster Assignment.",
         `You have been assigned to foster ${assignment.petName}. Please log in to RescueBase to view the care instructions and assignment details.`
+    );
+
+    await createFosterNotification(
+        assignment.fosterEmail,
+        "New Foster Assignment",
+        `You have been assigned to foster ${assignment.petName}. Please log in to RescueBase to review your assignment.`
     );
 
     return res.status(201).json({
@@ -1213,6 +1230,12 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
         `Your foster assignment for ${assignment.petName} has been completed after the behavioral evaluation was reviewed and accepted.`
     );
 
+    await createFosterNotification(
+        assignment.fosterEmail,
+        "Behavioral Evaluation Accepted",
+        `Your behavioral evaluation for ${assignment.petName} has been reviewed and accepted. Your foster assignment has been completed.`
+    );
+
     return res.status(200).json({
         success: true,
         message:
@@ -1282,6 +1305,12 @@ exports.returnBehaviorEvaluation = async (req, res) => {
         assignment.fosterEmail,
         "Behavior Evaluation Needs Changes",
         `Your behavioral evaluation for ${assignment.petName} was sent back for revision. Reason: ${reason}`
+    );
+
+    await createFosterNotification(
+        assignment.fosterEmail,
+        "Behavior Evaluation Needs Changes",
+        `Your behavioral evaluation for ${assignment.petName} was sent back. Reason: ${reason}`
     );
 
     return res.status(200).json({
@@ -1676,6 +1705,12 @@ exports.deleteAssignment = async (req, res) => {
         await Animal.findByIdAndUpdate(assignment.animalId, { $set: { fosterStatus: "none" } });
     }
 
+    await notifyFoster(
+        assignment.fosterEmail,
+        "Assignment Cancelled",
+        `Your foster assignment for ${assignment.petName} has been cancelled by the shelter.`
+    );
+
     return res.status(200).json({
         success: true,
         message: "Foster assignment deleted.",
@@ -1704,17 +1739,26 @@ async function notifyShelterStaff(title, message) {
     }
 }
 
-async function notifyFoster(email, title, message) {
+async function createFosterNotification(email, title, message, type = "foster_update") {
     try {
-        const foster = await User.findOne({ email }).select("_id");
+        const recipient = await User.findOne({ email }).select("_id");
 
-        if (foster) {
-            await Notification.create({ user: foster._id, title, message, type: "foster_update" });
+        if (recipient) {
+            await Notification.create({ user: recipient._id, title, message, type });
         }
+    } catch (error) {
+        console.error("Foster in-app notification error:", error);
+    }
+}
 
+// In-app notification + email
+async function notifyFoster(email, title, message) {
+    await createFosterNotification(email, title, message);
+
+    try {
         await sendFosterUpdateEmail(email, title, message);
     } catch (error) {
-        console.error("Return request foster notification error:", error);
+        console.error("Foster email notification error:", error);
     }
 }
 
