@@ -1196,7 +1196,6 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
             evaluation[field];
     }
 
-    animalUpdates.fosterStatus = "completed";
     animalUpdates.behaviorAssessedBy = evaluation.submittedBy || assignment.fosterName;
     animalUpdates.behaviorAssessedAt = new Date();
 
@@ -1218,12 +1217,7 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
 
     if (!assignment.animalId) assignment.animalId = animal._id;
 
-    assignment.status = "completed";
-    assignment.endDate = new Date();
-    if (assignment.animalId) {
-        await Animal.findByIdAndUpdate(assignment.animalId, { fosterStatus: "completed" });
-    }
-
+    // The assignment stays active until its planned end; staff press Complete to end it
     await assignment.save();
 
     await createLedgerEntrySafely({
@@ -1243,10 +1237,10 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
             assignment._id.toString(),
 
         description:
-            `${adminName} accepted the behavioral evaluation for ${assignment.petName} and completed the foster assignment.`,
+            `${adminName} accepted the behavioral evaluation for ${assignment.petName}.`,
 
         status:
-            "completed",
+            assignment.status,
 
         metadata: {
             petName:
@@ -1263,20 +1257,20 @@ exports.acceptBehaviorEvaluation = async (req, res) => {
     await sendEmailSafely(
         sendFosterUpdateEmail,
         assignment.fosterEmail,
-        "Foster Assignment Completed",
-        `Your foster assignment for ${assignment.petName} has been completed after the behavioral evaluation was reviewed and accepted.`
+        "Behavioral Evaluation Accepted",
+        `Your behavioral evaluation for ${assignment.petName} has been reviewed and accepted. Thank you! Your foster care continues until the planned end date.`
     );
 
     await createFosterNotification(
         assignment.fosterEmail,
         "Behavioral Evaluation Accepted",
-        `Your behavioral evaluation for ${assignment.petName} has been reviewed and accepted. Your foster assignment has been completed.`
+        `Your behavioral evaluation for ${assignment.petName} has been reviewed and accepted. Your foster care continues until the planned end date.`
     );
 
     return res.status(200).json({
         success: true,
         message:
-            "Behavioral evaluation accepted and foster assignment completed.",
+            "Behavioral evaluation accepted. The assignment stays active until you complete it.",
         assignment,
         animal: updatedAnimal,
     });
@@ -1462,6 +1456,12 @@ exports.completeAssignment = async (req, res) => {
                 assignment.fosterEmail,
         },
     });
+
+    await notifyFoster(
+        assignment.fosterEmail,
+        "Foster Assignment Completed",
+        `Your foster assignment for ${assignment.petName} has been completed. Thank you for caring for ${assignment.petName}!`
+    );
 
     return res.status(200).json({
         success: true,
@@ -1787,6 +1787,112 @@ async function createFosterNotification(email, title, message, type = "foster_up
         console.error("Foster in-app notification error:", error);
     }
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const LONG_ASSIGNMENT_DAYS = 30;
+const WEEKLY_UPDATE_DAYS = 7;
+
+// Planned to last 30+ days (no end date counts as long)
+function isLongAssignment(assignment) {
+    if (!assignment.endDate) return true;
+    const start = new Date(assignment.startDate || assignment.createdAt);
+    return new Date(assignment.endDate) - start >= LONG_ASSIGNMENT_DAYS * DAY_MS;
+}
+
+// Latest weekly update, or the start date if none yet
+function lastUpdateDate(assignment) {
+    const dates = (assignment.updates || []).map((update) => new Date(update.createdAt));
+    if (dates.length === 0) return new Date(assignment.startDate || assignment.createdAt);
+    return new Date(Math.max(...dates));
+}
+
+async function askFosterForWeeklyUpdate(assignment, askedByName) {
+    const title = `Weekly update for ${assignment.petName}`;
+    const message = askedByName
+        ? `${askedByName} from the shelter asked for a weekly update on ${assignment.petName}. Please submit a weekly report with their health, appetite and behavior.`
+        : `It's time for ${assignment.petName}'s weekly update. Please submit a weekly report with their health, appetite and behavior.`;
+
+    await notifyFoster(assignment.fosterEmail, title, message);
+
+    assignment.lastUpdateRequestedAt = new Date();
+    await assignment.save();
+}
+
+// Admin/staff: ask the foster for a weekly update now
+exports.requestWeeklyUpdate = async (req, res) => {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ success: false, message: "Invalid assignment ID." });
+    }
+
+    const assignment = await FosterAssignment.findById(id);
+
+    if (!assignment) {
+        return res.status(404).json({ success: false, message: "Foster assignment not found." });
+    }
+
+    if (assignment.status !== "active") {
+        return res.status(400).json({ success: false, message: "Only active assignments can be asked for an update." });
+    }
+
+    if (
+        assignment.lastUpdateRequestedAt &&
+        Date.now() - new Date(assignment.lastUpdateRequestedAt) < DAY_MS
+    ) {
+        return res.status(409).json({
+            success: false,
+            message: "The foster was already asked in the last 24 hours.",
+        });
+    }
+
+    const askedByName = String(req.user?.name || req.user?.username || "Staff").trim();
+    await askFosterForWeeklyUpdate(assignment, askedByName);
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "weekly_update_requested",
+        actorName: askedByName,
+        actorEmail: req.user?.email || "",
+        targetType: "FosterAssignment",
+        targetId: assignment._id.toString(),
+        description: `${askedByName} asked ${assignment.fosterName} for a weekly update on ${assignment.petName}.`,
+        status: assignment.status,
+        metadata: { petName: assignment.petName },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: `Asked ${assignment.fosterName} for a weekly update.`,
+        assignment,
+    });
+};
+
+// Used by the daily reminder job
+exports.sendDueWeeklyUpdateReminders = async () => {
+    const assignments = await FosterAssignment.find({ status: "active" });
+    const now = Date.now();
+    let sent = 0;
+
+    for (const assignment of assignments) {
+        if (!isLongAssignment(assignment)) continue;
+
+        const lastUpdate = lastUpdateDate(assignment);
+        const lastAsked = assignment.lastUpdateRequestedAt
+            ? new Date(assignment.lastUpdateRequestedAt)
+            : null;
+
+        const updateIsDue = now - lastUpdate >= WEEKLY_UPDATE_DAYS * DAY_MS;
+        const askedRecently = lastAsked && now - lastAsked < WEEKLY_UPDATE_DAYS * DAY_MS;
+
+        if (updateIsDue && !askedRecently) {
+            await askFosterForWeeklyUpdate(assignment, "");
+            sent += 1;
+        }
+    }
+
+    return sent;
+};
 
 // In-app notification + email
 async function notifyFoster(email, title, message) {
