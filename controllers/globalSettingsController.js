@@ -189,11 +189,9 @@ function validateAndNormalize(body) {
                     );
                 }
 
-                if (path === "general.appName" && !trimmed) {
-                    throw Object.assign(
-                        new Error("Application name is required."),
-                        { statusCode: 400 }
-                    );
+                // The application name is fixed; ignore any change to it
+                if (path === "general.appName") {
+                    continue;
                 }
 
                 if (
