@@ -29,6 +29,12 @@ const globalSettingsSchema = new mongoose.Schema(
                 trim: true,
                 maxlength: 30,
             },
+            facebookUrl: {
+                type: String,
+                default: "",
+                trim: true,
+                maxlength: 300,
+            },
             timezone: {
                 type: String,
                 default: "Asia/Manila",

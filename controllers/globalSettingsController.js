@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
         appName: "RESCUEBASE",
         contactEmail: "",
         contactPhone: "",
+        facebookUrl: "",
         timezone: "Asia/Manila",
         shelterCapacity: 30,
     },
@@ -47,6 +48,7 @@ const ALLOWED_FIELDS = {
         "appName",
         "contactEmail",
         "contactPhone",
+        "facebookUrl",
         "timezone",
         "shelterCapacity",
     ],
@@ -143,6 +145,7 @@ function validateAndNormalize(body) {
         "general.appName": { max: 100 },
         "general.contactEmail": { max: 254 },
         "general.contactPhone": { max: 30 },
+        "general.facebookUrl": { max: 300 },
         "general.timezone": { max: 100 },
         "maintenance.message": { max: 500 },
         "donationDropOff.city": { max: 100 },
@@ -200,6 +203,17 @@ function validateAndNormalize(body) {
                 ) {
                     throw Object.assign(
                         new Error("Enter a valid contact email."),
+                        { statusCode: 400 }
+                    );
+                }
+
+                if (
+                    path === "general.facebookUrl" &&
+                    trimmed &&
+                    !/^https:\/\/(www\.|m\.|web\.)?(facebook|fb)\.com\/\S+$/i.test(trimmed)
+                ) {
+                    throw Object.assign(
+                        new Error("Enter a Facebook page link, e.g. https://www.facebook.com/yourshelter"),
                         { statusCode: 400 }
                     );
                 }

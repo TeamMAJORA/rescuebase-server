@@ -38,7 +38,19 @@ router.get("/contact", verifyToken, asyncHandler(async (req, res) => {
             name: general.appName || "RescueBase",
             email: general.contactEmail || "",
             phone: general.contactPhone || "",
+            facebook: general.facebookUrl || "",
         },
+    });
+}));
+
+// Public (landing page footer): the shelter's Facebook page
+router.get("/social", asyncHandler(async (req, res) => {
+    const settings = await getSettingsDocument();
+
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({
+        success: true,
+        facebook: settings?.general?.facebookUrl || "",
     });
 }));
 

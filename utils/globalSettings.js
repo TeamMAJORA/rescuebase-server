@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS = {
         appName: "RESCUEBASE",
         contactEmail: "",
         contactPhone: "",
+        facebookUrl: "",
         timezone: "Asia/Manila",
         shelterCapacity: 30,
     },
