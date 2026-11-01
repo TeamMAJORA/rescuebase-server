@@ -76,7 +76,10 @@ initializeApp({
 
 mongoose
     .connect(process.env.MONGO_URI)
-    .then(() => console.log("MongoDB Connected"))
+    .then(() => {
+        console.log("MongoDB Connected");
+        startVaccinationReminders();
+    })
     .catch((error) => console.error("MongoDB error :", error));
 
 app.use("/api/auth", authRoutes);
