@@ -596,6 +596,22 @@ exports.createAssignment = async (req, res) => {
         throw error;
     }
 
+    // Optional dates from the assign pop-up: start (default today) and expected end
+    const startDate = req.body.startDate ? new Date(req.body.startDate) : new Date();
+    const expectedEndDate = req.body.endDate ? new Date(req.body.endDate) : null;
+
+    if (Number.isNaN(startDate.getTime()) || (expectedEndDate && Number.isNaN(expectedEndDate.getTime()))) {
+        const error = new Error("Invalid start or end date.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (expectedEndDate && expectedEndDate <= startDate) {
+        const error = new Error("The expected end date must be after the start date.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const approvedApplication =
         await FosterApplication.findOne({
             applicantEmail: fosterEmail,
@@ -684,6 +700,9 @@ exports.createAssignment = async (req, res) => {
                     req.body.careInstructions || ""
                 ).trim() ||
                 "Provide food, water, shelter, and weekly updates.",
+
+            startDate,
+            ...(expectedEndDate ? { endDate: expectedEndDate } : {}),
 
             status: "active",
         });
