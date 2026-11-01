@@ -40,13 +40,27 @@ exports.getTransfers = async (req, res) => {
     return res.status(200).json({ success: true, transfers });
 };
 
-// A completed transfer moves the animal: its profile location becomes the destination
+// A completed transfer moves the animal: its profile location becomes the destination.
+// If it leaves our care, it is also taken off adoption (unavailable).
 async function applyCompletedTransfer(transfer) {
     const animalId = transfer.animal_id?._id || transfer.animal_id;
     if (!animalId || !transfer.to_location) return;
 
     await Animal.findByIdAndUpdate(animalId, {
-        $set: { location: transfer.to_location },
+        $set: {
+            location: transfer.to_location,
+            ...(transfer.leaves_shelter ? { availabilityStatus: "unavailable" } : {}),
+        },
+    });
+}
+
+// Undo the "left our care" effect (transfer no longer Completed, or box unticked)
+async function makeAnimalAvailableAgain(transfer) {
+    const animalId = transfer.animal_id?._id || transfer.animal_id;
+    if (!animalId) return;
+
+    await Animal.findByIdAndUpdate(animalId, {
+        $set: { availabilityStatus: "available" },
     });
 }
 
@@ -57,6 +71,7 @@ exports.createTransfer = async (req, res) => {
     const transferDate = req.body.transfer_date;
     const reason = String(req.body.reason || "").trim();
     const status = req.body.status || "Pending";
+    const leavesShelter = req.body.leaves_shelter === true;
 
     if (!fromLocation) throw httpError("From location is required.", 400);
     if (!toLocation) throw httpError("To location is required.", 400);
@@ -73,6 +88,7 @@ exports.createTransfer = async (req, res) => {
         transfer_date: transferDate,
         reason,
         status,
+        leaves_shelter: leavesShelter,
         recorded_by: req.user?.id || null,
     });
 
@@ -93,7 +109,7 @@ exports.updateTransfer = async (req, res) => {
     const id = String(req.params.id || "").trim();
     requireId(id);
 
-    const allowedFields = ["animal_id", "from_location", "to_location", "transfer_date", "reason", "status"];
+    const allowedFields = ["animal_id", "from_location", "to_location", "transfer_date", "reason", "status", "leaves_shelter"];
     const updates = {};
 
     for (const field of allowedFields) {
@@ -113,7 +129,9 @@ exports.updateTransfer = async (req, res) => {
         if (updates[field] === "") throw httpError(`${field.replace("_", " ")} cannot be empty.`, 400);
     }
 
-    const before = await AnimalTransfer.findById(id).select("status").lean();
+    if (updates.leaves_shelter !== undefined) updates.leaves_shelter = updates.leaves_shelter === true;
+
+    const before = await AnimalTransfer.findById(id).select("status leaves_shelter animal_id").lean();
 
     if (!before) throw httpError("Transfer not found.", 404);
 
@@ -125,8 +143,22 @@ exports.updateTransfer = async (req, res) => {
 
     if (!transfer) throw httpError("Transfer not found.", 404);
 
+    const leftBefore = before.status === "Completed" && before.leaves_shelter;
+    const leavesNow = transfer.status === "Completed" && transfer.leaves_shelter;
+
+    // It no longer counts as leaving our care: put the (previous) animal back up for adoption
+    if (leftBefore && (!leavesNow || String(before.animal_id) !== String(transfer.animal_id?._id || transfer.animal_id))) {
+        await makeAnimalAvailableAgain({ animal_id: before.animal_id });
+    }
+
     // Only when it becomes Completed (editing a completed one again re-applies the destination)
-    if (transfer.status === "Completed" && (before.status !== "Completed" || updates.to_location !== undefined || updates.animal_id !== undefined)) {
+    if (
+        transfer.status === "Completed" &&
+        (before.status !== "Completed" ||
+            updates.to_location !== undefined ||
+            updates.animal_id !== undefined ||
+            updates.leaves_shelter !== undefined)
+    ) {
         await applyCompletedTransfer(transfer);
     }
 

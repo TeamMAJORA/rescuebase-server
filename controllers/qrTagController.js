@@ -4,6 +4,12 @@ const QRCode = require("qrcode");
 const QRTag = require("../models/QRTag");
 const Animal = require("../models/Animal");
 
+// Scanning a tag with any phone camera opens the public pet page: <website>/pet/<tagCode>
+function petProfileUrl(tagCode) {
+    const website = String(process.env.CLIENT_URL || "http://localhost:5173").trim().replace(/\/+$/, "");
+    return `${website}/pet/${encodeURIComponent(tagCode)}`;
+}
+
 function createTagCode() {
     const randomPart = Math.random()
         .toString(36)
@@ -17,6 +23,20 @@ exports.getAllQRTags = async (req, res) => {
     const qrTags = await QRTag.find()
         .populate("animal")
         .sort({ createdAt: -1 });
+
+    // Older tags stored JSON; rebuild them as the pet-page link (same tag code, so nothing breaks)
+    for (const qrTag of qrTags) {
+        const link = petProfileUrl(qrTag.tagCode);
+        if (qrTag.qrData !== link) {
+            qrTag.qrData = link;
+            qrTag.qrImageUrl = await QRCode.toDataURL(link);
+            // updateOne, not save(): a tag whose animal was deleted would fail validation
+            await QRTag.updateOne(
+                { _id: qrTag._id },
+                { $set: { qrData: qrTag.qrData, qrImageUrl: qrTag.qrImageUrl } }
+            );
+        }
+    }
 
     return res.status(200).json({
         success: true,
@@ -58,10 +78,7 @@ exports.generateQRTag = async (req, res) => {
 
     const tagCode = createTagCode();
 
-    const qrData = JSON.stringify({
-        tagCode,
-        animalId: animal._id.toString(),
-    });
+    const qrData = petProfileUrl(tagCode);
 
     const qrImageUrl = await QRCode.toDataURL(qrData);
 
@@ -134,10 +151,7 @@ exports.regenerateQRTag = async (req, res) => {
 
     const tagCode = createTagCode();
 
-    const qrData = JSON.stringify({
-        tagCode,
-        animalId: qrTag.animal.toString(),
-    });
+    const qrData = petProfileUrl(tagCode);
 
     const qrImageUrl = await QRCode.toDataURL(qrData);
 
