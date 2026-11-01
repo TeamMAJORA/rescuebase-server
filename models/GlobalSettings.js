@@ -17,6 +17,12 @@ const globalSettingsSchema = new mongoose.Schema(
                 trim: true,
                 maxlength: 100,
             },
+            shelterName: {
+                type: String,
+                default: "RescueBase Shelter",
+                trim: true,
+                maxlength: 100,
+            },
             contactEmail: {
                 type: String,
                 default: "",

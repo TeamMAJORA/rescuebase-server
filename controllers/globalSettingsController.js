@@ -5,6 +5,7 @@ const GlobalSettings = require("../models/GlobalSettings");
 const DEFAULT_SETTINGS = {
     general: {
         appName: "RESCUEBASE",
+        shelterName: "RescueBase Shelter",
         contactEmail: "",
         contactPhone: "",
         facebookUrl: "",
@@ -46,6 +47,7 @@ const DEFAULT_SETTINGS = {
 const ALLOWED_FIELDS = {
     general: [
         "appName",
+        "shelterName",
         "contactEmail",
         "contactPhone",
         "facebookUrl",
@@ -143,6 +145,7 @@ function validateAndNormalize(body) {
 
     const stringFields = {
         "general.appName": { max: 100 },
+        "general.shelterName": { max: 100 },
         "general.contactEmail": { max: 254 },
         "general.contactPhone": { max: 30 },
         "general.facebookUrl": { max: 300 },
@@ -185,6 +188,13 @@ function validateAndNormalize(body) {
                 if (trimmed.length > stringFields[path].max) {
                     throw Object.assign(
                         new Error(`${path} is too long.`),
+                        { statusCode: 400 }
+                    );
+                }
+
+                if (path === "general.shelterName" && !trimmed) {
+                    throw Object.assign(
+                        new Error("Shelter name is required."),
                         { statusCode: 400 }
                     );
                 }

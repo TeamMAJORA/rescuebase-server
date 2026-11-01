@@ -35,7 +35,7 @@ router.get("/contact", verifyToken, asyncHandler(async (req, res) => {
     return res.status(200).json({
         success: true,
         contact: {
-            name: general.appName || "RescueBase",
+            name: general.shelterName || "RescueBase Shelter",
             email: general.contactEmail || "",
             phone: general.contactPhone || "",
             facebook: general.facebookUrl || "",
@@ -143,7 +143,11 @@ router.get("/capacity", verifyToken, asyncHandler(async (req, res) => {
     const settings = await getSettingsDocument();
     const capacity = Number(settings?.general?.shelterCapacity) || 30;
 
-    return res.status(200).json({ success: true, shelterCapacity: capacity });
+    return res.status(200).json({
+        success: true,
+        shelterCapacity: capacity,
+        shelterName: settings?.general?.shelterName || "RescueBase Shelter",
+    });
 }));
 
 router.use(verifyToken);

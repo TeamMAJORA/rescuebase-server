@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { getShelterName } = require("../utils/globalSettings");
 
 const FosterAssignment = require("../models/FosterAssignment");
 const FosterApplication = require("../models/FosterApplication");
@@ -693,7 +694,7 @@ exports.createAssignment = async (req, res) => {
                 String(
                     req.body.shelterName || ""
                 ).trim() ||
-                "RescueBase Shelter",
+                (await getShelterName()),
 
             careInstructions:
                 String(

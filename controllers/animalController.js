@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { getShelterName } = require("../utils/globalSettings");
 const Animal = require("../models/Animal");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
@@ -150,7 +151,7 @@ exports.createAnimal = async (req, res) => {
             : "available",
         fosterStatus: String(req.body.fosterStatus || "none").trim(),
         location: String(
-            req.body.location || "RescueBase Shelter"
+            req.body.location || (await getShelterName())
         ).trim(),
         latitude: req.body.latitude ?? null,
         longitude: req.body.longitude ?? null,
