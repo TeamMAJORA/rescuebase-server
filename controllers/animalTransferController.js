@@ -8,7 +8,7 @@ const STATUSES = ["Pending", "In Transit", "Completed", "Cancelled"];
 function httpError(message, statusCode) {
     const error = new Error(message);
     error.statusCode = statusCode;
-    return error;
+    return error; 
 }
 
 // Checks the animal ID and that the animal exists
