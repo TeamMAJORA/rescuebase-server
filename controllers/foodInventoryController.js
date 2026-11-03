@@ -9,6 +9,39 @@ const FOR_ANIMALS = ["", "Dog", "Cat", "All"];
 const getUserId = (req) =>
     req.user?._id || req.user?.id || req.user?.userId || null;
 
+// Reasons that count as stock coming in for a Needed supplies request
+const SUPPLY_COUNTING_REASONS = ["delivery / donation"];
+
+function escapeRegex(text) {
+    return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Adds delivered/donated kg to the open Needed supplies request for this food
+// (linked to this food, or with the same name). Returns what was counted, or null.
+async function countTowardNeededSupply(foodItem, amountKg) {
+    const supply = await NeededSupply.findOne({
+        status: "active",
+        $or: [
+            { foodInventoryId: foodItem._id },
+            { name: { $regex: `^${escapeRegex(foodItem.name.trim())}$`, $options: "i" } },
+        ],
+    }).sort({ createdAt: 1 });
+
+    if (!supply) return null;
+
+    const remaining = Math.max(0, Number(supply.quantityNeeded) - Number(supply.quantityReceived || 0));
+    const counted = Math.min(remaining, amountKg);
+    if (counted <= 0) return null;
+
+    supply.quantityReceived = Number(supply.quantityReceived || 0) + counted;
+    if (supply.quantityReceived >= supply.quantityNeeded) {
+        supply.status = "fulfilled";
+    }
+    await supply.save();
+
+    return { name: supply.name, counted, fulfilled: supply.status === "fulfilled" };
+}
+
 const getInventory = async (req, res) => {
     const inventory = await FoodInventory.find()
         .select("-adjustmentHistory")
@@ -280,6 +313,19 @@ const adjustStock = async (req, res) => {
     const newStock = item.quantityInStock;
     const previousStock = newStock - adjustment;
 
+    const countsTowardSupply =
+        action === "add" &&
+        typeof reason === "string" &&
+        SUPPLY_COUNTING_REASONS.includes(reason.trim().toLowerCase());
+
+    const supplyUpdate = countsTowardSupply
+        ? await countTowardNeededSupply(item, amount)
+        : null;
+
+    const supplyNote = supplyUpdate
+        ? `Counted ${supplyUpdate.counted.toLocaleString()} kg toward Needed supplies: ${supplyUpdate.name}`
+        : "";
+
     item.adjustmentHistory.push({
         action,
         quantity: amount,
@@ -289,17 +335,25 @@ const adjustStock = async (req, res) => {
             typeof reason === "string" && reason.trim()
                 ? reason.trim()
                 : "Manual adjustment",
-        note: typeof note === "string" ? note.trim() : "",
+        note: [typeof note === "string" ? note.trim() : "", supplyNote].filter(Boolean).join(" · "),
         adjustedBy: getUserId(req),
         adjustedAt: new Date(),
     });
 
     await item.save();
 
+    let message = `Stock ${action === "add" ? "added" : "removed"} successfully.`;
+    if (supplyUpdate) {
+        message += ` Needed supplies "${supplyUpdate.name}" +${supplyUpdate.counted.toLocaleString()} kg${
+            supplyUpdate.fulfilled ? " (now fully received)" : ""
+        }.`;
+    }
+
     return res.status(200).json({
         success: true,
-        message: `Stock ${action === "add" ? "added" : "removed"} successfully.`,
+        message,
         item,
+        supplyUpdate,
     });
 };
 

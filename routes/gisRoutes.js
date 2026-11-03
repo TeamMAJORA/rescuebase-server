@@ -25,7 +25,7 @@ router.post(
 router.get(
     "/hotspots",
     verifyToken,
-    authorizeRoles("admin", "staff"),
+    authorizeRoles("admin", "staff", "volunteer"),
     asyncHandler(gisController.getHotspotAnalysis)
 );
 

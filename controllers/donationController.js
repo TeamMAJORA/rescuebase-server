@@ -49,7 +49,7 @@ async function changeLinkedFoodStock(supply, delta, req) {
     await food.save();
 }
 
-const MAX_DONATION_AMOUNT = 999999;
+const MAX_DONATION_AMOUNT = 100000;
 const MAX_DONATION_QUANTITY = 1000;
 
 

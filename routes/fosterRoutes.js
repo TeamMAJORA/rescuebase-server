@@ -134,6 +134,15 @@ router.patch(
     )
 );
 
+router.post(
+    "/assignments/:id/request-update",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.requestWeeklyUpdate
+    )
+);
+
 router.patch(
     "/assignments/:id/complete",
     verifyToken,

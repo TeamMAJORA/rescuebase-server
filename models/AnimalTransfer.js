@@ -31,6 +31,13 @@ const animalTransferSchema = new mongoose.Schema(
             trim: true,
         },
 
+        // True when the animal goes to another shelter / rescue partner for good.
+        // When the transfer is Completed, the animal is marked unavailable.
+        leaves_shelter: {
+            type: Boolean,
+            default: false,
+        },
+
         status: {
             type: String,
             enum: ["Pending", "In Transit", "Completed", "Cancelled"],

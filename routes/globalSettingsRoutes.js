@@ -35,10 +35,22 @@ router.get("/contact", verifyToken, asyncHandler(async (req, res) => {
     return res.status(200).json({
         success: true,
         contact: {
-            name: general.appName || "RescueBase",
+            name: general.shelterName || "RescueBase Shelter",
             email: general.contactEmail || "",
             phone: general.contactPhone || "",
+            facebook: general.facebookUrl || "",
         },
+    });
+}));
+
+// Public (landing page footer): the shelter's Facebook page
+router.get("/social", asyncHandler(async (req, res) => {
+    const settings = await getSettingsDocument();
+
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({
+        success: true,
+        facebook: settings?.general?.facebookUrl || "",
     });
 }));
 
@@ -131,7 +143,11 @@ router.get("/capacity", verifyToken, asyncHandler(async (req, res) => {
     const settings = await getSettingsDocument();
     const capacity = Number(settings?.general?.shelterCapacity) || 30;
 
-    return res.status(200).json({ success: true, shelterCapacity: capacity });
+    return res.status(200).json({
+        success: true,
+        shelterCapacity: capacity,
+        shelterName: settings?.general?.shelterName || "RescueBase Shelter",
+    });
 }));
 
 router.use(verifyToken);

@@ -37,6 +37,7 @@ const vaccinationRoutes = require("./routes/vaccinationRoutes");
 const medicalRecordRoutes = require("./routes/medicalRecordRoutes");
 const animalTransferRoutes = require("./routes/animalTransferRoutes");
 const startVaccinationReminders = require("./jobs/vaccinationReminders");
+const startFosterUpdateReminders = require("./jobs/fosterUpdateReminders");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const activityLogRoutes = require("./routes/activityLogRoutes");
 const globalSettingsRoutes = require("./routes/globalSettingsRoutes");
@@ -76,7 +77,11 @@ initializeApp({
 
 mongoose
     .connect(process.env.MONGO_URI)
-    .then(() => console.log("MongoDB Connected"))
+    .then(() => {
+        console.log("MongoDB Connected");
+        startVaccinationReminders();
+        startFosterUpdateReminders();
+    })
     .catch((error) => console.error("MongoDB error :", error));
 
 app.use("/api/auth", authRoutes);
