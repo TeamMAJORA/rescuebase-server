@@ -9,13 +9,13 @@ const validateRequest = require("../middleware/validateRequest");
 
 const animalController = require("../controllers/animalController");
 
-    router.post(
+router.post(
     "/",
     verifyToken,
-    authoriseRoles("admin", "staff"),
+    authoriseRoles("admin", "staff", "volunteer"),
     validateRequest(["name", "type"]),
     asyncHandler(animalController.createAnimal)
-    );
+);
 
 router.get(
     "/",

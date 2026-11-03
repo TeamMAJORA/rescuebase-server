@@ -5,14 +5,13 @@ const FoodInventory = require("../models/FoodInventory");
 
 const SUPPLY_STATUSES = ["active", "fulfilled", "inactive"];
 
-// Status only uses the model's values. Fully received closes it automatically;
-// a closed item that drops below the needed count goes back to active.
 function updateSupplyStatus(supply) {
-    if (supply.status === "inactive") return;
     if (supply.quantityReceived >= supply.quantityNeeded) {
         supply.status = "fulfilled";
-    } else if (supply.status === "fulfilled") {
-        supply.status = "active";
+    } else if (supply.quantityReceived > 0) {
+        supply.status = "partially_fulfilled";
+    } else {
+        supply.status = "needed";
     }
 }
 
@@ -158,20 +157,12 @@ exports.updateSupply = async (req, res) => {
 
     const allowedFields = [
         "shelter",
-        "name",
-        "category",
-        "priority",
-        "description",
+        "item",
         "quantityNeeded",
         "quantityReceived",
+        "notes",
+        "status",
     ];
-
-    if (req.body.status !== undefined && !SUPPLY_STATUSES.includes(req.body.status)) {
-        return res.status(400).json({
-            success: false,
-            message: "Invalid supply status.",
-        });
-    }
 
     for (const field of allowedFields) {
         if (req.body[field] !== undefined) {
@@ -179,17 +170,23 @@ exports.updateSupply = async (req, res) => {
         }
     }
 
-    if (hasInvalidSupplyQuantities(supply.quantityNeeded, supply.quantityReceived)) {
+    supply.quantityNeeded = Number(supply.quantityNeeded);
+    supply.quantityReceived = Number(supply.quantityReceived || 0);
+
+    if (
+        supply.quantityNeeded < 1 ||
+        supply.quantityReceived < 0
+    ) {
         return res.status(400).json({
             success: false,
             message: `Quantities must be between 0 and ${MAX_SUPPLY_QUANTITY.toLocaleString()} (needed at least 1).`,
         });
     }
 
-    if (req.body.status !== undefined) {
-        // Close / Reopen / Inactive chosen by staff wins
-        supply.status = req.body.status;
-    } else {
+    if (
+        req.body.status === undefined ||
+        req.body.status !== "cancelled"
+    ) {
         updateSupplyStatus(supply);
     }
 
