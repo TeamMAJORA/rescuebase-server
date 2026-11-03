@@ -203,7 +203,7 @@ exports.resolveMedicalRequest = async (
                 },
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );

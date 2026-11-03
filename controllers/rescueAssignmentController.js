@@ -61,13 +61,14 @@ exports.createAssignment = async (req, res) => {
         throw e;
     }
 
+    // Assignments can go to a volunteer or a staff member
     const volunteer = await User.findOne({
         _id: volunteerId,
-        role: "volunteer",
+        role: { $in: ["volunteer", "staff"] },
     }).select("_id name username email role");
 
     if (!volunteer) {
-        const e = new Error("Volunteer account was not found.");
+        const e = new Error("Volunteer or staff account was not found.");
         e.statusCode = 400;
         throw e;
     }

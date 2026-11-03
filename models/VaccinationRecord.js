@@ -30,6 +30,18 @@ const vaccinationRecordSchema =
                 trim: true,
                 default: null,
             },
+            
+            status: {
+                type: String,
+                enum: ["Completed", "Pending", "Overdue"],
+                default: "Completed",
+            },
+
+            notes: {
+                type: String,
+                trim: true,
+                default: "",
+            },
         },
         {
             timestamps: true,

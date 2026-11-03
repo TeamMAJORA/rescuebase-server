@@ -59,7 +59,7 @@ router.patch("/:id/read", async (req, res) => {
             read: true,
             readAt: new Date(),
         }, {
-            new: true,
+            returnDocument: "after",
         });
         
 

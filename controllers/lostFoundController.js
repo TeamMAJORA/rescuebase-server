@@ -1,6 +1,15 @@
+const GISLocation = require("../models/GISLocation");
 const LostFoundReport = require("../models/LostFoundReport");
 const LedgerEntry = require("../models/LedgerEntry");
-const { sendLostFoundClaimEmail, sendLostFoundReunitedEmail } = require("../services/emailService");
+const LostFoundMatch = require("../models/LostFoundMatch");
+const User = require("../models/User");
+const Notification = require("../models/Notifications");
+const {
+    sendLostFoundClaimEmail,
+    sendLostFoundReunitedEmail,
+    sendLostFoundMatchEmail,
+} = require("../services/emailService");
+const { generateMatches } = require("../services/lostFoundMatchingService");
 
 function getActorName(req) {
     return String(req.user?.name || req.user?.username || "User").trim();
@@ -10,11 +19,119 @@ function getActorEmail(req) {
     return String(req.user?.email || "").trim().toLowerCase();
 }
 
+function preventStaffAdmin(req) {
+    const role = String(req.user?.role || "")
+        .trim()
+        .toLowerCase();
+
+    if (role === "admin" || role === "staff") {
+        const error = new Error(
+            "Staff and Admin accounts cannot submit Lost & Found reports or claims."
+        );
+
+        error.statusCode = 403;
+        throw error;
+    }
+}
+
+async function notifyLostFoundMatchOwners(reportA, reportB) {
+    const reports = [
+        { owner: reportA, other: reportB },
+        { owner: reportB, other: reportA },
+    ];
+
+    for (const { owner, other } of reports) {
+        const email = String(owner.reporterEmail || "")
+            .trim()
+            .toLowerCase();
+
+        if (!email) continue;
+
+        const petName =
+            owner.petName || other.petName || "your reported pet";
+
+        // In-app notification
+        try {
+            const user = await User.findOne({ email }).select("_id email");
+
+            if (user) {
+                await Notification.create({
+                    user: user._id,
+                    title: "Lost & Found Match Confirmed",
+                    message:
+                        `A matching ${other.reportType} report for ${petName} ` +
+                        "has been confirmed by RescueBase staff.",
+                    type: "lost_found_update",
+                });
+            } else {
+                console.warn(
+                    `Lost & Found notification skipped: no user found for ${email}`
+                );
+            }
+        } catch (error) {
+            console.error(
+                `Lost & Found in-app notification failed for ${email}:`,
+                error
+            );
+        }
+
+        // Email notification
+        try {
+            await sendLostFoundMatchEmail(
+                email,
+                petName,
+                other.reportType,
+                other.location
+            );
+        } catch (error) {
+            console.error(
+                `Lost & Found match email failed for ${email}:`,
+                error
+            );
+        }
+    }
+}
+
 exports.createReport = async (req, res) => {
+    preventStaffAdmin(req);
+
+    const allowedColours = [
+        "Black",
+        "White",
+        "Brown",
+        "Tan",
+        "Gray",
+        "Grey",
+        "Cream",
+        "Golden",
+        "Orange",
+        "Red",
+        "Mixed",
+        "Other",
+    ];
+
+    const allowedSizes = [
+        "Small",
+        "Medium",
+        "Large",
+        "Extra Large",
+    ];
+
+    const allowedSexes = [
+        "Male",
+        "Female",
+        "Unknown",
+    ];
+
     const reportType = String(req.body.reportType || "").trim().toLowerCase();
     const species = String(req.body.species || "").trim();
     const description = String(req.body.description || "").trim();
     const location = String(req.body.location || "").trim();
+    const size = String(req.body.size || "").trim();
+    const sex = String(req.body.sex || "").trim();
+    const colour = String(
+        req.body.colour || req.body.color || ""
+    ).trim();
 
     if (!["lost", "found"].includes(reportType)) {
         const e = new Error("Report type must be either lost or found.");
@@ -40,6 +157,24 @@ exports.createReport = async (req, res) => {
         throw e;
     }
 
+    if (colour && !allowedColours.includes(colour)) {
+        const error = new Error("Invalid pet colour.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (size && !allowedSizes.includes(size)) {
+        const error = new Error("Invalid pet size.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (sex && !allowedSexes.includes(sex)) {
+        const error = new Error("Invalid pet sex.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const reporterName = getActorName(req);
     const reporterEmail = getActorEmail(req);
 
@@ -49,29 +184,72 @@ exports.createReport = async (req, res) => {
         throw e;
     }
 
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+
+    const hasValidCoordinates =
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        Math.abs(latitude) <= 90 &&
+        Math.abs(longitude) <= 180 &&
+        (latitude !== 0 || longitude !== 0);
+
+    const coordinates = hasValidCoordinates
+        ? { latitude, longitude }
+        : { latitude: null, longitude: null };
+
+    const eventDateValue =
+        req.body.eventDate ||
+        req.body.dateLost ||
+        req.body.dateFound ||
+        null;
+
     const report = await LostFoundReport.create({
         reporterName,
         reporterEmail,
         reportType,
-        petName: String(
-            req.body.petName || ""
-        ).trim(),
+        petName: String(req.body.petName || "").trim(),
         species,
-        breed: String(
-            req.body.breed || ""
-        ).trim(),
+        breed: String(req.body.breed || "").trim(),
         description,
         location,
-        dateReported:
-            req.body.dateReported ||
-            new Date(),
-        photoUrl: String(
-            req.body.photoUrl || ""
-        ).trim(),
+        dateReported: req.body.dateReported || new Date(),
+        photoUrl: String(req.body.photoUrl || "").trim(),
+        colour,
+        size,
+        sex,
+        coordinates,
+        eventDate: eventDateValue,
         status: "open",
         matchStatus: "none",
         claimStatus: "none",
     });
+
+    if (
+        Number.isFinite(latitude) && Number.isFinite(longitude) &&
+        Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 &&
+        (latitude !== 0 || longitude !== 0)
+    ) {
+        try {
+            const speciesKey = species.toLowerCase();
+
+            await GISLocation.create({
+                petName: report.petName || "Unknown",
+                reportType,
+                species: ["dog", "cat", "other"].includes(speciesKey) ? speciesKey : "unknown",
+                locationName: location,
+                latitude,
+                longitude,
+                status: "open",
+                description: String(req.body.mapNote || description).slice(0, 500),
+                createdBy: req.user?.id || req.user?._id || null,
+                createdByName: reporterName || "",
+                createdByEmail: reporterEmail || "",
+            });
+        } catch (gisError) {
+            console.error("Lost & found map pin failed:", gisError.message);
+        }
+    }
 
     await LedgerEntry.create({
         type: "lost_found",
@@ -91,11 +269,30 @@ exports.createReport = async (req, res) => {
         },
     });
 
+    let matchingResult = {
+        success: false,
+        matchesCreated: 0,
+    };
+
+    try {
+        matchingResult = await generateMatches(report._id);
+
+        console.log(
+            `[LostFound] Generated ${matchingResult.matchesCreated} suggestions for report ${report._id}`
+        );
+    } catch (matchingError) {
+        console.error(
+            "[LostFound] Automatic matching failed:",
+            matchingError
+        );
+    }
+
     return res.status(201).json({
         success: true,
         message:
             `${report.reportType === "lost" ? "Lost" : "Found"} pet report submitted successfully.`,
         report,
+        matching: matchingResult,
     });
 };
 
@@ -173,6 +370,8 @@ exports.deleteReport = async (req, res) => {
 };
 
 exports.claimReport = async (req, res) => {
+    preventStaffAdmin(req);
+
     const report = await LostFoundReport.findById(
         req.params.id
     );
@@ -183,6 +382,15 @@ exports.claimReport = async (req, res) => {
         );
 
         error.statusCode = 404;
+        throw error;
+    }
+
+    if (String(report.reportType || "").toLowerCase() === "lost") {
+        const error = new Error(
+            "Claims cannot be submitted on Lost reports. Only Found reports can be claimed."
+        );
+
+        error.statusCode = 400;
         throw error;
     }
 
@@ -216,6 +424,15 @@ exports.claimReport = async (req, res) => {
     ) {
         const error = new Error(
             "This report is no longer available for claims."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (report.claimStatus === "approved") {
+        const error = new Error(
+            "This report already has an approved claim."
         );
 
         error.statusCode = 400;
@@ -273,21 +490,19 @@ exports.claimReport = async (req, res) => {
     });
 };
 
+
 exports.reviewClaim = async (req, res) => {
     const allowedStatuses = [
         "approved",
         "rejected",
     ];
 
-    const claimStatus = String(
+    const requested = String(
         req.body.claimStatus || ""
     ).trim().toLowerCase();
 
-    if (!allowedStatuses.includes(claimStatus)) {
-        const error = new Error(
-            "Invalid claim status."
-        );
-
+    if (!allowedStatuses.includes(requested)) {
+        const error = new Error("Invalid claim status.");
         error.statusCode = 400;
         throw error;
     }
@@ -297,10 +512,7 @@ exports.reviewClaim = async (req, res) => {
     );
 
     if (!report) {
-        const error = new Error(
-            "Lost and found report not found."
-        );
-
+        const error = new Error("Lost and found report not found.");
         error.statusCode = 404;
         throw error;
     }
@@ -309,15 +521,15 @@ exports.reviewClaim = async (req, res) => {
         const error = new Error(
             "This report does not have a pending claim."
         );
-
         error.statusCode = 400;
         throw error;
     }
 
     const reviewerName = getActorName(req);
     const reviewerEmail = getActorEmail(req);
+    const claimantEmailForMail = report.claimedByEmail;
 
-    report.claimStatus = claimStatus;
+    report.claimStatus = requested;
 
     report.reviewedByName = reviewerName;
     report.reviewedByEmail = reviewerEmail;
@@ -329,11 +541,15 @@ exports.reviewClaim = async (req, res) => {
         ""
     ).trim();
 
-    if (claimStatus === "approved") {
-        report.status = "claimed";
+    if (requested === "approved") {
+        // Approval now completes the entire reunion process.
+        report.status = "reunited";
+        report.reunitedAt = new Date();
     } else {
+        // Rejected claims restore report availability.
         report.status =
-            report.matchStatus === "suggested"
+            report.matchStatus === "confirmed" ||
+                report.matchStatus === "suggested"
                 ? "matched"
                 : "open";
 
@@ -345,7 +561,9 @@ exports.reviewClaim = async (req, res) => {
 
     await LedgerEntry.create({
         type: "lost_found",
-        action: "lost_found_claim_reviewed",
+        action: requested === "approved"
+            ? "lost_found_case_reunited"
+            : "lost_found_claim_reviewed",
 
         actorName: reviewerName,
         actorEmail: reviewerEmail,
@@ -354,63 +572,70 @@ exports.reviewClaim = async (req, res) => {
         targetId: report._id.toString(),
 
         description:
-            `${report.petName || report.species} claim was ${claimStatus}.`,
+            requested === "approved"
+                ? `${report.petName || report.species} was approved and marked as reunited.`
+                : `${report.petName || report.species} claim was rejected.`,
 
         status: report.status,
 
         metadata: {
-            claimStatus,
-            claimedByEmail:
-                report.claimedByEmail,
-            reviewNotes:
-                report.claimNotes,
+            claimStatus: requested,
+            claimedByEmail: claimantEmailForMail,
+            reviewNotes: report.claimNotes,
+            reunitedAt: report.reunitedAt,
         },
     });
 
-    await sendLostFoundClaimEmail(
-        report.claimedByEmail,
-        report.petName || report.species,
-        claimStatus
-    );
+    if (requested === "approved") {
+        await sendLostFoundReunitedEmail(
+            report.reporterEmail,
+            report.petName || report.species
+        );
+    } else {
+        await sendLostFoundClaimEmail(
+            claimantEmailForMail,
+            report.petName || report.species,
+            requested
+        );
+    }
 
     return res.json({
         success: true,
         message:
-            `Lost and found claim ${claimStatus}.`,
+            requested === "approved"
+                ? "Claim approved. Lost and found case marked as reunited."
+                : "Lost and found claim rejected.",
         report,
     });
 };
 
-exports.markReunited = async (req, res) => {
-    const report = await LostFoundReport.findById(
-        req.params.id
-    );
+// Admin/staff: mark a case with an approved claim as reunited
+// the cases will be automatically marked as reunited if the claim is approvved
+exports.markReportReunited = async (req, res) => {
+    const reportId = String(req.params.id || "");
 
-    if (!report) {
-        const error = new Error(
-            "Lost and found report not found."
-        );
-
-        error.statusCode = 404;
-        throw error;
-    }
-
-    if (
-        report.claimStatus !== "approved"
-    ) {
-        const error = new Error(
-            "A claim must be approved before marking this case as reunited."
-        );
-
+    if (!/^[0-9a-fA-F]{24}$/.test(reportId)) {
+        const error = new Error("Invalid report id.");
         error.statusCode = 400;
         throw error;
     }
 
-    if (report.status === "reunited") {
-        const error = new Error(
-            "This case is already marked as reunited."
-        );
+    const report = await LostFoundReport.findById(reportId);
 
+    if (!report) {
+        const error = new Error("Lost and found report not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (report.status === "reunited") {
+        const error = new Error("This case is already marked as reunited.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (report.claimStatus !== "approved") {
+        const error = new Error("Only cases with an approved claim can be marked as reunited.");
         error.statusCode = 400;
         throw error;
     }
@@ -420,32 +645,19 @@ exports.markReunited = async (req, res) => {
 
     report.status = "reunited";
     report.reunitedAt = new Date();
-
-    report.reviewedByName = reviewerName;
-    report.reviewedByEmail = reviewerEmail;
-    report.reviewedAt = new Date();
-
     await report.save();
 
     await LedgerEntry.create({
         type: "lost_found",
         action: "lost_found_case_reunited",
-
         actorName: reviewerName,
         actorEmail: reviewerEmail,
-
         targetType: "LostFoundReport",
         targetId: report._id.toString(),
-
-        description:
-            `${report.petName || report.species} was marked as reunited.`,
-
-        status: "reunited",
-
+        description: `${report.petName || report.species} was marked as reunited.`,
+        status: report.status,
         metadata: {
-            petName: report.petName,
-            species: report.species,
-            reporterEmail: report.reporterEmail,
+            claimStatus: report.claimStatus,
             claimedByEmail: report.claimedByEmail,
             reunitedAt: report.reunitedAt,
         },
@@ -458,8 +670,367 @@ exports.markReunited = async (req, res) => {
 
     return res.json({
         success: true,
-        message:
-            "Lost and found case marked as reunited.",
+        message: "Case marked as reunited.",
+        report,
+    });
+};
+
+exports.getPossibleMatches = async (req, res) => {
+    const page = Math.max(
+        1,
+        parseInt(req.query.page, 10) || 1
+    );
+
+    const limit = Math.min(
+        100,
+        Math.max(1, parseInt(req.query.limit, 10) || 20)
+    );
+
+    const skip = (page - 1) * limit;
+
+    const [matches, total] = await Promise.all([
+        LostFoundMatch.find({
+            status: "suggested",
+        })
+            .populate("reportA")
+            .populate("reportB")
+            .sort({
+                score: -1,
+                createdAt: -1,
+            })
+            .skip(skip)
+            .limit(limit)
+            .lean(),
+
+        LostFoundMatch.countDocuments({
+            status: "suggested",
+        }),
+    ]);
+
+    return res.json({
+        success: true,
+        matches,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit),
+        },
+    });
+};
+
+
+exports.reviewPossibleMatch = async (req, res) => {
+    const matchId = req.params.matchId;
+
+    const decision = String(
+        req.body.decision || ""
+    )
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_");
+
+    const allowedDecisions = [
+        "confirm",
+        "not_a_match",
+    ];
+
+    if (!allowedDecisions.includes(decision)) {
+        const error = new Error(
+            "Decision must be confirm or not_a_match."
+        );
+
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const match = await LostFoundMatch.findById(matchId);
+
+    if (!match) {
+        const error = new Error(
+            "Possible match not found."
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (match.status !== "suggested") {
+        const error = new Error(
+            `This match has already been ${match.status}.`
+        );
+
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const reportA = await LostFoundReport.findById(
+        match.reportA
+    );
+
+    const reportB = await LostFoundReport.findById(
+        match.reportB
+    );
+
+    if (!reportA || !reportB) {
+        const error = new Error(
+            "One or both reports associated with this match no longer exist."
+        );
+
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (decision === "confirm") {
+        const validPair =
+            reportA.reportType === "lost" &&
+            reportB.reportType === "found" ||
+            reportA.reportType === "found" &&
+            reportB.reportType === "lost";
+
+        if (!validPair) {
+            const error = new Error(
+                "Only a Lost and Found report pair can be confirmed."
+            );
+
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const unavailableStatuses = [
+            "matched",
+            "reunited",
+            "claimed",
+            "rejected",
+        ];
+
+        if (
+            unavailableStatuses.includes(reportA.status) ||
+            unavailableStatuses.includes(reportB.status)
+        ) {
+            const error = new Error(
+                "One or both reports are no longer available for matching."
+            );
+
+            error.statusCode = 409;
+            throw error;
+        }
+
+        const speciesA = String(reportA.species || "")
+            .trim()
+            .toLowerCase();
+
+        const speciesB = String(reportB.species || "")
+            .trim()
+            .toLowerCase();
+
+        if (speciesA !== speciesB) {
+            const error = new Error(
+                "The reports have different animal species."
+            );
+
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const reviewerName = getActorName(req);
+        const reviewerEmail = getActorEmail(req);
+
+        const reviewerId =
+            req.user?.id ||
+            req.user?._id ||
+            null;
+
+        reportA.status = "matched";
+        reportB.status = "matched";
+
+        reportA.matchStatus = "confirmed";
+        reportB.matchStatus = "confirmed";
+
+        await Promise.all([
+            reportA.save(),
+            reportB.save(),
+        ]);
+
+        match.status = "confirmed";
+        match.reviewedBy = reviewerId;
+        match.reviewedAt = new Date();
+        match.reviewNotes = String(
+            req.body.reviewNotes || ""
+        ).trim();
+
+        await match.save();
+
+        await notifyLostFoundMatchOwners(reportA, reportB);
+
+        await LostFoundMatch.updateMany(
+            {
+                _id: { $ne: match._id },
+                status: "suggested",
+                $or: [
+                    {
+                        reportA: {
+                            $in: [reportA._id, reportB._id],
+                        },
+                    },
+                    {
+                        reportB: {
+                            $in: [reportA._id, reportB._id],
+                        },
+                    },
+                ],
+            },
+            {
+                $set: {
+                    status: "not_a_match",
+                    reviewedAt: new Date(),
+                    reviewNotes:
+                        "Closed because one of the reports was matched.",
+                },
+            }
+        );
+
+        await LedgerEntry.create({
+            type: "lost_found",
+            action: "lost_found_match_confirmed",
+            actorName: reviewerName,
+            actorEmail: reviewerEmail,
+            targetType: "LostFoundMatch",
+            targetId: match._id.toString(),
+            description:
+                `${reviewerName} confirmed a Lost & Found report match.`,
+            status: "confirmed",
+            metadata: {
+                matchId: match._id,
+                reportA: reportA._id,
+                reportB: reportB._id,
+                score: match.score,
+            },
+        });
+
+        return res.json({
+            success: true,
+            message: "Possible match confirmed successfully.",
+            match,
+            reports: [
+                reportA,
+                reportB,
+            ],
+        });
+    }
+
+    match.status = "not_a_match";
+    match.reviewedBy =
+        req.user?.id ||
+        req.user?._id ||
+        null;
+
+    match.reviewedAt = new Date();
+
+    match.reviewNotes = String(
+        req.body.reviewNotes || ""
+    ).trim();
+
+    await match.save();
+
+    await LedgerEntry.create({
+        type: "lost_found",
+        action: "lost_found_match_rejected",
+        actorName: getActorName(req),
+        actorEmail: getActorEmail(req),
+        targetType: "LostFoundMatch",
+        targetId: match._id.toString(),
+        description:
+            `${getActorName(req)} marked a suggested Lost & Found pair as not a match.`,
+        status: "not_a_match",
+        metadata: {
+            matchId: match._id,
+            reportA: reportA._id,
+            reportB: reportB._id,
+            score: match.score,
+        },
+    });
+
+    return res.json({
+        success: true,
+        message: "Candidate pair marked as not a match.",
+        match,
+    });
+};
+
+
+exports.cancelClaim = async (req, res) => {
+    preventStaffAdmin(req);
+
+    const report = await LostFoundReport.findById(req.params.id);
+
+    if (!report) {
+        const error = new Error("Lost and found report not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const claimantEmail = getActorEmail(req);
+
+    if (!claimantEmail) {
+        const error = new Error("Authenticated user email is missing.");
+        error.statusCode = 401;
+        throw error;
+    }
+
+    if (
+        String(report.claimedByEmail || "").trim().toLowerCase() !==
+        claimantEmail
+    ) {
+        const error = new Error(
+            "You are not authorized to cancel this claim."
+        );
+        error.statusCode = 403;
+        throw error;
+    }
+
+    if (report.claimStatus !== "pending") {
+        const error = new Error(
+            "Only pending claims can be cancelled."
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const claimantName = getActorName(req);
+
+    report.claimStatus = "none";
+    report.status =
+        report.matchStatus === "confirmed" ? "matched" : "open";
+
+    report.claimedByName = "";
+    report.claimedByEmail = "";
+    report.claimNotes = "";
+
+    await report.save();
+
+    await LedgerEntry.create({
+        type: "lost_found",
+        action: "lost_found_claim_cancelled",
+        actorName: claimantName,
+        actorEmail: claimantEmail,
+        targetType: "LostFoundReport",
+        targetId: report._id.toString(),
+        description:
+            `${claimantName} cancelled their pending claim for ` +
+            `${report.petName || report.species}.`,
+        status: report.status,
+        metadata: {
+            petName: report.petName,
+            species: report.species,
+            reportType: report.reportType,
+            reporterEmail: report.reporterEmail,
+        },
+    });
+
+    return res.json({
+        success: true,
+        message: "Your pending claim has been cancelled.",
         report,
     });
 };

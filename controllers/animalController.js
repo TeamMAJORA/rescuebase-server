@@ -2,9 +2,13 @@ const mongoose = require("mongoose");
 const Animal = require("../models/Animal");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
+const AdoptionApplication = require("../models/AdoptionApplication");
+const FosterAssignment = require("../models/FosterAssignment");
 const {
     sendPetAvailableEmail,
 } = require("../services/emailService");
+//new route for personality service to get the personality traits of the animal
+const { withPersonality } = require("../services/personalityService");
 
 async function notifyAdoptersAboutAnimal(animal) {
     const adopters = await User.find({
@@ -55,9 +59,10 @@ exports.createAnimal = async (req, res) => {
     }
 
     const age = Number(req.body.age || 0);
+    const MAX_ANIMAL_AGE_YEARS = 100;
 
-    if (Number.isNaN(age) || age < 0) {
-        const error = new Error("Invalid animal age.");
+    if (Number.isNaN(age) || age < 0 || age > MAX_ANIMAL_AGE_YEARS) {
+        const error = new Error(`Animal age must be between 0 and ${MAX_ANIMAL_AGE_YEARS} years.`);
         error.statusCode = 400;
         throw error;
     }
@@ -136,29 +141,20 @@ exports.createAnimal = async (req, res) => {
         rescuedBy: String(
             req.body.rescuedBy || ""
         ).trim(),
-                intakeStatus: autoApprove ? "approved" : "pending",
+        intakeStatus: autoApprove ? "approved" : "pending_review",
         availabilityStatus: autoApprove
             ? String(req.body.availabilityStatus || "available").trim()
             : "unavailable",
         adoptionStatus: autoApprove
             ? String(req.body.adoptionStatus || "available").trim()
             : "available",
-        fosterStatus: autoApprove
-            ? String(req.body.fosterStatus || "none").trim()
-            : String(
-                req.body.fosterStatus || "none"
-            ).trim(), //forda foster status of the animal new status is none, in_foster, completed
-        intakeStatus: "pending_review",
-        availabilityStatus: "unavailable",
-        adoptionStatus: "available",
-        fosterStatus: String(
-            req.body.fosterStatus || "none"
-        ).trim(),
+        fosterStatus: String(req.body.fosterStatus || "none").trim(),
         location: String(
             req.body.location || "RescueBase Shelter"
         ).trim(),
         latitude: req.body.latitude ?? null,
         longitude: req.body.longitude ?? null,
+        intakeSource: ["field", "desk"].includes(req.body.intakeSource) ? req.body.intakeSource : "",
         rejectionReason: "",
         createdByName: adminName,
         createdByEmail: adminEmail,
@@ -173,7 +169,7 @@ exports.createAnimal = async (req, res) => {
         message: autoApprove
             ? "Animal profile created."
             : "Animal intake record created and submitted for review.",// forda message to show that the animal intake record has been created and submitted for review
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -225,7 +221,7 @@ exports.getAllAnimals = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        animals,
+        animals: animals.map(withPersonality),
     });
 };
 
@@ -238,7 +234,7 @@ exports.getPendingIntakes = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        intakes,
+        intakes: intakes.map(withPersonality),
     });
 };
 
@@ -265,7 +261,7 @@ exports.getAnimalById = async (req, res) => {
 
     return res.status(200).json({
         success: true,
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -322,7 +318,7 @@ exports.approveIntake = async (req, res) => {
         success: true,
         message:
             "Animal intake approved successfully.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -370,7 +366,7 @@ exports.rejectIntake = async (req, res) => {
     return res.status(200).json({
         success: true,
         message: "Animal intake rejected.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -412,6 +408,8 @@ exports.updateAnimal = async (req, res) => {
         "description",
         "medicalStatus",
         "behaviorNotes",
+        "behaviorAssessedBy",
+        "behaviorAssessedAt",
         "energyLevel",
         "friendliness",
         "humanSociability",
@@ -430,6 +428,8 @@ exports.updateAnimal = async (req, res) => {
         "adoptionStatus",
         "fosterStatus",
         "location",
+        "latitude",
+        "longitude",
     ];
 
     const allowedUpdates = {};
@@ -443,9 +443,9 @@ exports.updateAnimal = async (req, res) => {
     if (allowedUpdates.age !== undefined) {
         const age = Number(allowedUpdates.age);
 
-        if (Number.isNaN(age) || age < 0) {
+        if (Number.isNaN(age) || age < 0 || age > 100) {
             const error = new Error(
-                "Invalid animal age."
+                "Animal age must be between 0 and 100 years."
             );
             error.statusCode = 400;
             throw error;
@@ -492,7 +492,7 @@ exports.updateAnimal = async (req, res) => {
             $set: allowedUpdates,
         },
         {
-            new: true,
+            returnDocument: "after",
             runValidators: true,
         }
     );
@@ -518,7 +518,7 @@ exports.updateAnimal = async (req, res) => {
         success: true,
         message:
             "Animal profile updated successfully.",
-        animal,
+        animal: withPersonality(animal),
     });
 };
 
@@ -533,17 +533,46 @@ exports.deleteAnimal = async (req, res) => {
         throw error;
     }
 
-    const animal = await Animal.findByIdAndDelete(
-        animalId
-    );
+    const existing = await Animal.findById(animalId).select("name");
 
-    if (!animal) {
+    if (!existing) {
         const error = new Error(
             "Animal profile not found."
         );
         error.statusCode = 404;
         throw error;
     }
+
+    // Deleting would leave these records stuck, so finish them first
+    const activeApplications = await AdoptionApplication.countDocuments({
+        animalId,
+        status: { $in: ["pending", "interview_scheduled", "interview_completed"] },
+    });
+
+    if (activeApplications > 0) {
+        const error = new Error(
+            `${existing.name} has ${activeApplications} open adoption application(s). Reject or finish them before deleting.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const activeFoster = await FosterAssignment.exists({
+        status: "active",
+        $or: [{ animalId }, { animalId: null, petName: existing.name }],
+    });
+
+    if (activeFoster) {
+        const error = new Error(
+            `${existing.name} is in an active foster assignment. Complete or delete the assignment first.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    const animal = await Animal.findByIdAndDelete(
+        animalId
+    );
 
     return res.status(200).json({
         success: true,

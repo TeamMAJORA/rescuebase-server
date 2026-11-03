@@ -66,6 +66,17 @@ const animalSchema = new mongoose.Schema(
             trim: true,
         },
 
+        behaviorAssessedBy: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        behaviorAssessedAt: {
+            type: Date,
+            default: null,
+        },
+
         energyLevel: {
             type: Number,
             enum: [1, 2, 3, 4, 5, null],
@@ -152,6 +163,13 @@ const animalSchema = new mongoose.Schema(
         latitude: {
             type: Number,
             default: null,
+        },
+
+        // Where the intake was saved from: "field" = phone, "desk" = computer, "" = older records
+        intakeSource: {
+            type: String,
+            enum: ["", "field", "desk"],
+            default: "",
         },
 
         longitude: {

@@ -10,6 +10,12 @@ const userController = require(
 );
 
 
+// ----- My account (any logged-in role) — must stay above "/:id" -----
+router.get("/me", verifyToken, asyncHandler(userController.getMe));
+router.patch("/me", verifyToken, asyncHandler(userController.updateMe));
+router.patch("/me/password", verifyToken, asyncHandler(userController.changeMyPassword));
+router.patch("/me/notifications", verifyToken, asyncHandler(userController.updateMyNotifications));
+
 router.get(
     "/",
     verifyToken,
@@ -19,6 +25,25 @@ router.get(
     )
 );
 
+// Names of active staff/admin accounts (used by "Assessed By" dropdowns)
+router.get(
+    "/staff",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        userController.getStaffList
+    )
+);
+
+
+router.get(
+    "/volunteers",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        userController.getVolunteerList
+    )
+);
 
 router.patch(
     "/:id",

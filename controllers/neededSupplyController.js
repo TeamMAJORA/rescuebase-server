@@ -1,19 +1,17 @@
 const mongoose = require("mongoose");
 
 const NeededSupply = require("../models/NeededSupply");
+const FoodInventory = require("../models/FoodInventory");
 
-// Status values must match the model enum: active, fulfilled, inactive
-function updateSupplyStatus(supply, requestedStatus) {
-    if (["active", "fulfilled", "inactive"].includes(requestedStatus)) {
-        supply.status = requestedStatus;
-    }
+const SUPPLY_STATUSES = ["active", "fulfilled", "inactive"];
 
-    // Fully received supplies close automatically (unless hidden on purpose)
-    if (
-        supply.status !== "inactive" &&
-        supply.quantityReceived >= supply.quantityNeeded
-    ) {
+function updateSupplyStatus(supply) {
+    if (supply.quantityReceived >= supply.quantityNeeded) {
         supply.status = "fulfilled";
+    } else if (supply.quantityReceived > 0) {
+        supply.status = "partially_fulfilled";
+    } else {
+        supply.status = "needed";
     }
 }
 
@@ -26,6 +24,22 @@ exports.getAllSupplies = async (req, res) => {
         supplies,
     });
 };
+
+const MAX_SUPPLY_QUANTITY = 10000;
+
+function hasInvalidSupplyQuantities(quantityNeeded, quantityReceived) {
+    const needed = Number(quantityNeeded);
+    const received = Number(quantityReceived || 0);
+
+    return (
+        !Number.isFinite(needed) ||
+        needed < 1 ||
+        needed > MAX_SUPPLY_QUANTITY ||
+        !Number.isFinite(received) ||
+        received < 0 ||
+        received > MAX_SUPPLY_QUANTITY
+    );
+}
 
 exports.createSupply = async (req, res) => {
     const {
@@ -68,6 +82,36 @@ exports.createSupply = async (req, res) => {
         });
     }
 
+    // shortcut for "Request more" from Food Storage
+    let foodInventoryId = null;
+
+    if (req.body.foodInventoryId) {
+        if (!mongoose.isValidObjectId(req.body.foodInventoryId)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid food item.",
+            });
+        }
+
+        const foodItem = await FoodInventory.exists({ _id: req.body.foodInventoryId });
+
+        if (!foodItem) {
+            return res.status(404).json({
+                success: false,
+                message: "Food item not found.",
+            });
+        }
+
+        foodInventoryId = req.body.foodInventoryId;
+    }
+
+    if (hasInvalidSupplyQuantities(quantityNeeded, quantityReceived)) {
+        return res.status(400).json({
+            success: false,
+            message: `Quantities must be between 0 and ${MAX_SUPPLY_QUANTITY.toLocaleString()} (needed at least 1).`,
+        });
+    }
+
     const supply = await NeededSupply.create({
         name: supplyName,
         category: supplyCategory,
@@ -78,6 +122,7 @@ exports.createSupply = async (req, res) => {
         status: supplyStatus,
         createdByName: req.user?.name || "",
         createdByEmail: req.user?.email || "",
+        foodInventoryId,
     });
 
     res.status(201).json({
@@ -111,12 +156,12 @@ exports.updateSupply = async (req, res) => {
     }
 
     const allowedFields = [
-        "name",
-        "category",
+        "shelter",
+        "item",
         "quantityNeeded",
         "quantityReceived",
-        "priority",
-        "description",
+        "notes",
+        "status",
     ];
 
     for (const field of allowedFields) {
@@ -129,18 +174,21 @@ exports.updateSupply = async (req, res) => {
     supply.quantityReceived = Number(supply.quantityReceived || 0);
 
     if (
-        !Number.isFinite(supply.quantityNeeded) ||
-        !Number.isFinite(supply.quantityReceived) ||
         supply.quantityNeeded < 1 ||
         supply.quantityReceived < 0
     ) {
         return res.status(400).json({
             success: false,
-            message: "Invalid supply quantities.",
+            message: `Quantities must be between 0 and ${MAX_SUPPLY_QUANTITY.toLocaleString()} (needed at least 1).`,
         });
     }
 
-    updateSupplyStatus(supply, req.body.status);
+    if (
+        req.body.status === undefined ||
+        req.body.status !== "cancelled"
+    ) {
+        updateSupplyStatus(supply);
+    }
 
     await supply.save();
 

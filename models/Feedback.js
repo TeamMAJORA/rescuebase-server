@@ -78,6 +78,31 @@ const FeedbackSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+
+        // Shelter's reply (sent to the user by email + notification)
+        reply: {
+            type: String,
+            default: "",
+            trim: true,
+            maxlength: 2000,
+        },
+
+        repliedAt: {
+            type: Date,
+            default: null,
+        },
+
+        repliedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+
+        repliedByName: {
+            type: String,
+            default: "",
+            trim: true,
+        },
     },
     {
         timestamps: true,

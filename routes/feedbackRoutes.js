@@ -29,18 +29,34 @@ router.get(
     "/",
     verifyToken,
     authorizeRoles(
-        "admin"
+        "admin",
+        "staff"
     ),
     asyncHandler(
         feedbackController.getAllFeedback
     )
 );
-
+router.get(
+    "/me",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff",
+        "adopter",
+        "foster",
+        "volunteer",
+        "donor"
+    ),
+    asyncHandler(
+        feedbackController.getMyFeedback
+    )
+);
 router.get(
     "/:id",
     verifyToken,
     authorizeRoles(
-        "admin"
+        "admin",
+        "staff"
     ),
     asyncHandler(
         feedbackController.getFeedbackById
@@ -48,10 +64,23 @@ router.get(
 );
 
 router.patch(
+    "/:id/reply",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff"
+    ),
+    asyncHandler(
+        feedbackController.replyToFeedback
+    )
+);
+
+router.patch(
     "/:id/archive",
     verifyToken,
     authorizeRoles(
-        "admin"
+        "admin",
+        "staff"
     ),
     asyncHandler(
         feedbackController.archiveFeedback
@@ -62,7 +91,8 @@ router.patch(
     "/:id/restore",
     verifyToken,
     authorizeRoles(
-        "admin"
+        "admin",
+        "staff"
     ),
     asyncHandler(
         feedbackController.restoreFeedback
@@ -79,5 +109,4 @@ router.delete(
         feedbackController.deleteFeedback
     )
 );
-
-module.exports = router;
+   module.exports = router;

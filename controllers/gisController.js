@@ -108,7 +108,8 @@ exports.createLocation = async (req, res) => {
             locationName,
             latitude,
             longitude,
-            status: "open",
+            // Staff/admin can save a report as already resolved (e.g. rescued on the spot)
+            status: String(req.body.status || "").trim().toLowerCase() === "resolved" ? "resolved" : "open",
             description,
 
             createdBy: user._id,
@@ -237,9 +238,11 @@ exports.getAllLocations = async (
     const locations =
         await GISLocation.find(
             filter
-        ).sort({
-            createdAt: -1,
-        });
+        )
+            .populate("createdBy", "role")
+            .sort({
+                createdAt: -1,
+            });
 
     return res.status(200).json({
         success: true,
@@ -467,7 +470,7 @@ exports.updateLocation = async (
                 $set: updates,
             },
             {
-                new: true,
+                returnDocument: "after",
                 runValidators: true,
             }
         );
@@ -592,106 +595,132 @@ exports.deleteLocation = async (
 };
 
 exports.getHotspotAnalysis = async (req, res) => {
+    const CLUSTER_DISTANCE_METERS = 500;
+
     const locations = await GISLocation.find({
         status: "open",
-        latitude: { $exists: true },
-        longitude: { $exists: true },
-    }).select(
-        "latitude longitude reportType species"
-    );
+        reportType: {
+            $in: ["lost", "found", "stray", "rescue", "intake"],
+        },
+        latitude: { $exists: true, $ne: null },
+        longitude: { $exists: true, $ne: null },
+    }).select("latitude longitude reportType locationName");
 
-    const GRID_SIZE = 0.01;
+    const reports = locations.filter((location) => {
+        const latitude = Number(location.latitude);
+        const longitude = Number(location.longitude);
 
-    const grid = new Map();
+        return (
+            Number.isFinite(latitude) &&
+            latitude >= -90 &&
+            latitude <= 90 &&
+            Number.isFinite(longitude) &&
+            longitude >= -180 &&
+            longitude <= 180
+        );
+    }).map((location) => ({
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+        reportType: location.reportType,
+        locationName: location.locationName || "",
+    }));
 
-    for (const location of locations) {
-        const latitude =
-            Number(location.latitude);
+    const toRadians = (degrees) => degrees * Math.PI / 180;
 
-        const longitude =
-            Number(location.longitude);
+    function distanceMeters(a, b) {
+        const earthRadius = 6371000;
 
-        if (
-            Number.isNaN(latitude) ||
-            Number.isNaN(longitude)
-        ) {
-            continue;
-        }
+        const dLat = toRadians(b.latitude - a.latitude);
+        const dLon = toRadians(b.longitude - a.longitude);
 
-        const latCell =
-            Math.floor(latitude / GRID_SIZE);
+        const lat1 = toRadians(a.latitude);
+        const lat2 = toRadians(b.latitude);
 
-        const lngCell =
-            Math.floor(longitude / GRID_SIZE);
+        const value =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1) *
+                Math.cos(lat2) *
+                Math.sin(dLon / 2) ** 2;
 
-        const key =
-            `${latCell}:${lngCell}`;
+        const safeValue = Math.min(1, Math.max(0, value));
 
-        if (!grid.has(key)) {
-            grid.set(key, {
-                latCell,
-                lngCell,
-
-                count: 0,
-
-                latitudeSum: 0,
-                longitudeSum: 0,
-
-                lost: 0,
-                found: 0,
-                stray: 0,
-            });
-        }
-
-        const cell =
-            grid.get(key);
-
-        cell.count++;
-
-        cell.latitudeSum += latitude;
-        cell.longitudeSum += longitude;
-
-        if (location.reportType === "lost") {
-            cell.lost++;
-        }
-
-        if (location.reportType === "found") {
-            cell.found++;
-        }
-
-        if (location.reportType === "stray") {
-            cell.stray++;
-        }
+        return 2 * earthRadius * Math.asin(Math.sqrt(safeValue));
     }
 
-    const hotspots =
-        Array.from(grid.values())
-            .map((cell) => ({
-                latCell: cell.latCell,
-                lngCell: cell.lngCell,
+    const visited = new Array(reports.length).fill(false);
+    const hotspots = [];
 
-                count: cell.count,
+    for (let i = 0; i < reports.length; i++) {
+        if (visited[i]) continue;
 
-                lost: cell.lost,
-                found: cell.found,
-                stray: cell.stray,
+        const queue = [i];
+        const cluster = [];
 
-                latitude:
-                    cell.latitudeSum /
-                    cell.count,
+        visited[i] = true;
 
-                longitude:
-                    cell.longitudeSum /
-                    cell.count,
-            }))
-            .sort(
-                (a, b) =>
-                    b.count - a.count
-            );
+        for (let head = 0; head < queue.length; head++) {
+            const currentIndex = queue[head];
+            const current = reports[currentIndex];
+
+            cluster.push(current);
+
+            for (let j = 0; j < reports.length; j++) {
+                if (visited[j]) continue;
+
+                if (
+                    distanceMeters(current, reports[j]) <=
+                    CLUSTER_DISTANCE_METERS
+                ) {
+                    visited[j] = true;
+                    queue.push(j);
+                }
+            }
+        }
+
+        const counts = {
+            lost: 0,
+            found: 0,
+            stray: 0,
+            rescue: 0,
+            intake: 0,
+        };
+
+        let latitudeSum = 0;
+        let longitudeSum = 0;
+
+        for (const report of cluster) {
+            latitudeSum += report.latitude;
+            longitudeSum += report.longitude;
+
+            if (Object.hasOwn(counts, report.reportType)) {
+                counts[report.reportType]++;
+            }
+        }
+
+        //For the hotspot and we will use the locationname for the label
+        const nameCounts = {};
+        for (const report of cluster) {
+            const name = report.locationName.split(",")[0].trim();
+            if (name) nameCounts[name] = (nameCounts[name] || 0) + 1;
+        }
+        const areaName = Object.keys(nameCounts).sort((a, b) => nameCounts[b] - nameCounts[a])[0] || "";
+
+        hotspots.push({
+            areaName,
+            latitude: latitudeSum / cluster.length,
+            longitude: longitudeSum / cluster.length,
+            count: cluster.length,
+            ...counts,
+        });
+    }
+
+    hotspots.sort((a, b) => b.count - a.count);
 
     return res.status(200).json({
         success: true,
-        totalReports: locations.length,
+        totalReports: reports.length,
+        clusterDistanceMeters: CLUSTER_DISTANCE_METERS,
+        totalHotspots: hotspots.length,
         hotspots,
     });
 };
@@ -702,6 +731,262 @@ exports.getShelters = async (req, res) => {
     }).sort({
         name: 1,
     });
+
+    return res.status(200).json({
+        success: true,
+        shelters,
+    });
+};
+
+
+// Shelter category / island helpers
+const SHELTER_CATEGORIES = ["shelter", "clinic", "pound"];
+
+function cleanCategory(value) {
+    const category = String(value || "shelter").trim().toLowerCase();
+    return SHELTER_CATEGORIES.includes(category) ? category : null;
+}
+
+// Rough box around Mactan Island (Lapu-Lapu City / Cordova)
+function guessIsland(latitude, longitude) {
+    return latitude >= 10.24 && latitude <= 10.36 && longitude >= 123.94
+        ? "mactan"
+        : "cebu";
+}
+
+exports.createShelter = async (req, res) => {
+    const name = String(req.body.name || "").trim();
+    const address = String(req.body.address || "").trim();
+    const latitude = Number(req.body.latitude);
+    const longitude = Number(req.body.longitude);
+
+    const contact = String(req.body.contact || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const description = String(req.body.description || "").trim();
+
+    if (!name) {
+        const error = new Error("Shelter name is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!address) {
+        const error = new Error("Shelter address is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (
+        req.body.latitude === undefined ||
+        req.body.latitude === "" ||
+        !Number.isFinite(latitude) ||
+        latitude < -90 ||
+        latitude > 90
+    ) {
+        const error = new Error("Invalid shelter latitude.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (
+        req.body.longitude === undefined ||
+        req.body.longitude === "" ||
+        !Number.isFinite(longitude) ||
+        longitude < -180 ||
+        longitude > 180
+    ) {
+        const error = new Error("Invalid shelter longitude.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const category = cleanCategory(req.body.category);
+
+    if (!category) {
+        const error = new Error("Category must be shelter, clinic or pound.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const shelter = await Shelter.create({
+        name,
+        address,
+        latitude,
+        longitude,
+        contact,
+        email,
+        description,
+        category,
+        island: guessIsland(latitude, longitude),
+        status: "active",
+    });
+
+    return res.status(201).json({
+        success: true,
+        message: "Shelter created successfully.",
+        shelter,
+    });
+};
+
+
+exports.updateShelter = async (req, res) => {
+    const shelterId = String(req.params.id || "").trim();
+
+    if (!mongoose.isValidObjectId(shelterId)) {
+        const error = new Error("Invalid shelter ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const allowedFields = [
+        "name",
+        "address",
+        "latitude",
+        "longitude",
+        "contact",
+        "email",
+        "description",
+        "status",
+        "category",
+    ];
+
+    const updates = {};
+
+    for (const field of allowedFields) {
+        if (req.body[field] !== undefined) {
+            updates[field] = req.body[field];
+        }
+    }
+
+    if (Object.keys(updates).length === 0) {
+        const error = new Error("No valid fields provided for update.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (updates.name !== undefined) {
+        updates.name = String(updates.name).trim();
+
+        if (!updates.name) {
+            const error = new Error("Shelter name cannot be empty.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.address !== undefined) {
+        updates.address = String(updates.address).trim();
+
+        if (!updates.address) {
+            const error = new Error("Shelter address cannot be empty.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.latitude !== undefined) {
+        if (updates.latitude === "") {
+            const error = new Error("Shelter latitude is required.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        updates.latitude = Number(updates.latitude);
+
+        if (
+            !Number.isFinite(updates.latitude) ||
+            updates.latitude < -90 ||
+            updates.latitude > 90
+        ) {
+            const error = new Error("Invalid shelter latitude.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.longitude !== undefined) {
+        if (updates.longitude === "") {
+            const error = new Error("Shelter longitude is required.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        updates.longitude = Number(updates.longitude);
+
+        if (
+            !Number.isFinite(updates.longitude) ||
+            updates.longitude < -180 ||
+            updates.longitude > 180
+        ) {
+            const error = new Error("Invalid shelter longitude.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.contact !== undefined) {
+        updates.contact = String(updates.contact).trim();
+    }
+
+    if (updates.email !== undefined) {
+        updates.email = String(updates.email).trim().toLowerCase();
+    }
+
+    if (updates.description !== undefined) {
+        updates.description = String(updates.description).trim();
+    }
+
+    if (updates.status !== undefined) {
+        updates.status = String(updates.status).trim().toLowerCase();
+
+        if (!["active", "inactive"].includes(updates.status)) {
+            const error = new Error(
+                "Shelter status must be active or inactive."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.category !== undefined) {
+        updates.category = cleanCategory(updates.category);
+
+        if (!updates.category) {
+            const error = new Error("Category must be shelter, clinic or pound.");
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
+    if (updates.latitude !== undefined && updates.longitude !== undefined) {
+        updates.island = guessIsland(Number(updates.latitude), Number(updates.longitude));
+    }
+
+    const shelter = await Shelter.findByIdAndUpdate(
+        shelterId,
+        { $set: updates },
+        {
+            returnDocument: "after",
+            runValidators: true,
+        }
+    );
+
+    if (!shelter) {
+        const error = new Error("Shelter not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Shelter updated successfully.",
+        shelter,
+    });
+};
+
+exports.getAllShelters = async (req, res) => {
+    const shelters = await Shelter.find({})
+        .sort({ name: 1 });
 
     return res.status(200).json({
         success: true,

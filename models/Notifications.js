@@ -35,6 +35,7 @@ const notificationSchema = new mongoose.Schema(
                 "rescue_update",
                 "donation_update",
                 "medical_update",
+                "lost_found_update",
             ],
             default: "general",
         },

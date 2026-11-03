@@ -4,6 +4,13 @@ const fosterUpdateSchema = new mongoose.Schema(
     {
         note: String,
         photoUrl: String,
+        // Weekly care report details
+        healthStatus: { type: String, default: "", trim: true },
+        appetite: { type: String, default: "", trim: true },
+        behavior: { type: String, default: "", trim: true },
+        weight: { type: Number, default: null },
+        medication: { type: Boolean, default: false },
+        exercise: { type: Boolean, default: false },
         submittedBy: String,
         submittedByEmail: String,
     },
@@ -90,6 +97,13 @@ const fosterBehaviorEvaluationSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+
+       // for reavaluation requests
+        reviewNotes: {
+            type: String,
+            default: "",
+            trim: true,
+        },
     },
     { _id: false }
 );
@@ -106,6 +120,18 @@ const medicalRequestSchema = new mongoose.Schema(
             type: String,
             enum: ["Low", "Medium", "High", "Emergency"],
             default: "Medium",
+        },
+
+        issueType: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
+        photoUrl: {
+            type: String,
+            default: "",
+            trim: true,
         },
 
         status: {
@@ -143,9 +169,38 @@ const medicalRequestSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+// Foster asks to return an animal early; staff confirm once it is back
+const returnRequestSchema = new mongoose.Schema(
+    {
+        status: {
+            type: String,
+            enum: ["none", "pending", "declined", "confirmed"],
+            default: "none",
+        },
+        reason: {
+            type: String,
+            enum: ["", "Medical", "Behavior", "Personal", "Emergency"],
+            default: "",
+        },
+        notes: { type: String, default: "", trim: true, maxlength: 1000 },
+        preferredDate: { type: Date, default: null },
+        urgent: { type: Boolean, default: false },
+        requestedAt: { type: Date, default: null },
+        adminNote: { type: String, default: "", trim: true, maxlength: 500 },
+        handledBy: { type: String, default: "", trim: true },
+        handledAt: { type: Date, default: null },
+    },
+    { _id: false }
+);
 
 const fosterAssignmentSchema = new mongoose.Schema(
     {
+        animalId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Animal",
+            default: null,
+        },
+
         petName: {
             type: String,
             required: true,
@@ -182,8 +237,19 @@ const fosterAssignmentSchema = new mongoose.Schema(
 
         status: {
             type: String,
-            enum: ["active", "completed", "cancelled"],
+            enum: ["active", "completed", "cancelled", "returned"],
             default: "active",
+        },
+
+        returnRequest: {
+            type: returnRequestSchema,
+            default: () => ({}),
+        },
+
+        endReason: {
+            type: String,
+            default: "",
+            trim: true,
         },
 
         startDate: {

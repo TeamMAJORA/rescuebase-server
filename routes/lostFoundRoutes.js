@@ -12,11 +12,9 @@ router.post(
     "/reports",
     verifyToken,
     authorizeRoles(
-        "admin",
-        "staff",
-        "foster",
         "adopter",
-        "volunteer"
+        "volunteer",
+        "foster"
     ),
     asyncHandler(
         lostFoundController.createReport
@@ -28,7 +26,10 @@ router.get(
     verifyToken,
     authorizeRoles(
         "admin",
-        "staff"
+        "staff",
+        "foster",
+        "adopter",
+        "volunteer"
     ),
     asyncHandler(
         lostFoundController.getAllReports
@@ -69,11 +70,9 @@ router.post(
     "/reports/:id/claim",
     verifyToken,
     authorizeRoles(
-        "admin",
-        "staff",
-        "foster",
         "adopter",
-        "volunteer"
+        "volunteer",
+        "foster"
     ),
     asyncHandler(
         lostFoundController.claimReport
@@ -95,12 +94,9 @@ router.patch(
 router.patch(
     "/reports/:id/reunited",
     verifyToken,
-    authorizeRoles(
-        "admin",
-        "staff"
-    ),
+    authorizeRoles("admin", "staff"),
     asyncHandler(
-        lostFoundController.markReunited
+        lostFoundController.markReportReunited
     )
 );
 
@@ -112,5 +108,37 @@ router.delete(
         lostFoundController.deleteReport
     )
 );
+
+router.get(
+    "/matches",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        lostFoundController.getPossibleMatches
+    )
+);
+
+router.patch(
+    "/matches/:matchId/decision",
+    verifyToken,
+    authorizeRoles("admin", "staff"),
+    asyncHandler(
+        lostFoundController.reviewPossibleMatch
+    )
+);
+
+router.patch(
+    "/reports/:id/claim/cancel",
+    verifyToken,
+    authorizeRoles(
+        "adopter",
+        "volunteer",
+        "foster"
+    ),
+    asyncHandler(
+        lostFoundController.cancelClaim
+    )
+);
+
 
 module.exports = router;

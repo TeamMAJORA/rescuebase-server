@@ -78,7 +78,9 @@ async function sendApplicationUpdateEmail(email, status, applicationType = "appl
                 </p>
 
                 <p>
-                    Please log in to RescueBase to view the latest details.
+                    ${status === "approved"
+                ? "If you are already logged in, please log out and log in again to open your new dashboard."
+                : "Please log in to RescueBase to view the latest details."}
                 </p>
 
                 <p>— RescueBase</p>
@@ -386,16 +388,15 @@ async function sendRoleApplicationEmail(
                     <strong>${status}</strong>.
                 </p>
 
-                ${
-                    !approved && rejectionReason
-                        ? `
+                ${!approved && rejectionReason
+                ? `
                             <p>
                                 <strong>Reason:</strong>
                                 ${rejectionReason}
                             </p>
                         `
-                        : ""
-                }
+                : ""
+            }
 
                 <p>
                     Please log in to RescueBase to view
@@ -408,17 +409,158 @@ async function sendRoleApplicationEmail(
     });
 }
 
+async function sendDocumentRequestEmail(email, petName, reason) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase: Please resubmit your documents",
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Document resubmission needed</h2>
+
+                <p>
+                    The shelter reviewed the ID you uploaded for your adoption
+                    application for <strong>${petName}</strong> and needs a new copy.
+                </p>
+
+                <p><strong>Reason:</strong> ${reason}</p>
+
+                <p>
+                    Log in to RescueBase and open <strong>Application Status</strong>
+                    to upload a new photo of your ID.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
+function escapeHtml(value) {
+    return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
+async function sendFeedbackReplyEmail(email, name, feedbackMessage, reply) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase replied to your feedback",
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Thank you for your feedback${name ? `, ${escapeHtml(name)}` : ""}!</h2>
+
+                <p><strong>Our reply:</strong></p>
+                <p style="white-space: pre-wrap;">${escapeHtml(reply)}</p>
+
+                <p style="color: #777;"><strong>Your feedback:</strong></p>
+                <blockquote style="margin: 0; padding-left: 12px; border-left: 3px solid #ddd; color: #777; white-space: pre-wrap;">${escapeHtml(feedbackMessage)}</blockquote>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
+
+// ------------------------------------------------------------
+// Respect each user's email choices (Settings > Notifications).
+// Looks the recipient up by email; unknown or missing prefs = send.
+// ------------------------------------------------------------
+async function wantsEmail(email, category) {
+    if (!email || !category) return true;
+
+    try {
+        const User = require("../models/User");
+        const user = await User.findOne({ email: String(email).trim().toLowerCase() })
+            .select("emailPrefs")
+            .lean();
+        return user?.emailPrefs?.[category] !== false;
+    } catch (error) {
+        console.error("Email preference check failed:", error.message);
+        return true;
+    }
+}
+
+function gated(send, category, pickEmail = (args) => args[0]) {
+    return async (...args) => {
+        const email = pickEmail(args);
+
+        if (!(await wantsEmail(email, category))) {
+            console.log(`[Email] skipped ${category} email to ${email} (turned off in settings)`);
+            return { skipped: true };
+        }
+
+        return send(...args);
+    };
+}
+
+async function sendLostFoundMatchEmail(
+    email,
+    petName,
+    matchedReportType,
+    matchedLocation
+) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: "RescueBase Lost & Found - Possible Pet Match Confirmed",
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>Lost & Found Match Confirmed</h2>
+
+                <p>
+                    Good news! A possible match for
+                    <strong>${petName || "your reported pet"}</strong>
+                    has been confirmed by RescueBase staff.
+                </p>
+
+                <p>
+                    The matching report is a
+                    <strong>${matchedReportType}</strong> report.
+                </p>
+
+                <p>
+                    <strong>Reported location:</strong>
+                    ${matchedLocation || "Not specified"}
+                </p>
+
+                <p>
+                    Please log in to RescueBase to view the latest details
+                    and coordinate with the other report owner.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
 module.exports = {
+    // Always sent (security / account)
     sendOtpEmail,
     sendPasswordResetEmail,
-    sendApplicationUpdateEmail,
     sendRoleApplicationEmail,
-    sendDonationConfirmationEmail,
-    sendFosterUpdateEmail,
-    sendVaccinationReminderEmail,
-    sendInterviewScheduleEmail,
-    sendPetAvailableEmail,
-    sendLostFoundClaimEmail,
-    sendLostFoundReunitedEmail,
-    sendRescueAssignmentEmail,
+
+    // Update emails the user can turn off
+    sendApplicationUpdateEmail: gated(sendApplicationUpdateEmail, "adoption"),
+    sendInterviewScheduleEmail: gated(sendInterviewScheduleEmail, "adoption"),
+    sendDocumentRequestEmail: gated(sendDocumentRequestEmail, "adoption"),
+    sendPetAvailableEmail: gated(sendPetAvailableEmail, "petAvailable"),
+    sendFosterUpdateEmail: gated(sendFosterUpdateEmail, "foster"),
+    sendVaccinationReminderEmail: gated(sendVaccinationReminderEmail, "foster"),
+    sendLostFoundClaimEmail: gated(sendLostFoundClaimEmail, "lostFound"),
+    sendLostFoundReunitedEmail: gated(sendLostFoundReunitedEmail, "lostFound"),
+    sendRescueAssignmentEmail: gated(sendRescueAssignmentEmail, "rescue"),
+    sendFeedbackReplyEmail: gated(sendFeedbackReplyEmail, "feedback"),
+    sendLostFoundMatchEmail: gated(sendLostFoundMatchEmail, "lostFound"),
+    sendDonationConfirmationEmail: gated(
+        sendDonationConfirmationEmail,
+        "donation",
+        (args) => (args[0] && typeof args[0] === "object" ? args[0].donorEmail : args[0])
+    ),
 };

@@ -47,6 +47,25 @@ const ShelterSchema = new mongoose.Schema(
             trim: true,
         },
 
+        // shelter = rescue/adoption shelter, clinic = vet clinic,
+        // pound = government vet office / impounding
+        category: {
+            type: String,
+            enum: ["shelter", "clinic", "pound"],
+            default: "shelter",
+            lowercase: true,
+            trim: true,
+        },
+
+        // which island the place is on (Cebu mainland or Mactan)
+        island: {
+            type: String,
+            enum: ["cebu", "mactan"],
+            default: "cebu",
+            lowercase: true,
+            trim: true,
+        },
+
         status: {
             type: String,
             enum: [
