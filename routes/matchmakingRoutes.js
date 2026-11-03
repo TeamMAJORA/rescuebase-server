@@ -21,11 +21,15 @@ router.get(
 
 router.post(
     "/quiz",
+    verifyToken,
+    authoriseRoles("adopter", "foster"),
     submitMatchmakingQuiz
 );
 
 router.get(
     "/results/:quizResponseId",
+    verifyToken,
+    authoriseRoles("adopter", "foster", "admin", "staff"),
     getMatchmakingResults
 );
 

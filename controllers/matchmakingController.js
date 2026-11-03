@@ -25,9 +25,9 @@ exports.submitMatchmakingQuiz = async (req, res) => {
         }
 
         const quizResponse = await QuizResponse.create({
-            adopterUserId: quizData.adopterUserId || null,
-            adopterName: quizData.adopterName || "Adopter",
-            adopterEmail: String(quizData.adopterEmail || "").trim().toLowerCase(),
+            adopterUserId: req.user.id,
+            adopterName: req.user.name || req.user.username || "Adopter",
+            adopterEmail: String(req.user.email || "").trim().toLowerCase(),
             preferredPetType: quizData.preferredPetType,
             preferredSize: quizData.preferredSize,
             homeType: quizData.homeType,
@@ -102,6 +102,18 @@ exports.getMatchmakingResults = async (req, res) => {
             return res.status(404).json({
                 success: false,
                 message: "Matchmaking quiz response not found."
+            });
+        }
+
+        const isReviewer = ["admin", "staff"].includes(req.user.role);
+        const isOwner =
+            String(quizResponse.adopterUserId || "") === String(req.user.id) ||
+            String(quizResponse.adopterEmail || "").toLowerCase() === String(req.user.email || "").toLowerCase();
+
+        if (!isReviewer && !isOwner) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only view your own matchmaking results.",
             });
         }
 
