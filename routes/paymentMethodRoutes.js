@@ -35,7 +35,7 @@ router.get(
 router.get(
     "/all",
     verifyToken,
-    authoriseRoles("admin", "staff", "adopter", "foster"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         paymentMethodController.getAllPaymentMethods
     )
@@ -62,7 +62,7 @@ router.patch(
 router.delete(
     "/:id",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         paymentMethodController.deletePaymentMethod
     )

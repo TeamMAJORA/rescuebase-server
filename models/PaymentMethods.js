@@ -8,8 +8,7 @@ const PaymentMethodSchema = new mongoose.Schema(
             enum: [
                 "GCash",
                 "Maya",
-                "Bank Transfer",
-                "Wire Transfer",
+                "Bank Account",
             ],
             required: true,
         },

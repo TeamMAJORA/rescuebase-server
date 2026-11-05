@@ -6,6 +6,7 @@ const Notification = require("../models/Notifications");
 const { sendDonationConfirmationEmail } = require("../services/emailService");
 const NeededSupply = require("../models/NeededSupply.js")
 const FoodInventory = require("../models/FoodInventory");
+const PaymentMethod = require("../models/PaymentMethods");
 
 const MAX_FOOD_STOCK_KG = 100000;
 
@@ -155,6 +156,21 @@ exports.createDonation = async (req, res) => {
             );
             error.statusCode = 400;
             throw error;
+        }
+
+        if (!isShelterStaff) {
+            const registeredPaymentMethod = await PaymentMethod.exists({
+                method_type: paymentMethod,
+                is_active: true,
+            });
+
+            if (!registeredPaymentMethod) {
+                const error = new Error(
+                    "Please choose one of the shelter's available payment methods."
+                );
+                error.statusCode = 400;
+                throw error;
+            }
         }
     }
 
