@@ -454,45 +454,45 @@ exports.deleteDonation = async (req, res) => {
         throw error;
     }
 
-    // Delete first, in one step. If the same delete arrives twice (double-click, retry),
-    // only the request that actually removed the record goes on to reverse the totals,
-    // so a received donation is never subtracted twice.
-    const donation = await Donation.findOneAndDelete({ _id: donationId });
+    const donation = await Donation.findById(donationId);
 
-    if (!donation) {
+    if (!donation || donation.hiddenFromLedgerAt) {
         const error = new Error("Donation record not found.");
         error.statusCode = 404;
         throw error;
     }
 
-    const receivedQuantity = Number(donation.quantity || 0);
-
-    if (
-        donation.status === "received" &&
-        donation.neededSupplyId &&
-        receivedQuantity > 0
-    ) {
-        const supply = await NeededSupply.findByIdAndUpdate(
-            donation.neededSupplyId,
-            { $inc: { quantityReceived: -receivedQuantity } },
+    // A Received donation stays in the database and keeps counting in all totals
+    // (donation counts, money received, supply totals); it is only hidden from the ledger.
+    if (donation.status === "received") {
+        const hidden = await Donation.findOneAndUpdate(
+            { _id: donationId, status: "received", hiddenFromLedgerAt: null },
+            {
+                $set: {
+                    hiddenFromLedgerAt: new Date(),
+                    hiddenFromLedgerBy: req.user?.name || req.user?.username || req.user?.email || "",
+                },
+            },
             { returnDocument: "after" }
         );
 
-        if (supply) {
-            // If the total was edited by hand to less than this donation, stop at 0
-            if (supply.quantityReceived < 0) {
-                await NeededSupply.updateOne(
-                    { _id: supply._id, quantityReceived: { $lt: 0 } },
-                    { $set: { quantityReceived: 0 } }
-                );
-            }
-
-            await changeLinkedFoodStock(supply, -receivedQuantity, req);
+        if (!hidden) {
+            const error = new Error("Donation record not found.");
+            error.statusCode = 404;
+            throw error;
         }
+
+        return res.status(200).json({
+            success: true,
+            message: "Donation removed from the ledger. It still counts in the totals.",
+        });
     }
+
+    // Pending and Cancelled donations were never added to any total, so they are deleted for real
+    await Donation.findByIdAndDelete(donationId);
 
     return res.status(200).json({
         success: true,
-        message: "Donation record deleted and totals updated successfully.",
+        message: "Donation record deleted successfully.",
     });
 };
