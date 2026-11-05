@@ -52,7 +52,7 @@ router.patch(
 router.delete(
     "/:id",
     verifyToken,
-    authoriseRoles("admin"),
+    authoriseRoles("admin", "staff"),
     asyncHandler(
         donationController.deleteDonation
     )

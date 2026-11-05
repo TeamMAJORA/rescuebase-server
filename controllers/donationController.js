@@ -454,7 +454,10 @@ exports.deleteDonation = async (req, res) => {
         throw error;
     }
 
-    const donation = await Donation.findById(donationId);
+    // Delete first, in one step. If the same delete arrives twice (double-click, retry),
+    // only the request that actually removed the record goes on to reverse the totals,
+    // so a received donation is never subtracted twice.
+    const donation = await Donation.findOneAndDelete({ _id: donationId });
 
     if (!donation) {
         const error = new Error("Donation record not found.");
@@ -462,43 +465,31 @@ exports.deleteDonation = async (req, res) => {
         throw error;
     }
 
+    const receivedQuantity = Number(donation.quantity || 0);
+
     if (
         donation.status === "received" &&
-        donation.neededSupplyId
+        donation.neededSupplyId &&
+        receivedQuantity > 0
     ) {
-        const receivedQuantity = Number(
-            donation.quantity || 0
+        const supply = await NeededSupply.findByIdAndUpdate(
+            donation.neededSupplyId,
+            { $inc: { quantityReceived: -receivedQuantity } },
+            { returnDocument: "after" }
         );
 
-        const supply = await NeededSupply.findOneAndUpdate(
-            {
-                _id: donation.neededSupplyId,
-                quantityReceived: {
-                    $gte: receivedQuantity,
-                },
-            },
-            {
-                $inc: {
-                    quantityReceived: -receivedQuantity,
-                },
-            },
-            {
-                returnDocument: "after",
+        if (supply) {
+            // If the total was edited by hand to less than this donation, stop at 0
+            if (supply.quantityReceived < 0) {
+                await NeededSupply.updateOne(
+                    { _id: supply._id, quantityReceived: { $lt: 0 } },
+                    { $set: { quantityReceived: 0 } }
+                );
             }
-        );
 
-        if (!supply) {
-            const error = new Error(
-                "Could not reverse the received quantity. The linked supply may be missing or its recorded total is insufficient."
-            );
-            error.statusCode = 409;
-            throw error;
+            await changeLinkedFoodStock(supply, -receivedQuantity, req);
         }
-
-        await changeLinkedFoodStock(supply, -receivedQuantity, req);
     }
-
-    await Donation.findByIdAndDelete(donationId);
 
     return res.status(200).json({
         success: true,
