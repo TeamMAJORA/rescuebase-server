@@ -12,7 +12,7 @@ const donationController = require("../controllers/donationController");
 router.post(
     "/",
     verifyToken,
-    authoriseRoles("admin", "staff", "foster", "adopter"),
+    authoriseRoles("admin", "staff", "foster", "adopter", "volunteer"),
     validateRequest([
         "donorName",
         "donationType",
@@ -35,7 +35,7 @@ router.get(
 router.get(
     "/my",
     verifyToken,
-    authoriseRoles("adopter", "foster"),
+    authoriseRoles("adopter", "foster", "volunteer"),
     asyncHandler(donationController.getMyDonations)
 )
 

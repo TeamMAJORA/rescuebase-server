@@ -174,14 +174,6 @@ exports.createDonation = async (req, res) => {
 
     const creator = await User.findById(creatorId).select("name username email role");
 
-    if (creator?.role === "volunteer") {
-        const error = new Error(
-            "Volunteer accounts are not permitted to submit donations."
-        );
-        error.statusCode = 403;
-        throw error;
-    }
-
     if (!creator) {
         const error = new Error(
             "Authenticated user account was not found."
