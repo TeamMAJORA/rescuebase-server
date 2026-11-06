@@ -10,6 +10,7 @@ const {
 } = require("../services/emailService");
 //new route for personality service to get the personality traits of the animal
 const { withPersonality } = require("../services/personalityService");
+const { listShelterIntakeAsFoundReport } = require("./lostFoundController");
 
 async function notifyAdoptersAboutAnimal(animal) {
     const adopters = await User.find({
@@ -164,6 +165,9 @@ exports.createAnimal = async (req, res) => {
         if (autoApprove && animal.availabilityStatus === "available") {
         await notifyAdoptersAboutAnimal(animal);
     }
+        if (autoApprove) {
+            await listShelterIntakeAsFoundReport(animal, req.user);
+        }
 
     return res.status(201).json({
         success: true,
@@ -314,6 +318,7 @@ exports.approveIntake = async (req, res) => {
     await animal.save();
 
     await notifyAdoptersAboutAnimal(animal);
+    await listShelterIntakeAsFoundReport(animal, req.user);
 
     return res.status(200).json({
         success: true,

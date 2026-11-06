@@ -277,6 +277,8 @@ async function generateMatches(reportId) {
     );
 
     let matchesCreated = 0;
+    
+    const newlyMatchedReports = [];
 
     for (const candidate of selectedCandidates) {
         const pairKey = createPairKey(
@@ -315,6 +317,7 @@ async function generateMatches(reportId) {
                     status: "suggested",
                     suggestedBy: "system",
                 });
+                    newlyMatchedReports.push(candidate.candidate);
             } catch (error) {
                 if (error.code === 11000) {
                     continue;
@@ -348,6 +351,7 @@ async function generateMatches(reportId) {
         success: true,
         matchesCreated,
         candidatesFound: candidates.length,
+        newlyMatchedReports,
     };
 }
 

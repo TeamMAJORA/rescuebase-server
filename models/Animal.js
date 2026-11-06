@@ -144,7 +144,7 @@ const animalSchema = new mongoose.Schema(
 
         adoptionStatus: {
             type: String,
-            enum: ["available", "pending", "adopted"],
+            enum: ["available", "pending", "adopted", "returned_to_owner"],
             default: "available",
         },
 

@@ -99,6 +99,12 @@ const lostFoundReportSchema = new mongoose.Schema(
             default: "",
         },
 
+        linkedAnimal: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Animal",
+            default: null,
+        },
+
         status: {
             type: String,
             enum: [

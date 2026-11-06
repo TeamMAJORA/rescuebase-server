@@ -3,6 +3,7 @@ const LostFoundReport = require("../models/LostFoundReport");
 const LedgerEntry = require("../models/LedgerEntry");
 const LostFoundMatch = require("../models/LostFoundMatch");
 const User = require("../models/User");
+const Animal = require("../models/Animal");
 const Notification = require("../models/Notifications");
 const {
     sendLostFoundClaimEmail,
@@ -57,10 +58,10 @@ async function notifyLostFoundMatchOwners(reportA, reportB) {
             if (user) {
                 await Notification.create({
                     user: user._id,
-                    title: "Lost & Found Match Confirmed",
+                    title: "Possible Lost & Found Match",
                     message:
-                        `A matching ${other.reportType} report for ${petName} ` +
-                        "has been confirmed by RescueBase staff.",
+                        `RescueBase found a possible matching ${other.reportType} report for ${petName}. ` +
+                        "Open Lost & Found to check it.",
                     type: "lost_found_update",
                 });
             } else {
@@ -91,6 +92,80 @@ async function notifyLostFoundMatchOwners(reportA, reportB) {
         }
     }
 }
+
+async function notifyNewMatches(report, matchingResult) {
+    for (const matchedReport of matchingResult.newlyMatchedReports || []) {
+        await notifyLostFoundMatchOwners(report, matchedReport);
+    }
+}
+
+// Shelter animals linked to a found report follow its claim status.
+async function updateLinkedAnimal(report, animalChanges) {
+    if (!report.linkedAnimal) return;
+
+    await Animal.findByIdAndUpdate(report.linkedAnimal, animalChanges);
+}
+
+const SHELTER_INTAKE_TYPES_LISTED_AS_FOUND = ["Rescued", "Stray"];
+
+// Called by animalController when a Rescued/Stray intake is approved.
+// Lists the animal as a found report so owners can be matched and can claim it.
+exports.listShelterIntakeAsFoundReport = async (animal, approvingUser) => {
+    try {
+        if (!SHELTER_INTAKE_TYPES_LISTED_AS_FOUND.includes(animal.intakeType)) return;
+
+        const isAlreadyListed = await LostFoundReport.exists({ linkedAnimal: animal._id });
+        if (isAlreadyListed) return;
+
+        const animalColour = String(animal.color || "").toLowerCase();
+        const reportColours = LostFoundReport.schema.path("colour").enumValues.filter(Boolean);
+        const coloursInAnimalText = reportColours.filter((colour) =>
+            animalColour.includes(colour.toLowerCase())
+        );
+        const reportColour = !animalColour
+            ? ""
+            : coloursInAnimalText.length > 1
+                ? "Mixed"
+                : coloursInAnimalText[0] || "Other";
+
+        const hasCoordinates =
+            Number.isFinite(animal.latitude) && Number.isFinite(animal.longitude);
+
+        const report = await LostFoundReport.create({
+            reporterName: approvingUser?.name || approvingUser?.username || "RescueBase Shelter",
+            reporterEmail: approvingUser?.email,
+            reportType: "found",
+            petName: animal.name || "",
+            species: animal.type,
+            breed: animal.breed || "",
+            colour: reportColour,
+            size: animal.size === "Unknown" ? "" : animal.size || "",
+            sex: animal.gender || "",
+            description:
+                animal.description ||
+                animal.intakeNotes ||
+                `Admitted to the shelter as a ${String(animal.intakeType).toLowerCase()} animal.`,
+            location: animal.sourceLocation || animal.location || "RescueBase Shelter",
+            coordinates: hasCoordinates
+                ? { latitude: animal.latitude, longitude: animal.longitude }
+                : { latitude: null, longitude: null },
+            eventDate: animal.intakeDate || new Date(),
+            photoUrl: animal.image || "",
+            linkedAnimal: animal._id,
+        });
+
+        const matchingResult = await generateMatches(report._id);
+        await notifyNewMatches(report, matchingResult);
+        console.log(
+            `[LostFound] Shelter intake ${animal._id} listed as found report ${report._id} (${matchingResult.matchesCreated} suggestions)`
+        );
+    } catch (error) {
+        console.error(
+            `[LostFound] Shelter intake ${animal._id} could not be listed as a found report:`,
+            error
+        );
+    }
+};
 
 exports.createReport = async (req, res) => {
     preventStaffAdmin(req);
@@ -276,6 +351,7 @@ exports.createReport = async (req, res) => {
 
     try {
         matchingResult = await generateMatches(report._id);
+        await notifyNewMatches(report, matchingResult);
 
         console.log(
             `[LostFound] Generated ${matchingResult.matchesCreated} suggestions for report ${report._id}`
@@ -448,6 +524,19 @@ exports.claimReport = async (req, res) => {
         throw error;
     }
 
+    if (report.linkedAnimal) {
+        const linkedAnimal = await Animal.findById(report.linkedAnimal).select("adoptionStatus");
+
+        if (!linkedAnimal || ["adopted", "returned_to_owner"].includes(linkedAnimal.adoptionStatus)) {
+            const error = new Error(
+                "This shelter animal is no longer available for claims."
+            );
+
+            error.statusCode = 400;
+            throw error;
+        }
+    }
+
     report.claimStatus = "pending";
     report.claimedByName = claimantName;
     report.claimedByEmail = claimantEmail;
@@ -458,6 +547,7 @@ exports.claimReport = async (req, res) => {
     report.status = "claimed";
 
     await report.save();
+    await updateLinkedAnimal(report, { availabilityStatus: "unavailable" });
 
     await LedgerEntry.create({
         type: "lost_found",
@@ -559,6 +649,13 @@ exports.reviewClaim = async (req, res) => {
 
     await report.save();
 
+    await updateLinkedAnimal(
+        report,
+        requested === "approved"
+            ? { availabilityStatus: "unavailable", adoptionStatus: "returned_to_owner" }
+            : { availabilityStatus: "available" }
+    );
+
     await LedgerEntry.create({
         type: "lost_found",
         action: requested === "approved"
@@ -591,6 +688,10 @@ exports.reviewClaim = async (req, res) => {
             report.reporterEmail,
             report.petName || report.species
         );
+    await sendLostFoundReunitedEmail(
+        claimantEmailForMail,
+        report.petName || report.species
+    );
     } else {
         await sendLostFoundClaimEmail(
             claimantEmailForMail,
@@ -672,6 +773,87 @@ exports.markReportReunited = async (req, res) => {
         success: true,
         message: "Case marked as reunited.",
         report,
+    });
+};
+
+// Reporter: system suggestions for my own open reports.
+exports.getMySuggestedMatches = async (req, res) => {
+    const myOpenReportIds = await LostFoundReport.find({
+        reporterEmail: getActorEmail(req),
+        status: { $in: ["open", "matched"] },
+    }).distinct("_id");
+
+    const myReportIdStrings = new Set(myOpenReportIds.map(String));
+
+    const matches = await LostFoundMatch.find({
+        status: "suggested",
+        $or: [
+            { reportA: { $in: myOpenReportIds } },
+            { reportB: { $in: myOpenReportIds } },
+        ],
+    })
+        .sort({ score: -1 })
+        .populate("reportA reportB");
+
+    const suggestions = matches
+        .filter((match) => match.reportA && match.reportB)
+        .map((match) => {
+            const myReportIsA = myReportIdStrings.has(String(match.reportA._id));
+
+            return {
+                matchId: match._id,
+                score: match.score,
+                myReport: myReportIsA ? match.reportA : match.reportB,
+                matchedReport: myReportIsA ? match.reportB : match.reportA,
+            };
+        })
+        .filter(({ matchedReport }) => !["reunited", "rejected"].includes(matchedReport.status));
+
+    return res.json({
+        success: true,
+        suggestions,
+    });
+};
+
+// Reporter: "Not my pet" removes the suggestion for both reports.
+exports.dismissSuggestedMatch = async (req, res) => {
+    const match = await LostFoundMatch.findById(req.params.matchId).populate(
+        "reportA reportB",
+        "reporterEmail"
+    );
+
+    if (!match) {
+        const error = new Error("Suggested match not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    const reporterEmail = getActorEmail(req);
+    const isMySuggestion = [match.reportA, match.reportB].some(
+        (report) => report?.reporterEmail === reporterEmail
+    );
+
+    if (!isMySuggestion) {
+        const error = new Error("You can only dismiss suggestions for your own reports.");
+        error.statusCode = 403;
+        throw error;
+    }
+
+    if (match.status !== "suggested") {
+        const error = new Error(`This suggestion has already been ${match.status}.`);
+        error.statusCode = 409;
+        throw error;
+    }
+
+    match.status = "not_a_match";
+    match.reviewedBy = req.user.id;
+    match.reviewedAt = new Date();
+    match.reviewNotes = "Dismissed by the reporter: not their pet.";
+    await match.save();
+
+    return res.json({
+        success: true,
+        message: "Suggestion dismissed.",
     });
 };
 
@@ -1008,6 +1190,7 @@ exports.cancelClaim = async (req, res) => {
     report.claimNotes = "";
 
     await report.save();
+    await updateLinkedAnimal(report, { availabilityStatus: "available" });
 
     await LedgerEntry.create({
         type: "lost_found",

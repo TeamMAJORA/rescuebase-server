@@ -118,6 +118,24 @@ router.get(
     )
 );
 
+router.get(
+    "/matches/me",
+    verifyToken,
+    authorizeRoles("adopter", "volunteer", "foster"),
+    asyncHandler(
+        lostFoundController.getMySuggestedMatches
+    )
+);
+
+router.patch(
+    "/matches/:matchId/dismiss",
+    verifyToken,
+    authorizeRoles("adopter", "volunteer", "foster"),
+    asyncHandler(
+        lostFoundController.dismissSuggestedMatch
+    )
+);
+
 router.patch(
     "/matches/:matchId/decision",
     verifyToken,
