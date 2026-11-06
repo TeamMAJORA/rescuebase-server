@@ -250,6 +250,12 @@ exports.createReport = async (req, res) => {
         throw error;
     }
 
+    if (reportType === "found" && !String(req.body.photoUrl || "").trim()) {
+        const error = new Error("A photo is required for found pet reports so the owner can recognize the pet.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const reporterName = getActorName(req);
     const reporterEmail = getActorEmail(req);
 
@@ -537,12 +543,31 @@ exports.claimReport = async (req, res) => {
         }
     }
 
+    const MINIMUM_CLAIM_PROOF_LENGTH = 20;
+    const claimNotes = String(req.body.claimNotes || "").trim();
+    const claimContactNumber = String(req.body.claimContactNumber || "").trim();
+
+    if (claimNotes.length < MINIMUM_CLAIM_PROOF_LENGTH) {
+        const error = new Error(
+            `Please describe your proof of ownership in at least ${MINIMUM_CLAIM_PROOF_LENGTH} characters.`
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!/^9\d{9}$/.test(claimContactNumber)) {
+        const error = new Error("Please enter a valid mobile number: 10 digits starting with 9.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     report.claimStatus = "pending";
     report.claimedByName = claimantName;
     report.claimedByEmail = claimantEmail;
-    report.claimNotes = String(
-        req.body.claimNotes || ""
-    ).trim();
+    report.claimNotes = claimNotes;
+    report.claimContactNumber = claimContactNumber;
+    report.claimProofPhotoUrl = String(req.body.claimProofPhotoUrl || "").trim();
+    report.claimedAt = new Date();
 
     report.status = "claimed";
 
@@ -645,6 +670,8 @@ exports.reviewClaim = async (req, res) => {
 
         report.claimedByName = "";
         report.claimedByEmail = "";
+        report.claimContactNumber = "";
+        report.claimProofPhotoUrl = "";
     }
 
     await report.save();
@@ -1188,6 +1215,9 @@ exports.cancelClaim = async (req, res) => {
     report.claimedByName = "";
     report.claimedByEmail = "";
     report.claimNotes = "";
+    report.claimContactNumber = "";
+    report.claimProofPhotoUrl = "";
+    report.claimedAt = null;
 
     await report.save();
     await updateLinkedAnimal(report, { availabilityStatus: "available" });

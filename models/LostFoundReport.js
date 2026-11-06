@@ -154,6 +154,21 @@ const lostFoundReportSchema = new mongoose.Schema(
             default: "",
         },
 
+        claimContactNumber: {
+            type: String,
+            default: "",
+        },
+
+        claimProofPhotoUrl: {
+            type: String,
+            default: "",
+        },
+
+        claimedAt: {
+            type: Date,
+            default: null,
+        },
+
         reviewedByName: {
             type: String,
             default: "",
