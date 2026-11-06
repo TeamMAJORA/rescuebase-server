@@ -31,7 +31,7 @@ async function notifyAdoptersAboutAnimal(animal) {
         }))
     );
 
-    await Promise.all(
+    await Promise.allSettled(
         adopters
             .filter((adopter) => adopter.email)
             .map((adopter) =>
@@ -145,7 +145,7 @@ exports.createAnimal = async (req, res) => {
         ).trim(),
         intakeStatus: autoApprove ? "approved" : "pending_review",
         availabilityStatus: autoApprove
-            ? String(req.body.availabilityStatus || "available").trim()
+            ? String(req.body.availabilityStatus || "unavailable").trim()
             : "unavailable",
         adoptionStatus: autoApprove
             ? String(req.body.adoptionStatus || "available").trim()
@@ -307,17 +307,13 @@ exports.approveIntake = async (req, res) => {
         throw error;
     }
 
-    animal.intakeStatus = "rejected";
-    animal.availabilityStatus = "unavailable";
-    animal.rejectionReason = reason;
     animal.intakeStatus = "approved";
-    animal.availabilityStatus = "available";
+    animal.availabilityStatus = "unavailable"; // staff list it for adoption after checks
     animal.adoptionStatus = "available";
     animal.rejectionReason = "";
 
     await animal.save();
 
-    await notifyAdoptersAboutAnimal(animal);
     await listShelterIntakeAsFoundReport(animal, req.user);
 
     return res.status(200).json({

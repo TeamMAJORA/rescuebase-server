@@ -169,6 +169,12 @@ const lostFoundReportSchema = new mongoose.Schema(
             default: null,
         },
 
+        // Shelter animal's availability before a claim, restored if the claim is cancelled or rejected
+        linkedAnimalAvailabilityBeforeClaim: {
+            type: String,
+            default: "",
+        },
+
         reviewedByName: {
             type: String,
             default: "",
