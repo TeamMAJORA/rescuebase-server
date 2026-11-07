@@ -90,7 +90,6 @@ const RULES = [
     ["POST", /^\/api\/lost-found\/reports$/, "Lost & Found", (c) => withName(`Reported a ${c.body?.reportType || "lost or found"} pet`, c.name ? `: ${c.name}` : "").replace(" :", ":")],
     ["POST", /^\/api\/lost-found\/reports\/[^/]+\/claim$/, "Lost & Found", (c) => withName("Claimed", c.name)],
     ["PATCH", /^\/api\/lost-found\/reports\/[^/]+\/claim$/, "Lost & Found", (c) => withName("Reviewed a claim for", c.name)],
-    ["PATCH", /^\/api\/lost-found\/reports\/[^/]+\/reunited$/, "Lost & Found", (c) => withName("Marked as reunited:", c.name)],
     ["DELETE", /^\/api\/lost-found\/reports\/[^/]+$/, "Lost & Found", () => "Deleted a lost & found report"],
     ["POST", /^\/api\/gis\/shelters$/, "GIS", (c) => withName("Added place", c.name)],
     ["PATCH", /^\/api\/gis\/shelters\/[^/]+$/, "GIS", (c) => withName("Updated place", c.name)],
