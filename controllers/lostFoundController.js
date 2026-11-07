@@ -157,6 +157,52 @@ async function notifyLostFoundMatchOwners(reportA, reportB, isConfirmedByStaff =
     }
 }
 
+// Tell every adopter about a new lost or found pet so the community can help.
+// Skips the reporter and anyone already told about a match. Never throws.
+async function announceReportToAdopters(report, matchingResult) {
+    try {
+        const alreadyNotifiedEmails = [
+            report.reporterEmail,
+            ...(matchingResult.newlyMatchedReports || []).map((matched) => matched.reporterEmail),
+        ].filter(Boolean);
+
+        const adopters = await User.find({
+            role: "adopter",
+            email: { $nin: alreadyNotifiedEmails },
+        }).select("_id");
+
+        if (!adopters.length) return;
+
+        const species = String(report.species || "pet").toLowerCase();
+        const place = report.location || "Cebu";
+
+        const announcement = report.linkedAnimal
+            ? {
+                title: "Found Pet at the Shelter",
+                message: `A ${species} found near ${place} was brought to the shelter. If it's yours, open Lost & Found to claim it.`,
+            }
+            : report.reportType === "lost"
+                ? {
+                    title: "Lost Pet Reported",
+                    message: `${report.petName ? `${report.petName}, a ${species},` : `A ${species}`} was reported lost near ${place}. If you see it, open Lost & Found.`,
+                }
+                : {
+                    title: "Found Pet Reported",
+                    message: `A ${species} was found near ${place}. If it's yours, open Lost & Found to claim it.`,
+                };
+
+        await Notification.insertMany(
+            adopters.map((adopter) => ({
+                user: adopter._id,
+                ...announcement,
+                type: "lost_found_update",
+            }))
+        );
+    } catch (error) {
+        console.error(`Lost & Found announcement failed for report ${report._id}:`, error);
+    }
+}
+
 async function notifyNewMatches(report, matchingResult) {
     for (const matchedReport of matchingResult.newlyMatchedReports || []) {
         await notifyLostFoundMatchOwners(report, matchedReport);
@@ -255,6 +301,7 @@ exports.listShelterIntakeAsFoundReport = async (animal, approvingUser) => {
 
         const matchingResult = await generateMatches(report._id);
         await notifyNewMatches(report, matchingResult);
+        await announceReportToAdopters(report, matchingResult);
         console.log(
             `[LostFound] Shelter intake ${animal._id} listed as found report ${report._id} (${matchingResult.matchesCreated} suggestions)`
         );
@@ -476,6 +523,8 @@ exports.createReport = async (req, res) => {
             matchingError
         );
     }
+
+    await announceReportToAdopters(report, matchingResult);
 
     return res.status(201).json({
         success: true,

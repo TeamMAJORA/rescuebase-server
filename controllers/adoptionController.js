@@ -14,6 +14,26 @@ const {
 } = require("../services/emailService");
 const { removeShelterListing } = require("./lostFoundController");
 
+// In-app notice to every admin and staff account. Never throws.
+async function notifyApplicationReviewers(title, message) {
+    try {
+        const reviewers = await User.find({ role: { $in: ["admin", "staff"] } }).select("_id");
+
+        if (reviewers.length) {
+            await Notification.insertMany(
+                reviewers.map((reviewer) => ({
+                    user: reviewer._id,
+                    title,
+                    message,
+                    type: "application_update",
+                }))
+            );
+        }
+    } catch (error) {
+        console.error("Notify reviewers error:", error);
+    }
+}
+
 async function createLedgerEntrySafely(data) {
     try {
         await LedgerEntry.create(data);
@@ -150,6 +170,11 @@ exports.submitApplication = async (req, res) => {
         application.email,
         "pending",
         "adoption"
+    );
+
+    await notifyApplicationReviewers(
+        "New Adoption Application",
+        `${application.fullName} applied to adopt ${application.petName}. Review it in Adoption Applications.`
     );
 
     return res.status(201).json({
@@ -861,23 +886,10 @@ exports.resubmitDocuments = async (req, res) => {
         metadata: { petName: application.petName },
     });
 
-    // Let admins and staff know new documents are waiting
-    try {
-        const reviewers = await User.find({ role: { $in: ["admin", "staff"] } }).select("_id");
-
-        if (reviewers.length) {
-            await Notification.insertMany(
-                reviewers.map((reviewer) => ({
-                    user: reviewer._id,
-                    title: "Documents resubmitted",
-                    message: `${application.fullName} uploaded new documents for ${application.petName}.`,
-                    type: "application_update",
-                }))
-            );
-        }
-    } catch (error) {
-        console.error("Notify reviewers error:", error);
-    }
+    await notifyApplicationReviewers(
+        "Documents resubmitted",
+        `${application.fullName} uploaded new documents for ${application.petName}.`
+    );
 
     return res.status(200).json({
         success: true,
