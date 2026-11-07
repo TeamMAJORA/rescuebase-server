@@ -15,6 +15,13 @@ const lostFoundReportSchema = new mongoose.Schema(
             lowercase: true,
         },
 
+        // Staff and the reporter only, never shown publicly.
+        reporterContactNumber: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+
         reportType: {
             type: String,
             enum: ["lost", "found"],

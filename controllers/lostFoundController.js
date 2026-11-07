@@ -12,6 +12,7 @@ const {
     sendLostFoundStaffAlertEmail,
 } = require("../services/emailService");
 const { generateMatches } = require("../services/lostFoundMatchingService");
+const stripLegacyContact = require("../utils/stripLegacyContact");
 
 // In-app notification for one user, found by email. Never throws.
 async function notifyUserInApp(email, title, message) {
@@ -322,6 +323,14 @@ exports.createReport = async (req, res) => {
         throw e;
     }
 
+    const reporterContactNumber = String(req.body.contactNumber || "").trim();
+
+    if (!/^9\d{9}$/.test(reporterContactNumber)) {
+        const e = new Error("Please enter a valid mobile number: 10 digits starting with 9.");
+        e.statusCode = 400;
+        throw e;
+    }
+
     const latitude = Number(req.body.latitude);
     const longitude = Number(req.body.longitude);
 
@@ -345,6 +354,7 @@ exports.createReport = async (req, res) => {
     const report = await LostFoundReport.create({
         reporterName,
         reporterEmail,
+        reporterContactNumber,
         reportType,
         petName: String(req.body.petName || "").trim(),
         species,
@@ -430,26 +440,60 @@ exports.createReport = async (req, res) => {
         success: true,
         message:
             `${report.reportType === "lost" ? "Lost" : "Found"} pet report submitted successfully.`,
-        report,
+        report: reportForViewer(report, req),
         matching: matchingResult,
     });
 };
 
-// Claim proof and the claimant's mobile number are for staff review only.
-const CLAIM_PRIVATE_FIELDS = "-claimNotes -claimContactNumber -claimProofPhotoUrl";
+// Contact details and claim proof are for shelter staff. The reporter sees their
+// own contact, the claimant their own claim, and the finder the live claim on
+// their found report so they can check with the claimant before staff decide.
+const STAFF_ONLY_REPORT_FIELDS = [
+    "reporterEmail",
+    "reporterContactNumber",
+    "claimedByName",
+    "claimedByEmail",
+    "claimNotes",
+    "claimContactNumber",
+    "claimProofPhotoUrl",
+    "reviewedByName",
+    "reviewedByEmail",
+];
+const REPORTER_FIELDS = ["reporterEmail", "reporterContactNumber"];
+const CLAIMANT_FIELDS = ["claimedByName", "claimedByEmail", "claimNotes", "claimContactNumber", "claimProofPhotoUrl"];
+const CLAIM_STATUSES_SHOWN_TO_FINDER = ["pending", "approved"];
 
-function claimFieldsVisibleTo(req) {
-    return ["admin", "staff"].includes(req.user?.role) ? "" : CLAIM_PRIVATE_FIELDS;
+function reportForViewer(report, req) {
+    const plain = typeof report.toObject === "function" ? report.toObject() : { ...report };
+    const viewerEmail = getActorEmail(req);
+
+    plain.isMine = Boolean(viewerEmail) && plain.reporterEmail === viewerEmail;
+    plain.isMyClaim = Boolean(viewerEmail) && plain.claimedByEmail === viewerEmail;
+
+    if (["admin", "staff"].includes(req.user?.role)) return plain;
+
+    for (const field of STAFF_ONLY_REPORT_FIELDS) {
+        if (plain.isMine && REPORTER_FIELDS.includes(field)) continue;
+        if (plain.isMyClaim && CLAIMANT_FIELDS.includes(field)) continue;
+        if (
+            plain.isMine &&
+            CLAIMANT_FIELDS.includes(field) &&
+            CLAIM_STATUSES_SHOWN_TO_FINDER.includes(plain.claimStatus)
+        ) continue;
+        delete plain[field];
+    }
+
+    if (!plain.isMine) plain.description = stripLegacyContact(plain.description);
+
+    return plain;
 }
 
 exports.getAllReports = async (req, res) => {
-    const reports = await LostFoundReport.find()
-        .select(claimFieldsVisibleTo(req))
-        .sort({ createdAt: -1 });
+    const reports = await LostFoundReport.find().sort({ createdAt: -1 });
 
     return res.json({
         success: true,
-        reports,
+        reports: reports.map((report) => reportForViewer(report, req)),
     });
 };
 
@@ -473,15 +517,14 @@ exports.getMyReports = async (req, res) => {
 
     return res.json({
         success: true,
-        reports,
+        reports: reports.map((report) => reportForViewer(report, req)),
     });
 };
 
 exports.getReportById = async (req, res) => {
     const report = await LostFoundReport.findById(
         req.params.id
-    )
-    .select(claimFieldsVisibleTo(req));
+    );
 
     if (!report) {
         const error = new Error(
@@ -494,7 +537,7 @@ exports.getReportById = async (req, res) => {
 
     return res.json({
         success: true,
-        report,
+        report: reportForViewer(report, req),
     });
 };
 
@@ -647,6 +690,16 @@ exports.claimReport = async (req, res) => {
             `${report.claimProofPhotoUrl ? " with a proof photo" : ""}. Review it in Lost & Found.`
     );
 
+    // A user's found report: the finder has the pet, so they verify too.
+    if (!report.linkedAnimal) {
+        await notifyUserInApp(
+            report.reporterEmail,
+            "Someone Claimed the Pet You Found",
+            `${claimantName} says ${report.petName || `the ${String(report.species).toLowerCase()}`} you found is theirs. ` +
+                "Check their proof and mobile number in Lost & Found and contact them to confirm. Shelter staff make the final decision."
+        );
+    }
+
     await LedgerEntry.create({
         type: "lost_found",
         action: "lost_found_claim_submitted",
@@ -674,7 +727,7 @@ exports.claimReport = async (req, res) => {
         success: true,
         message:
             "Claim submitted for verification.",
-        report,
+        report: reportForViewer(report, req),
     });
 };
 
@@ -758,13 +811,25 @@ exports.reviewClaim = async (req, res) => {
     
     const claimedPetName = report.petName || `the ${String(report.species).toLowerCase()}`;
 
+    const handoverBy = report.linkedAnimal ? "The shelter" : "The finder";
+
     await notifyUserInApp(
         claimantEmailForMail,
         requested === "approved" ? "Claim Approved" : "Claim Not Approved",
         requested === "approved"
-            ? `Your claim for ${claimedPetName} was approved. The shelter will contact you about pickup.`
+            ? `Your claim for ${claimedPetName} was approved. ${handoverBy} will contact you to arrange the handover.`
             : `Your claim for ${claimedPetName} was not approved. You can still check other reports.`
     );
+
+    if (!report.linkedAnimal) {
+        await notifyUserInApp(
+            report.reporterEmail,
+            requested === "approved" ? "Claim Approved" : "Claim Not Approved",
+            requested === "approved"
+                ? `Staff approved the claim for ${claimedPetName}. Please contact the owner to hand the pet over.`
+                : `Staff rejected the claim for ${claimedPetName}. Your found report is open again.`
+        );
+    }
 
 
     await LedgerEntry.create({
@@ -903,7 +968,7 @@ exports.getMySuggestedMatches = async (req, res) => {
         ],
     })
         .sort({ score: -1 })
-        .populate("reportA reportB", CLAIM_PRIVATE_FIELDS);
+        .populate("reportA reportB");
 
     const suggestions = matches
         .filter((match) => match.reportA && match.reportB)
@@ -914,8 +979,8 @@ exports.getMySuggestedMatches = async (req, res) => {
                 matchId: match._id,
                 score: match.score,
                 isConfirmedByStaff: match.status === "confirmed",
-                myReport: myReportIsA ? match.reportA : match.reportB,
-                matchedReport: myReportIsA ? match.reportB : match.reportA,
+                myReport: reportForViewer(myReportIsA ? match.reportA : match.reportB, req),
+                matchedReport: reportForViewer(myReportIsA ? match.reportB : match.reportA, req),
             };
         })
         .filter(({ matchedReport }) => !["claimed", "reunited", "rejected"].includes(matchedReport.status));
@@ -1330,6 +1395,6 @@ exports.cancelClaim = async (req, res) => {
     return res.json({
         success: true,
         message: "Your pending claim has been cancelled.",
-        report,
+        report: reportForViewer(report, req),
     });
 };

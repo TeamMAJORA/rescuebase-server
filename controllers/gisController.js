@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const GISLocation = require("../models/GISLocation");
 const User = require("../models/User");
 const Shelter = require("../models/Shelter");
+const stripLegacyContact = require("../utils/stripLegacyContact");
 
 exports.createLocation = async (req, res) => {
     const petName = String(req.body.petName || "").trim();
@@ -270,11 +271,15 @@ exports.getPublicLocations = async (
             )
             .sort({
                 createdAt: -1,
-            });
+            })
+            .lean();
 
     return res.status(200).json({
         success: true,
-        locations,
+        locations: locations.map((location) => ({
+            ...location,
+            description: stripLegacyContact(location.description),
+        })),
     });
 };
 
