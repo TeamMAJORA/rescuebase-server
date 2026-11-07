@@ -69,6 +69,36 @@ function preventStaffAdmin(req) {
     }
 }
 
+// A shelter intake gets its own wording so owners know the pet is at the shelter.
+function describeMatchForOwner(owner, other, isConfirmedByStaff) {
+    if (other.linkedAnimal) {
+        const species = String(other.species || "animal").toLowerCase();
+        const ownPetName = owner.petName || "your pet";
+
+        return isConfirmedByStaff
+            ? {
+                title: "Shelter Animal Confirmed as a Match",
+                message: `Shelter staff confirmed that a ${species} at the shelter matches ${ownPetName}. Open Lost & Found to claim it.`,
+            }
+            : {
+                title: "A Shelter Animal May Be Your Pet",
+                message: `A ${species} admitted to the shelter may be ${ownPetName}. Open Lost & Found to check it and claim it if it's yours.`,
+            };
+    }
+
+    const petName = owner.petName || other.petName || "your reported pet";
+
+    return isConfirmedByStaff
+        ? {
+            title: "Lost & Found Match Confirmed",
+            message: `Shelter staff confirmed a matching ${other.reportType} report for ${petName}. Open Lost & Found to check it.`,
+        }
+        : {
+            title: "Possible Lost & Found Match",
+            message: `RescueBase found a possible matching ${other.reportType} report for ${petName}. Open Lost & Found to check it.`,
+        };
+}
+
 async function notifyLostFoundMatchOwners(reportA, reportB, isConfirmedByStaff = false) {
     const reports = [
         { owner: reportA, other: reportB },
@@ -95,12 +125,7 @@ async function notifyLostFoundMatchOwners(reportA, reportB, isConfirmedByStaff =
             if (user) {
                 await Notification.create({
                     user: user._id,
-                    title: isConfirmedByStaff
-                        ? "Lost & Found Match Confirmed"
-                        : "Possible Lost & Found Match",
-                    message: isConfirmedByStaff
-                        ? `Shelter staff confirmed a matching ${other.reportType} report for ${petName}. Open Lost & Found to check it.`
-                        : `RescueBase found a possible matching ${other.reportType} report for ${petName}. Open Lost & Found to check it.`,
+                    ...describeMatchForOwner(owner, other, isConfirmedByStaff),
                     type: "lost_found_update",
                 });
             } else {
