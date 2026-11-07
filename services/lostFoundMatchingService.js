@@ -15,6 +15,10 @@ const MATCH_WEIGHTS = {
 const MINIMUM_MATCH_SCORE = 45;
 // Breed / colour / size / sex known on BOTH reports before a match is suggested
 const MINIMUM_SHARED_PHYSICAL_DETAILS = 2;
+// Two details that clearly disagree (e.g. wrong colour AND wrong sex) mean a different pet
+const MAXIMUM_CONFLICTING_PHYSICAL_DETAILS = 1;
+// These colours can contain any other colour, so they never conflict
+const COLOURS_THAT_NEVER_CONFLICT = ["mixed", "other"];
 const MAX_MATCHES_PER_REPORT = 10;
 const MAX_SEARCH_DISTANCE_KM = 50;
 const MAX_DATE_DIFFERENCE_DAYS = 90;
@@ -65,6 +69,22 @@ function textSimilarity(first, second) {
 function isKnownDetail(value) {
     const normalizedValue = normalize(value);
     return Boolean(normalizedValue) && normalizedValue !== "unknown";
+}
+
+// Known on both reports and with nothing in common
+function isConflictingDetail(detail, first, second) {
+    if (!isKnownDetail(first[detail]) || !isKnownDetail(second[detail])) return false;
+
+    if (
+        detail === "colour" &&
+        [first.colour, second.colour].some((colour) =>
+            COLOURS_THAT_NEVER_CONFLICT.includes(normalize(colour))
+        )
+    ) {
+        return false;
+    }
+
+    return textSimilarity(first[detail], second[detail]) === 0;
 }
 
 function exactSimilarity(first, second) {
@@ -175,6 +195,14 @@ function calculateMatchScore(first, second) {
     ).length;
 
     if (sharedPhysicalDetails < MINIMUM_SHARED_PHYSICAL_DETAILS) {
+        return null;
+    }
+
+    const conflictingPhysicalDetails = ["breed", "colour", "size", "sex"].filter(
+        (detail) => isConflictingDetail(detail, first, second)
+    ).length;
+
+    if (conflictingPhysicalDetails > MAXIMUM_CONFLICTING_PHYSICAL_DETAILS) {
         return null;
     }
 
