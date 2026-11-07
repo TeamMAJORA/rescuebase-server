@@ -12,6 +12,7 @@ const {
     sendInterviewScheduleEmail,
     sendDocumentRequestEmail,
 } = require("../services/emailService");
+const { removeShelterListing } = require("./lostFoundController");
 
 async function createLedgerEntrySafely(data) {
     try {
@@ -459,6 +460,15 @@ exports.updateApplicationStatus = async (req, res) => {
                     notificationError
                 );
             }
+        }
+    }
+
+    // Adopted, so it is no longer a found pet an owner could claim
+    if (status === "approved") {
+        try {
+            await removeShelterListing(application.animalId);
+        } catch (listingError) {
+            console.error("Failed to remove the adopted pet's Lost & Found listing:", listingError);
         }
     }
 

@@ -168,6 +168,22 @@ async function updateLinkedAnimal(report, animalChanges) {
 
 // Called by animalController when an intake is saved by staff or approved.
 // Only intakes ticked "List on Lost & Found" become found reports owners can match and claim.
+// The animal left the shelter (adopted or profile deleted): take its found
+// listing and match suggestions down. Reunited listings stay as history.
+exports.removeShelterListing = async (animalId) => {
+    const listingIds = await LostFoundReport.find({
+        linkedAnimal: animalId,
+        status: { $ne: "reunited" },
+    }).distinct("_id");
+
+    if (!listingIds.length) return;
+
+    await LostFoundMatch.deleteMany({
+        $or: [{ reportA: { $in: listingIds } }, { reportB: { $in: listingIds } }],
+    });
+    await LostFoundReport.deleteMany({ _id: { $in: listingIds } });
+};
+
 exports.listShelterIntakeAsFoundReport = async (animal, approvingUser) => {
     try {
         if (!animal.listOnLostFound) return;

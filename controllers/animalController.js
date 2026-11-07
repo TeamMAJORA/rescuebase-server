@@ -10,7 +10,8 @@ const {
 } = require("../services/emailService");
 //new route for personality service to get the personality traits of the animal
 const { withPersonality } = require("../services/personalityService");
-const { listShelterIntakeAsFoundReport } = require("./lostFoundController");
+const { listShelterIntakeAsFoundReport, removeShelterListing } = require("./lostFoundController");
+const LostFoundReport = require("../models/LostFoundReport");
 
 async function notifyAdoptersAboutAnimal(animal) {
     const adopters = await User.find({
@@ -572,6 +573,21 @@ exports.deleteAnimal = async (req, res) => {
         error.statusCode = 409;
         throw error;
     }
+
+    const pendingLostFoundClaim = await LostFoundReport.exists({
+        linkedAnimal: animalId,
+        claimStatus: "pending",
+    });
+
+    if (pendingLostFoundClaim) {
+        const error = new Error(
+            `${existing.name} has a pending Lost & Found ownership claim. Approve or reject it before deleting.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    await removeShelterListing(animalId);
 
     const animal = await Animal.findByIdAndDelete(
         animalId
