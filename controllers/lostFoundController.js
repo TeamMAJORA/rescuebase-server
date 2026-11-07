@@ -486,47 +486,52 @@ exports.createReport = async (req, res) => {
     });
 };
 
-// Contact details and claim proof are for shelter staff. The reporter sees their
-// own contact, the claimant their own claim, and the finder the live claim on
-// their found report so they can check with the claimant before staff decide.
-const STAFF_ONLY_REPORT_FIELDS = [
-    "reporterEmail",
-    "reporterContactNumber",
-    "claimedByName",
-    "claimedByEmail",
-    "claimNotes",
-    "claimContactNumber",
-    "claimProofPhotoUrl",
-    "reviewedByName",
-    "reviewedByEmail",
-];
-const REPORTER_FIELDS = ["reporterEmail", "reporterContactNumber"];
-const CLAIMANT_FIELDS = ["claimedByName", "claimedByEmail", "claimNotes", "claimContactNumber", "claimProofPhotoUrl"];
+// Contact details and claims are for shelter staff. The reporter sees their own
+// contact, each claimant only their own claims, and the finder the live claims
+// on their found report so they can check with claimants before staff decide.
+const REPORTER_ONLY_FIELDS = ["reporterEmail", "reporterContactNumber"];
 const CLAIM_STATUSES_SHOWN_TO_FINDER = ["pending", "approved"];
 
 function reportForViewer(report, req) {
     const plain = typeof report.toObject === "function" ? report.toObject() : { ...report };
     const viewerEmail = getActorEmail(req);
+    const claims = plain.claims || [];
+    const myClaims = claims.filter((claim) => Boolean(viewerEmail) && claim.claimantEmail === viewerEmail);
 
     plain.isMine = Boolean(viewerEmail) && plain.reporterEmail === viewerEmail;
-    plain.isMyClaim = Boolean(viewerEmail) && plain.claimedByEmail === viewerEmail;
+    plain.pendingClaimCount = claims.filter((claim) => claim.status === "pending").length;
+    plain.myClaimStatus = myClaims.length ? myClaims[myClaims.length - 1].status : null;
 
     if (["admin", "staff"].includes(req.user?.role)) return plain;
 
-    for (const field of STAFF_ONLY_REPORT_FIELDS) {
-        if (plain.isMine && REPORTER_FIELDS.includes(field)) continue;
-        if (plain.isMyClaim && CLAIMANT_FIELDS.includes(field)) continue;
-        if (
-            plain.isMine &&
-            CLAIMANT_FIELDS.includes(field) &&
-            CLAIM_STATUSES_SHOWN_TO_FINDER.includes(plain.claimStatus)
-        ) continue;
-        delete plain[field];
+    if (!plain.isMine) {
+        for (const field of REPORTER_ONLY_FIELDS) delete plain[field];
+        plain.description = stripLegacyContact(plain.description);
     }
 
-    if (!plain.isMine) plain.description = stripLegacyContact(plain.description);
+    plain.claims = plain.isMine
+        ? claims.filter((claim) => CLAIM_STATUSES_SHOWN_TO_FINDER.includes(claim.status))
+        : myClaims;
 
     return plain;
+}
+
+// Report status follows its pending claims, unless a claim was already approved.
+function updateClaimSummary(report) {
+    if (report.claimStatus === "approved") return;
+
+    const hasPendingClaims = report.claims.some((claim) => claim.status === "pending");
+
+    report.claimStatus = hasPendingClaims ? "pending" : "none";
+    report.status = hasPendingClaims
+        ? "claimed"
+        : report.matchStatus === "confirmed" ? "matched" : "open";
+}
+
+function stampReview(claim, req) {
+    claim.reviewedByName = getActorName(req);
+    claim.reviewedByEmail = getActorEmail(req);
+    claim.reviewedAt = new Date();
 }
 
 exports.getAllReports = async (req, res) => {
@@ -671,14 +676,20 @@ exports.claimReport = async (req, res) => {
         throw error;
     }
 
-    if (report.claimStatus === "pending") {
+    const hasMyPendingClaim = report.claims.some(
+        (claim) => claim.claimantEmail === claimantEmail && claim.status === "pending"
+    );
+
+    if (hasMyPendingClaim) {
         const error = new Error(
-            "This report already has a pending claim."
+            "You already have a pending claim on this report."
         );
 
         error.statusCode = 400;
         throw error;
     }
+
+    const isFirstPendingClaim = report.claimStatus !== "pending";
 
     if (report.linkedAnimal) {
         const linkedAnimal = await Animal.findById(report.linkedAnimal).select("adoptionStatus availabilityStatus");
@@ -691,7 +702,10 @@ exports.claimReport = async (req, res) => {
             error.statusCode = 400;
             throw error;
         }
-        report.linkedAnimalAvailabilityBeforeClaim = linkedAnimal.availabilityStatus;
+
+        if (isFirstPendingClaim) {
+            report.linkedAnimalAvailabilityBeforeClaim = linkedAnimal.availabilityStatus;
+        }
     }
 
     const MINIMUM_CLAIM_PROOF_LENGTH = 20;
@@ -712,23 +726,34 @@ exports.claimReport = async (req, res) => {
         throw error;
     }
 
-    report.claimStatus = "pending";
-    report.claimedByName = claimantName;
-    report.claimedByEmail = claimantEmail;
-    report.claimNotes = claimNotes;
-    report.claimContactNumber = claimContactNumber;
-    report.claimProofPhotoUrl = String(req.body.claimProofPhotoUrl || "").trim();
-    report.claimedAt = new Date();
+    const claim = {
+        claimantName,
+        claimantEmail,
+        contactNumber: claimContactNumber,
+        proofNotes: claimNotes,
+        proofPhotoUrl: String(req.body.claimProofPhotoUrl || "").trim(),
+        claimedAt: new Date(),
+    };
 
-    report.status = "claimed";
+    report.claims.push(claim);
+    report.claimedAt = claim.claimedAt;
+    updateClaimSummary(report);
 
     await report.save();
-    await updateLinkedAnimal(report, { availabilityStatus: "unavailable" });
+
+    if (isFirstPendingClaim) {
+        await updateLinkedAnimal(report, { availabilityStatus: "unavailable" });
+    }
+
+    const pendingClaimCount = report.claims.filter((each) => each.status === "pending").length;
+
     await notifyShelterStaff(
         "New Ownership Claim",
         `${claimantName} claimed ${report.petName || `a ${String(report.species).toLowerCase()}`} ` +
             `(${report.linkedAnimal ? "shelter animal" : "found report"})` +
-            `${report.claimProofPhotoUrl ? " with a proof photo" : ""}. Review it in Lost & Found.`
+            `${claim.proofPhotoUrl ? " with a proof photo" : ""}. ` +
+            `${pendingClaimCount > 1 ? `It now has ${pendingClaimCount} claims to compare. ` : ""}` +
+            "Review it in Lost & Found."
     );
 
     // A user's found report: the finder has the pet, so they verify too.
@@ -760,7 +785,7 @@ exports.claimReport = async (req, res) => {
             petName: report.petName,
             species: report.species,
             reporterEmail: report.reporterEmail,
-            claimNotes: report.claimNotes,
+            claimNotes,
         },
     });
 
@@ -773,25 +798,17 @@ exports.claimReport = async (req, res) => {
 };
 
 
+// Staff decide one claim. Approving it rejects every other pending claim.
 exports.reviewClaim = async (req, res) => {
-    const allowedStatuses = [
-        "approved",
-        "rejected",
-    ];
+    const requested = String(req.body.claimStatus || "").trim().toLowerCase();
 
-    const requested = String(
-        req.body.claimStatus || ""
-    ).trim().toLowerCase();
-
-    if (!allowedStatuses.includes(requested)) {
+    if (!["approved", "rejected"].includes(requested)) {
         const error = new Error("Invalid claim status.");
         error.statusCode = 400;
         throw error;
     }
 
-    const report = await LostFoundReport.findById(
-        req.params.id
-    );
+    const report = await LostFoundReport.findById(req.params.id);
 
     if (!report) {
         const error = new Error("Lost and found report not found.");
@@ -799,79 +816,83 @@ exports.reviewClaim = async (req, res) => {
         throw error;
     }
 
-    if (report.claimStatus !== "pending") {
-        const error = new Error(
-            "This report does not have a pending claim."
-        );
+    const claim = report.claims.id(String(req.body.claimId || ""));
+
+    if (!claim) {
+        const error = new Error("Claim not found on this report.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (claim.status !== "pending") {
+        const error = new Error("This claim is no longer pending.");
         error.statusCode = 400;
         throw error;
     }
 
-    const reviewerName = getActorName(req);
-    const reviewerEmail = getActorEmail(req);
-    const claimantEmailForMail = report.claimedByEmail;
+    claim.status = requested;
+    stampReview(claim, req);
 
-    report.claimStatus = requested;
-
-    report.reviewedByName = reviewerName;
-    report.reviewedByEmail = reviewerEmail;
-    report.reviewedAt = new Date();
-
-    report.claimNotes = String(
-        req.body.reviewNotes ||
-        report.claimNotes ||
-        ""
-    ).trim();
+    const otherClaimsRejected = [];
 
     if (requested === "approved") {
-        // Approval now completes the entire reunion process.
+        for (const otherClaim of report.claims) {
+            if (otherClaim.status !== "pending") continue;
+
+            otherClaim.status = "rejected";
+            stampReview(otherClaim, req);
+            otherClaimsRejected.push(otherClaim);
+        }
+
+        report.claimStatus = "approved";
         report.status = "reunited";
         report.reunitedAt = new Date();
     } else {
-        // Rejected claims reopen the report so it can be matched and claimed again.
-        report.status = "open";
-
-        report.claimedByName = "";
-        report.claimedByEmail = "";
-        report.claimContactNumber = "";
-        report.claimProofPhotoUrl = "";
+        updateClaimSummary(report);
     }
 
     await report.save();
 
+    const stillHasPendingClaims = report.claimStatus === "pending";
+
     if (requested === "approved") {
-        await closeOwnersMatchedLostReports(report, claimantEmailForMail);
+        await closeOwnersMatchedLostReports(report, claim.claimantEmail);
+        await updateLinkedAnimal(report, { availabilityStatus: "unavailable", adoptionStatus: "returned_to_owner" });
+    } else if (!stillHasPendingClaims) {
+        await updateLinkedAnimal(report, {
+            availabilityStatus: report.linkedAnimalAvailabilityBeforeClaim || "unavailable",
+        });
     }
 
-    await updateLinkedAnimal(
-        report,
-        requested === "approved"
-            ? { availabilityStatus: "unavailable", adoptionStatus: "returned_to_owner" }
-            : { availabilityStatus: report.linkedAnimalAvailabilityBeforeClaim || "unavailable" }
-    );
-    
     const claimedPetName = report.petName || `the ${String(report.species).toLowerCase()}`;
-
     const handoverBy = report.linkedAnimal ? "The shelter" : "The finder";
 
     await notifyUserInApp(
-        claimantEmailForMail,
+        claim.claimantEmail,
         requested === "approved" ? "Claim Approved" : "Claim Not Approved",
         requested === "approved"
             ? `Your claim for ${claimedPetName} was approved. ${handoverBy} will contact you to arrange the handover.`
             : `Your claim for ${claimedPetName} was not approved. You can still check other reports.`
     );
 
+    for (const otherClaim of otherClaimsRejected) {
+        await notifyUserInApp(
+            otherClaim.claimantEmail,
+            "Claim Not Approved",
+            `Another owner's claim for ${claimedPetName} was approved, so your claim was closed. You can still check other reports.`
+        );
+    }
+
     if (!report.linkedAnimal) {
         await notifyUserInApp(
             report.reporterEmail,
             requested === "approved" ? "Claim Approved" : "Claim Not Approved",
             requested === "approved"
-                ? `Staff approved the claim for ${claimedPetName}. Please contact the owner to hand the pet over.`
-                : `Staff rejected the claim for ${claimedPetName}. Your found report is open again.`
+                ? `Staff approved ${claim.claimantName}'s claim for ${claimedPetName}. Please contact the owner to hand the pet over.`
+                : `Staff rejected ${claim.claimantName}'s claim for ${claimedPetName}.` +
+                    (stillHasPendingClaims ? "" : " Your found report is open again.")
         );
     }
-
 
     await LedgerEntry.create({
         type: "lost_found",
@@ -879,23 +900,23 @@ exports.reviewClaim = async (req, res) => {
             ? "lost_found_case_reunited"
             : "lost_found_claim_reviewed",
 
-        actorName: reviewerName,
-        actorEmail: reviewerEmail,
+        actorName: getActorName(req),
+        actorEmail: getActorEmail(req),
 
         targetType: "LostFoundReport",
         targetId: report._id.toString(),
 
         description:
             requested === "approved"
-                ? `${report.petName || report.species} was approved and marked as reunited.`
-                : `${report.petName || report.species} claim was rejected.`,
+                ? `${claim.claimantName}'s claim for ${report.petName || report.species} was approved and marked as reunited.`
+                : `${claim.claimantName}'s claim for ${report.petName || report.species} was rejected.`,
 
         status: report.status,
 
         metadata: {
             claimStatus: requested,
-            claimedByEmail: claimantEmailForMail,
-            reviewNotes: report.claimNotes,
+            claimantEmail: claim.claimantEmail,
+            otherClaimsRejected: otherClaimsRejected.map((otherClaim) => otherClaim.claimantEmail),
             reunitedAt: report.reunitedAt,
         },
     });
@@ -906,9 +927,12 @@ exports.reviewClaim = async (req, res) => {
         requested === "approved"
             ? [
                 sendLostFoundReunitedEmail(report.reporterEmail, petNameForEmail),
-                sendLostFoundReunitedEmail(claimantEmailForMail, petNameForEmail),
+                sendLostFoundReunitedEmail(claim.claimantEmail, petNameForEmail),
+                ...otherClaimsRejected.map((otherClaim) =>
+                    sendLostFoundClaimEmail(otherClaim.claimantEmail, petNameForEmail, "rejected")
+                ),
             ]
-            : [sendLostFoundClaimEmail(claimantEmailForMail, petNameForEmail, requested)];
+            : [sendLostFoundClaimEmail(claim.claimantEmail, petNameForEmail, requested)];
 
     for (const emailResult of await Promise.allSettled(decisionEmails)) {
         if (emailResult.status === "rejected") {
@@ -922,17 +946,15 @@ exports.reviewClaim = async (req, res) => {
             requested === "approved"
                 ? "Claim approved. Lost and found case marked as reunited."
                 : "Lost and found claim rejected.",
-        report,
+        report: reportForViewer(report, req),
     });
 };
 
-// Admin/staff: mark a case with an approved claim as reunited
-// the cases will be automatically marked as reunited if the claim is approvved
 // Reporter: system suggestions for my own open reports.
 exports.getMySuggestedMatches = async (req, res) => {
     const myOpenReportIds = await LostFoundReport.find({
         reporterEmail: getActorEmail(req),
-        status: { $in: ["open", "matched"] },
+        status: { $in: ["open", "matched", "claimed"] },
     }).distinct("_id");
 
     const myReportIdStrings = new Set(myOpenReportIds.map(String));
@@ -960,7 +982,7 @@ exports.getMySuggestedMatches = async (req, res) => {
                 matchedReport: reportForViewer(myReportIsA ? match.reportB : match.reportA, req),
             };
         })
-        .filter(({ matchedReport }) => !["claimed", "reunited", "rejected"].includes(matchedReport.status));
+        .filter(({ matchedReport }) => !["reunited", "rejected"].includes(matchedReport.status));
 
     return res.json({
         success: true,
@@ -1313,42 +1335,28 @@ exports.cancelClaim = async (req, res) => {
         throw error;
     }
 
-    if (
-        String(report.claimedByEmail || "").trim().toLowerCase() !==
-        claimantEmail
-    ) {
-        const error = new Error(
-            "You are not authorized to cancel this claim."
-        );
-        error.statusCode = 403;
-        throw error;
-    }
+    const myPendingClaim = report.claims.find(
+        (claim) => claim.claimantEmail === claimantEmail && claim.status === "pending"
+    );
 
-    if (report.claimStatus !== "pending") {
-        const error = new Error(
-            "Only pending claims can be cancelled."
-        );
+    if (!myPendingClaim) {
+        const error = new Error("You have no pending claim on this report.");
         error.statusCode = 409;
         throw error;
     }
 
     const claimantName = getActorName(req);
 
-    report.claimStatus = "none";
-    report.status =
-        report.matchStatus === "confirmed" ? "matched" : "open";
-
-    report.claimedByName = "";
-    report.claimedByEmail = "";
-    report.claimNotes = "";
-    report.claimContactNumber = "";
-    report.claimProofPhotoUrl = "";
-    report.claimedAt = null;
+    myPendingClaim.status = "cancelled";
+    updateClaimSummary(report);
 
     await report.save();
-    await updateLinkedAnimal(report, {
-        availabilityStatus: report.linkedAnimalAvailabilityBeforeClaim || "unavailable",
-    });
+
+    if (report.claimStatus !== "pending") {
+        await updateLinkedAnimal(report, {
+            availabilityStatus: report.linkedAnimalAvailabilityBeforeClaim || "unavailable",
+        });
+    }
 
     await LedgerEntry.create({
         type: "lost_found",

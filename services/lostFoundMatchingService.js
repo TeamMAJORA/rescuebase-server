@@ -22,6 +22,8 @@ const COLOURS_THAT_NEVER_CONFLICT = ["mixed", "other"];
 const MAX_MATCHES_PER_REPORT = 10;
 const MAX_SEARCH_DISTANCE_KM = 50;
 const MAX_DATE_DIFFERENCE_DAYS = 90;
+// A found pet with pending claims can still be claimed by its real owner
+const STATUSES_OPEN_FOR_MATCHING = ["open", "claimed"];
 
 function normalize(value) {
     return String(value || "")
@@ -269,7 +271,7 @@ async function generateMatches(reportId) {
         throw new Error("Lost and Found report not found.");
     }
 
-    if (report.status !== "open") {
+    if (!STATUSES_OPEN_FOR_MATCHING.includes(report.status)) {
         return {
             success: true,
             matchesCreated: 0,
@@ -282,7 +284,7 @@ async function generateMatches(reportId) {
 
     const possibleReports = await LostFoundReport.find({
         reportType: oppositeType,
-        status: "open",
+        status: { $in: STATUSES_OPEN_FOR_MATCHING },
         _id: { $ne: report._id },
     })
         .sort({ createdAt: -1 })

@@ -1,5 +1,67 @@
 const mongoose = require("mongoose");
 
+// One ownership claim. A found report can have several pending at once;
+// staff approve one and the rest are rejected.
+const claimSchema = new mongoose.Schema({
+    claimantName: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+
+    claimantEmail: {
+        type: String,
+        required: true,
+        trim: true,
+        lowercase: true,
+    },
+
+    contactNumber: {
+        type: String,
+        default: "",
+        trim: true,
+    },
+
+    proofNotes: {
+        type: String,
+        default: "",
+        trim: true,
+    },
+
+    proofPhotoUrl: {
+        type: String,
+        default: "",
+        trim: true,
+    },
+
+    status: {
+        type: String,
+        enum: ["pending", "approved", "rejected", "cancelled"],
+        default: "pending",
+    },
+
+    claimedAt: {
+        type: Date,
+        default: Date.now,
+    },
+
+    reviewedByName: {
+        type: String,
+        default: "",
+    },
+
+    reviewedByEmail: {
+        type: String,
+        default: "",
+        lowercase: true,
+    },
+
+    reviewedAt: {
+        type: Date,
+        default: null,
+    },
+});
+
 const lostFoundReportSchema = new mongoose.Schema(
     {
         reporterName: {
@@ -134,43 +196,23 @@ const lostFoundReportSchema = new mongoose.Schema(
             default: "none",
         },
 
+        // Summary of claims: "pending" while any claim waits for staff
         claimStatus: {
             type: String,
             enum: [
                 "none",
                 "pending",
                 "approved",
-                "rejected",
             ],
             default: "none",
         },
 
-        claimedByName: {
-            type: String,
-            default: "",
+        claims: {
+            type: [claimSchema],
+            default: [],
         },
 
-        claimedByEmail: {
-            type: String,
-            default: "",
-            lowercase: true,
-        },
-
-        claimNotes: {
-            type: String,
-            default: "",
-        },
-
-        claimContactNumber: {
-            type: String,
-            default: "",
-        },
-
-        claimProofPhotoUrl: {
-            type: String,
-            default: "",
-        },
-
+        // When the latest claim was submitted (drives the staff sidebar dot)
         claimedAt: {
             type: Date,
             default: null,
@@ -182,21 +224,6 @@ const lostFoundReportSchema = new mongoose.Schema(
             default: "",
         },
 
-        reviewedByName: {
-            type: String,
-            default: "",
-        },
-
-        reviewedByEmail: {
-            type: String,
-            default: "",
-            lowercase: true,
-        },
-
-        reviewedAt: {
-            type: Date,
-            default: null,
-        },
 
         reunitedAt: {
             type: Date,
