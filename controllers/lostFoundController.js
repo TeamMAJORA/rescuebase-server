@@ -165,13 +165,11 @@ async function updateLinkedAnimal(report, animalChanges) {
     await Animal.findByIdAndUpdate(report.linkedAnimal, animalChanges);
 }
 
-const SHELTER_INTAKE_TYPES_LISTED_AS_FOUND = ["Rescued", "Stray"];
-
-// Called by animalController when a Rescued/Stray intake is approved.
-// Lists the animal as a found report so owners can be matched and can claim it.
+// Called by animalController when an intake is saved by staff or approved.
+// Only intakes ticked "List on Lost & Found" become found reports owners can match and claim.
 exports.listShelterIntakeAsFoundReport = async (animal, approvingUser) => {
     try {
-        if (!SHELTER_INTAKE_TYPES_LISTED_AS_FOUND.includes(animal.intakeType)) return;
+        if (!animal.listOnLostFound) return;
 
         const isAlreadyListed = await LostFoundReport.exists({ linkedAnimal: animal._id });
         if (isAlreadyListed) return;

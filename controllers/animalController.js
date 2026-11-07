@@ -157,6 +157,7 @@ exports.createAnimal = async (req, res) => {
         latitude: req.body.latitude ?? null,
         longitude: req.body.longitude ?? null,
         intakeSource: ["field", "desk"].includes(req.body.intakeSource) ? req.body.intakeSource : "",
+        listOnLostFound: req.body.listOnLostFound === true,
         rejectionReason: "",
         createdByName: adminName,
         createdByEmail: adminEmail,

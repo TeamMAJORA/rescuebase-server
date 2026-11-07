@@ -13,6 +13,8 @@ const MATCH_WEIGHTS = {
 };
 
 const MINIMUM_MATCH_SCORE = 45;
+// Breed / colour / size / sex known on BOTH reports before a match is suggested
+const MINIMUM_SHARED_PHYSICAL_DETAILS = 2;
 const MAX_MATCHES_PER_REPORT = 10;
 const MAX_SEARCH_DISTANCE_KM = 50;
 const MAX_DATE_DIFFERENCE_DAYS = 90;
@@ -57,6 +59,12 @@ function textSimilarity(first, second) {
     ]).size;
 
     return intersection / union;
+}
+
+// Empty and "Unknown" both mean the detail was not given
+function isKnownDetail(value) {
+    const normalizedValue = normalize(value);
+    return Boolean(normalizedValue) && normalizedValue !== "unknown";
 }
 
 function exactSimilarity(first, second) {
@@ -161,6 +169,15 @@ function calculateMatchScore(first, second) {
         return null;
     }
 
+    // Species, place and date alone are a guess, not a match
+    const sharedPhysicalDetails = ["breed", "colour", "size", "sex"].filter(
+        (detail) => isKnownDetail(first[detail]) && isKnownDetail(second[detail])
+    ).length;
+
+    if (sharedPhysicalDetails < MINIMUM_SHARED_PHYSICAL_DETAILS) {
+        return null;
+    }
+
     const distance = calculateDistanceKm(first, second);
 
     const factors = {
@@ -168,7 +185,9 @@ function calculateMatchScore(first, second) {
         breed: textSimilarity(first.breed, second.breed),
         colour: textSimilarity(first.colour, second.colour),
         size: exactSimilarity(first.size, second.size),
-        sex: exactSimilarity(first.sex, second.sex),
+        sex: isKnownDetail(first.sex) && isKnownDetail(second.sex)
+            ? exactSimilarity(first.sex, second.sex)
+            : null,
         distance: calculateDistanceSimilarity(distance),
         date: calculateDateSimilarity(first, second),
         description: textSimilarity(

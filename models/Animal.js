@@ -172,6 +172,12 @@ const animalSchema = new mongoose.Schema(
             default: "",
         },
 
+        // Staff ticked "List on Lost & Found" on the intake form
+        listOnLostFound: {
+            type: Boolean,
+            default: false,
+        },
+
         longitude: {
             type: Number,
             default: null,
