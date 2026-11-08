@@ -801,7 +801,25 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
             .lean();
 
         counts["lost_found_reports"] = lostFoundReports.length;
-        exportData["lost_found_reports.csv"] = toCSV(lostFoundReports,
+
+        // One row per report: the approved claimant plus how many claims came in
+        const lostFoundRows = lostFoundReports.map((report) => {
+            const claims = report.claims || [];
+            const approvedClaim = claims.find((claim) => claim.status === "approved");
+
+            return {
+                ...report,
+                claimsReceived: claims.length,
+                approvedClaimantName: approvedClaim?.claimantName || "",
+                approvedClaimantEmail: approvedClaim?.claimantEmail || "",
+                approvedClaimProof: approvedClaim?.proofNotes || "",
+                reviewedByName: approvedClaim?.reviewedByName || "",
+                reviewedByEmail: approvedClaim?.reviewedByEmail || "",
+                reviewedAt: approvedClaim?.reviewedAt || "",
+            };
+        });
+
+        exportData["lost_found_reports.csv"] = toCSV(lostFoundRows,
             [
                 { label: "Report ID", value: "_id" },
                 { label: "Report Type", value: "reportType" },
@@ -816,9 +834,10 @@ async function buildExport({ user, fromDate, toDate, datasets, generatedAt, peri
                 { label: "Status", value: "status" },
                 { label: "Match Status", value: "matchStatus" },
                 { label: "Claim Status", value: "claimStatus" },
-                { label: "Claimed By", value: "claimedByName" },
-                { label: "Claimed By Email", value: "claimedByEmail" },
-                { label: "Claim Notes", value: "claimNotes" },
+                { label: "Claims Received", value: "claimsReceived" },
+                { label: "Approved Claimant", value: "approvedClaimantName" },
+                { label: "Approved Claimant Email", value: "approvedClaimantEmail" },
+                { label: "Approved Claim Proof", value: "approvedClaimProof" },
                 { label: "Reviewed By", value: "reviewedByName" },
                 { label: "Reviewer Email", value: "reviewedByEmail" },
                 { label: "Reviewed At", value: "reviewedAt" },

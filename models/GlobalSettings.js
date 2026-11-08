@@ -166,6 +166,19 @@ const globalSettingsSchema = new mongoose.Schema(
                 trim: true,
                 maxlength: 1000,
             },
+            // Map pin for the drop-off point (both set, or both null)
+            latitude: {
+                type: Number,
+                default: null,
+                min: -90,
+                max: 90,
+            },
+            longitude: {
+                type: Number,
+                default: null,
+                min: -180,
+                max: 180,
+            },
         },
 
         updatedBy: {

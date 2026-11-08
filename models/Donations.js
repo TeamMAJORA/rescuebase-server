@@ -89,6 +89,13 @@ const DonationSchema = new mongoose.Schema(
             default: "",
         },
 
+        // Photo of the donated items (in-kind), uploaded by the donor
+        itemPhotoUrl: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
         receivedDate: {
             type: Date,
             default: null,

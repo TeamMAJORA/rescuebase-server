@@ -10,6 +10,8 @@ const {
 } = require("../services/emailService");
 //new route for personality service to get the personality traits of the animal
 const { withPersonality } = require("../services/personalityService");
+const { listShelterIntakeAsFoundReport, removeShelterListing } = require("./lostFoundController");
+const LostFoundReport = require("../models/LostFoundReport");
 
 async function notifyAdoptersAboutAnimal(animal) {
     const adopters = await User.find({
@@ -30,7 +32,7 @@ async function notifyAdoptersAboutAnimal(animal) {
         }))
     );
 
-    await Promise.all(
+    await Promise.allSettled(
         adopters
             .filter((adopter) => adopter.email)
             .map((adopter) =>
@@ -144,7 +146,7 @@ exports.createAnimal = async (req, res) => {
         ).trim(),
         intakeStatus: autoApprove ? "approved" : "pending_review",
         availabilityStatus: autoApprove
-            ? String(req.body.availabilityStatus || "available").trim()
+            ? String(req.body.availabilityStatus || "unavailable").trim()
             : "unavailable",
         adoptionStatus: autoApprove
             ? String(req.body.adoptionStatus || "available").trim()
@@ -156,6 +158,7 @@ exports.createAnimal = async (req, res) => {
         latitude: req.body.latitude ?? null,
         longitude: req.body.longitude ?? null,
         intakeSource: ["field", "desk"].includes(req.body.intakeSource) ? req.body.intakeSource : "",
+        listOnLostFound: req.body.listOnLostFound === true,
         rejectionReason: "",
         createdByName: adminName,
         createdByEmail: adminEmail,
@@ -164,6 +167,9 @@ exports.createAnimal = async (req, res) => {
         if (autoApprove && animal.availabilityStatus === "available") {
         await notifyAdoptersAboutAnimal(animal);
     }
+        if (autoApprove) {
+            await listShelterIntakeAsFoundReport(animal, req.user);
+        }
 
     return res.status(201).json({
         success: true,
@@ -303,17 +309,14 @@ exports.approveIntake = async (req, res) => {
         throw error;
     }
 
-    animal.intakeStatus = "rejected";
-    animal.availabilityStatus = "unavailable";
-    animal.rejectionReason = reason;
     animal.intakeStatus = "approved";
-    animal.availabilityStatus = "available";
+    animal.availabilityStatus = "unavailable"; // staff list it for adoption after checks
     animal.adoptionStatus = "available";
     animal.rejectionReason = "";
 
     await animal.save();
 
-    await notifyAdoptersAboutAnimal(animal);
+    await listShelterIntakeAsFoundReport(animal, req.user);
 
     return res.status(200).json({
         success: true,
@@ -570,6 +573,21 @@ exports.deleteAnimal = async (req, res) => {
         error.statusCode = 409;
         throw error;
     }
+
+    const pendingLostFoundClaim = await LostFoundReport.exists({
+        linkedAnimal: animalId,
+        claimStatus: "pending",
+    });
+
+    if (pendingLostFoundClaim) {
+        const error = new Error(
+            `${existing.name} has a pending Lost & Found ownership claim. Approve or reject it before deleting.`
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
+    await removeShelterListing(animalId);
 
     const animal = await Animal.findByIdAndDelete(
         animalId

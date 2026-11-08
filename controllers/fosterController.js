@@ -254,9 +254,27 @@ exports.reviewApplication = async (req, res) => {
         "Admin User"
     ).trim();
 
+    const existingApplication = await FosterApplication.findById(req.params.id).select("status");
+
+    if (!existingApplication) {
+        const error = new Error("Foster application not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    // A withdrawn application is the applicant's final word; they can apply again
+    if (existingApplication.status === "withdrawn") {
+        const error = new Error(
+            "The applicant withdrew this application, so it can't be reviewed. They can submit a new one."
+        );
+        error.statusCode = 409;
+        throw error;
+    }
+
     const application =
-        await FosterApplication.findByIdAndUpdate(
-            req.params.id,
+        await FosterApplication.findOneAndUpdate(
+            // Also guards against a withdrawal while staff were reviewing
+            { _id: req.params.id, status: { $ne: "withdrawn" } },
             {
                 $set: {
                     status,
@@ -292,10 +310,10 @@ exports.reviewApplication = async (req, res) => {
 
     if (!application) {
         const error = new Error(
-            "Foster application not found."
+            "The applicant withdrew this application while you were reviewing it."
         );
 
-        error.statusCode = 404;
+        error.statusCode = 409;
         throw error;
     }
 

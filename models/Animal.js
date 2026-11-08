@@ -144,7 +144,7 @@ const animalSchema = new mongoose.Schema(
 
         adoptionStatus: {
             type: String,
-            enum: ["available", "pending", "adopted"],
+            enum: ["available", "pending", "adopted", "returned_to_owner"],
             default: "available",
         },
 
@@ -170,6 +170,12 @@ const animalSchema = new mongoose.Schema(
             type: String,
             enum: ["", "field", "desk"],
             default: "",
+        },
+
+        // Staff ticked "List on Lost & Found" on the intake form
+        listOnLostFound: {
+            type: Boolean,
+            default: false,
         },
 
         longitude: {

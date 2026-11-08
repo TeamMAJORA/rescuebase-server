@@ -91,15 +91,6 @@ router.patch(
     )
 );
 
-router.patch(
-    "/reports/:id/reunited",
-    verifyToken,
-    authorizeRoles("admin", "staff"),
-    asyncHandler(
-        lostFoundController.markReportReunited
-    )
-);
-
 router.delete(
     "/reports/:reportId",
     verifyToken,
@@ -115,6 +106,24 @@ router.get(
     authorizeRoles("admin", "staff"),
     asyncHandler(
         lostFoundController.getPossibleMatches
+    )
+);
+
+router.get(
+    "/matches/me",
+    verifyToken,
+    authorizeRoles("adopter", "volunteer", "foster"),
+    asyncHandler(
+        lostFoundController.getMySuggestedMatches
+    )
+);
+
+router.patch(
+    "/matches/:matchId/dismiss",
+    verifyToken,
+    authorizeRoles("adopter", "volunteer", "foster"),
+    asyncHandler(
+        lostFoundController.dismissSuggestedMatch
     )
 );
 
