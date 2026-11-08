@@ -106,6 +106,7 @@ const rescueAssignmentSchema = new mongoose.Schema(
         status: {
             type: String,
             enum: [
+                "open",
                 "pending",
                 "accepted",
                 "declined",
@@ -113,7 +114,7 @@ const rescueAssignmentSchema = new mongoose.Schema(
                 "completed",
                 "cancelled",
             ],
-            default: "pending",
+            default: "open",
         },
 
         volunteerNotes: {
@@ -170,6 +171,24 @@ const rescueAssignmentSchema = new mongoose.Schema(
         declinedAt: {
             type: Date,
             default: null,
+        },
+        volunteerId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+        },
+
+        volunteerName: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
+        volunteerEmail: {
+            type: String,
+            trim: true,
+            lowercase: true,
+            default: "",
         },
     },
     {
