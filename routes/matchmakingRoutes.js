@@ -7,7 +7,7 @@ const authoriseRoles = require("../middleware/authoriseRoles");
 
 const {
     submitMatchmakingQuiz,
-    getMatchmakingResults,
+    getMyLatestQuizResponse,
     getAllQuizResponses,
 } = require("../controllers/matchmakingController");
 
@@ -26,11 +26,12 @@ router.post(
     submitMatchmakingQuiz
 );
 
+// The logged-in user's latest quiz answers and current matches
 router.get(
-    "/results/:quizResponseId",
+    "/quiz/me",
     verifyToken,
-    authoriseRoles("adopter", "foster", "volunteer", "admin", "staff"),
-    getMatchmakingResults
+    authoriseRoles("adopter", "foster", "volunteer"),
+    getMyLatestQuizResponse
 );
 
 module.exports = router;
