@@ -142,4 +142,31 @@ router.delete(
     )
 );
 
+router.get(
+    "/open",
+    verifyToken,
+    authorizeRoles("volunteer"),
+    asyncHandler(
+        rescueAssignmentController.getOpenAssignments
+    )
+);
+
+router.post(
+    "/:id/claim",
+    verifyToken,
+    authorizeRoles("volunteer"),
+    asyncHandler(
+        rescueAssignmentController.claimAssignment
+    )
+);
+
+router.patch(
+    "/:id/drop",
+    verifyToken,
+    authorizeRoles("volunteer"),
+    asyncHandler(
+        rescueAssignmentController.dropAssignment
+    )
+);
+
 module.exports = router;

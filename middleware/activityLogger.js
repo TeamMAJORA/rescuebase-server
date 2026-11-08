@@ -81,18 +81,37 @@ const RULES = [
     ["DELETE", /^\/api\/foster\/assignments\/[^/]+$/, "Foster", () => "Deleted a foster assignment"],
 
     // Rescue
-    ["POST", /^\/api\/rescue-assignments\/?$/, "Rescue", () => "Created a rescue assignment"],
-    ["PATCH", /^\/api\/rescue-assignments\/[^/]+\/(accept|decline|start|complete|cancel)$/, "Rescue", (c) => `${c.match[1][0].toUpperCase()}${c.match[1].slice(1)}${c.match[1].endsWith("e") ? "d" : "ed"} a rescue assignment`],
-    ["PATCH", /^\/api\/rescue-assignments\/[^/]+$/, "Rescue", () => "Updated a rescue assignment"],
-    ["DELETE", /^\/api\/rescue-assignments\/[^/]+$/, "Rescue", () => "Deleted a rescue assignment"],
-    
-    // Rescue
-    ["POST", /^\/api\/rescue-assignments\/?$/, "Rescue", () => "Created a rescue assignment"],
-    ["POST", /^\/api\/rescue-assignments\/[^/]+\/claim$/, "Rescue", (c) => withName("Claimed rescue assignment", c.name)],
-    ["PATCH", /^\/api\/rescue-assignments\/[^/]+\/drop$/, "Rescue", (c) => withName("Released rescue assignment", c.name)],
-    ["PATCH", /^\/api\/rescue-assignments\/[^/]+\/(accept|decline|start|complete|cancel)$/, "Rescue", (c) => `${c.match[1][0].toUpperCase()}${c.match[1].slice(1)}${c.match[1].endsWith("e") ? "d" : "ed"} a rescue assignment`],
-    ["PATCH", /^\/api\/rescue-assignments\/[^/]+$/, "Rescue", () => "Updated a rescue assignment"],
-    ["DELETE", /^\/api\/rescue-assignments\/[^/]+$/, "Rescue", () => "Deleted a rescue assignment"],
+    ["POST", /^\/api\/rescue-assignments\/?$/, "Rescue", (c) => {
+        const assignment = c.data?.assignment; const volunteerName = assignment?.volunteerName || assignment?.volunteer?.name;
+        if (volunteerName) {
+            return withName(
+                "Posted and assigned rescue to",
+                volunteerName
+            );
+        }
+        return "Posted an open rescue assignment";
+    },],
+
+    ["POST", /^\/api\/rescue-assignments\/[^/]+\/claim$/, "Rescue", (c) => withName("Claimed rescue assignment", c.data?.assignment?.title || c.name),],
+    ["PATCH", /^\/api\/rescue-assignments\/[^/]+\/drop$/,
+        "Rescue",
+        (c) => withName(
+            "Released rescue assignment",
+            c.data?.assignment?.title || c.name
+        ),
+    ],
+    ["PATCH", /^\/api\/rescue-assignments\/[^/]+\/(accept|decline|start|complete|cancel)$/, "Rescue", (c) => {
+        const action = c.match[1]; const actionLabels = {
+            accept: "Accepted",
+            decline: "Declined",
+            start: "Started",
+            complete: "Completed",
+            cancel: "Cancelled",
+        };
+        return `${actionLabels[action]} a rescue assignment`;
+    },],
+    ["PATCH", /^\/api\/rescue-assignments\/[^/]+$/, "Rescue", () => "Updated a rescue assignment",],
+    ["DELETE", /^\/api\/rescue-assignments\/[^/]+$/, "Rescue", () => "Deleted a rescue assignment",],
 
     // Lost & Found / GIS
     ["POST", /^\/api\/lost-found\/reports$/, "Lost & Found", (c) => withName(`Reported a ${c.body?.reportType || "lost or found"} pet`, c.name ? `: ${c.name}` : "").replace(" :", ":")],
