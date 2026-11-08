@@ -22,18 +22,13 @@ async function createNotification({
     });
 }
 
+
 exports.createAssignment = async (req, res) => {
     const volunteerId = String(req.body.volunteerId || "").trim();
     const animalId = String(req.body.animalId || "").trim();
     const title = String(req.body.title || "").trim();
     const description = String(req.body.description || "").trim();
     const location = String(req.body.location || "").trim();
-
-    if (!mongoose.isValidObjectId(volunteerId)) {
-        const e = new Error("Valid volunteer ID is required.");
-        e.statusCode = 400;
-        throw e;
-    }
 
     if (!title) {
         const e = new Error("Assignment title is required.");
@@ -42,7 +37,7 @@ exports.createAssignment = async (req, res) => {
     }
 
     if (!description) {
-        const e = new Error("Assignment description is required");
+        const e = new Error("Assignment description is required.");
         e.statusCode = 400;
         throw e;
     }
@@ -61,101 +56,112 @@ exports.createAssignment = async (req, res) => {
         throw e;
     }
 
-    // Assignments can go to a volunteer or a staff member
-    const volunteer = await User.findOne({
-        _id: volunteerId,
-        role: { $in: ["volunteer", "staff"] },
-    }).select("_id name username email role");
+    // A volunteer is optional.
+    let volunteer = null;
 
-    if (!volunteer) {
-        const e = new Error("Volunteer or staff account was not found.");
-        e.statusCode = 400;
-        throw e;
-    }
-
-    let animal = null;
-
-    if (animalId && mongoose.isValidObjectId(animalId)) {
-        animal = await Animal.findById(animalId);
-
-        if (!animal) {
-            const e = new Error("Animal profile was not found.");
+    if (volunteerId) {
+        if (!mongoose.isValidObjectId(volunteerId)) {
+            const e = new Error("Invalid volunteer ID.");
             e.statusCode = 400;
+            throw e;
+        }
+
+        volunteer = await User.findOne({
+            _id: volunteerId,
+            role: "volunteer",
+        }).select("_id name username email");
+
+        if (!volunteer) {
+            const e = new Error("Volunteer account was not found.");
+            e.statusCode = 404;
             throw e;
         }
     }
 
-    const adminId = req.user?.id;
+    // Validate optional animal.
+    let animal = null;
 
-    if (!adminId) {
-        const e = new Error("Auth admin user is missing.");
-        e.statusCode = 400;
+    if (animalId) {
+        if (!mongoose.isValidObjectId(animalId)) {
+            const e = new Error("Invalid animal ID.");
+            e.statusCode = 400;
+            throw e;
+        }
+
+        animal = await Animal.findById(animalId);
+
+        if (!animal) {
+            const e = new Error("Animal profile was not found.");
+            e.statusCode = 404;
+            throw e;
+        }
+    }
+
+    const creatorId = req.user?.id || req.user?._id;
+
+    if (!creatorId) {
+        const e = new Error("Authenticated creator is missing.");
+        e.statusCode = 401;
         throw e;
     }
 
-    const admin = await User.findById(adminId).select("_id name username email");
+    const creator = await User.findById(creatorId)
+        .select("_id name username email role");
 
-    if (!admin) {
-        const e = new Error("Admin account was not found.");
-        e.statusCode = 400;
+    if (!creator || !["admin", "staff"].includes(creator.role)) {
+        const e = new Error("Only Admin and Staff can create rescues.");
+        e.statusCode = 403;
         throw e;
     }
 
     const assignment = await RescueAssignment.create({
-        volunteerId: volunteer._id,
-        volunteerName:
-            volunteer.name ||
-            volunteer.username ||
-            "Volunteer",
-        volunteerEmail:
-            volunteer.email,
-        animalId:
-            animal?._id || null,
-        animalName:
-            animal?.name || "",
-        animalType:
-            animal?.type || "",
-        animalBreed:
-            animal?.breed || "",
-        animalImage:
-            animal?.image || "",
-        assignmentType:
-            req.body.assignmentType ||
-            "rescue",
+        volunteerId: volunteer?._id || null,
+        volunteerName: volunteer
+            ? volunteer.name || volunteer.username || "Volunteer"
+            : "",
+        volunteerEmail: volunteer?.email || "",
+
+        animalId: animal?._id || null,
+        animalName: animal?.name || "",
+        animalType: animal?.type || "",
+        animalBreed: animal?.breed || "",
+        animalImage: animal?.image || "",
+
+        assignmentType: req.body.assignmentType || "rescue",
         title,
         description,
         location,
         scheduledDate,
-        scheduledTime:
-            String(
-                req.body.scheduledTime ||
-                ""
-            ).trim(),
-        priority:
-            req.body.priority ||
-            "normal",
-        status: "pending",
-        adminId: admin._id,
-        adminName:
-            admin.name ||
-            admin.username ||
-            "Admin",
-        adminEmail:
-            admin.email || "",
+        scheduledTime: String(req.body.scheduledTime || "").trim(),
+        priority: req.body.priority || "normal",
+
+        // No volunteer = Open. Assigned volunteer = Pending.
+        status: volunteer ? "pending" : "open",
+
+        // Keep existing schema field names for compatibility.
+        adminId: creator._id,
+        adminName: creator.name || creator.username || "Staff",
+        adminEmail: creator.email || "",
     });
 
-    await createNotification({
-        userId: volunteer._id,
-        title: "New Rescue Assignment.",
-        message: `You have been assigned a new rescue task: ${assignment.title}.`,
-        type: "rescue_update",
-    });
+    if (volunteer) {
+        const message = `You have been assigned a new rescue task: ${assignment.title}.`;
 
-    await sendRescueAssignmentEmail(
-        volunteer.email,
-        "New Rescue Assignment.",
-        `You have been assigned a new rescue task: ${assignment.title}.`
-    );
+        await createNotification({
+            userId: volunteer._id,
+            title: "New Rescue Assignment",
+            message,
+            type: "rescue_update",
+        });
+
+        if (volunteer.email) {
+            await sendRescueAssignmentEmail(
+                volunteer.email,
+                "New Rescue Assignment",
+                message
+            );
+        }
+    }
 
     return res.status(201).json({
         success: true,
@@ -163,6 +169,7 @@ exports.createAssignment = async (req, res) => {
         assignment,
     });
 };
+
 
 exports.getAllAssignments = async (req, res) => {
     const assignments = await RescueAssignment.find().sort({ createdAt: -1 });

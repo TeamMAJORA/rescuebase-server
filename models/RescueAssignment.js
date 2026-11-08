@@ -5,20 +5,20 @@ const rescueAssignmentSchema = new mongoose.Schema(
         volunteerId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
-            required: true,
+            default: null,
         },
 
         volunteerName: {
             type: String,
-            required: true,
             trim: true,
+            default: "",
         },
 
         volunteerEmail: {
             type: String,
-            required: true,
             trim: true,
             lowercase: true,
+            default: "",
         },
 
         animalId: {
