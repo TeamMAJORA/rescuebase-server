@@ -60,6 +60,7 @@ exports.submitMatchmakingQuiz = async (req, res) => {
             success: true,
             message: "Matchmaking quiz completed successfully.",
             quizResponseId: quizResponse._id,
+            quizResponse,
             totalAnimalsEvaluated: animals.length,
             totalMatches: matches.length,
             matches,
@@ -83,38 +84,22 @@ exports.submitMatchmakingQuiz = async (req, res) => {
     }
 };
 
-exports.getMatchmakingResults = async (req, res) => {
+// The logged-in user's latest quiz and their matches, scored now against the
+// animals available today. No quiz yet: quizResponse is null (Recommendations
+// shows "take the quiz"). The database is the only source; nothing is cached
+// in the browser.
+exports.getMyLatestQuizResponse = async (req, res) => {
     try {
-        const { quizResponseId } = req.params;
+        const myEmail = String(req.user.email || "").trim().toLowerCase();
 
-        if (!quizResponseId) {
-            return res.status(400).json({
-                success: false,
-                message: "Quiz response ID is required."
-            });
-        }
-
-        const quizResponse = await QuizResponse.findById(
-            quizResponseId
-        ).lean();
+        const quizResponse = await QuizResponse.findOne({
+            $or: [{ adopterUserId: req.user.id }, { adopterEmail: myEmail }],
+        })
+            .sort({ createdAt: -1 })
+            .lean();
 
         if (!quizResponse) {
-            return res.status(404).json({
-                success: false,
-                message: "Matchmaking quiz response not found."
-            });
-        }
-
-        const isReviewer = ["admin", "staff"].includes(req.user.role);
-        const isOwner =
-            String(quizResponse.adopterUserId || "") === String(req.user.id) ||
-            String(quizResponse.adopterEmail || "").toLowerCase() === String(req.user.email || "").toLowerCase();
-
-        if (!isReviewer && !isOwner) {
-            return res.status(403).json({
-                success: false,
-                message: "You can only view your own matchmaking results.",
-            });
+            return res.status(200).json({ success: true, quizResponse: null, matches: [] });
         }
 
         const animals = await Animal.find({
@@ -126,23 +111,16 @@ exports.getMatchmakingResults = async (req, res) => {
 
         return res.status(200).json({
             success: true,
-            quizResponseId: quizResponse._id,
+            quizResponse,
             totalAnimalsEvaluated: animals.length,
-            totalMatches: matches.length,
             matches,
         });
     } catch (error) {
-        console.error("Get matchmaking error:", error);
+        console.error("Get my matchmaking quiz error:", error);
 
         return res.status(500).json({
             success: false,
-            message:
-                "Failed to retrieve matchmaking results.",
-            error:
-                process.env.NODE_ENV ===
-                    "development"
-                    ? error.message
-                    : undefined,
+            message: "Failed to load your matchmaking results.",
         });
     }
 };

@@ -17,15 +17,22 @@ const DonationSchema = new mongoose.Schema(
 
         donationType: {
             type: String,
+            // Every category on the donation form (and older ones still in the data)
             enum: [
                 "Money",
+                "Pet Food",
                 "Dog Food",
                 "Cat Food",
                 "Medicine",
                 "Medical Supplies",
+                "Blankets & Bedding",
+                "Cleaning Supplies",
+                "Pet Toys",
+                "Pet Accessories",
+                "Feeding Bowls",
+                "Leashes & Collars",
                 "Other Supplies",
                 "Other",
-                "Pet Food",
             ],
             required: true,
         },
