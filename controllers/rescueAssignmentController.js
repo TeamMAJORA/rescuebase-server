@@ -197,6 +197,125 @@ exports.getMyAssignments = async (req, res) => {
     });
 };
 
+exports.getOpenAssignments = async (req, res) => {
+    const assignments = await RescueAssignment.find({
+        status: "open",
+        $or: [
+            { volunteerId: null },
+            { volunteerId: { $exists: false } },
+        ],
+    }).sort({
+        priority: -1,
+        scheduledDate: 1,
+        createdAt: -1,
+    });
+
+    return res.status(200).json({
+        success: true,
+        count: assignments.length,
+        assignments,
+    });
+};
+
+exports.claimAssignment = async (req, res) => {
+    const assignmentId = String(req.params.id || "").trim();
+    const volunteerId = req.user?.id || req.user?._id;
+
+    if (!mongoose.isValidObjectId(assignmentId)) {
+        const e = new Error("Invalid rescue assignment ID.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (!volunteerId || !mongoose.isValidObjectId(volunteerId)) {
+        const e = new Error("Authenticated volunteer is missing.");
+        e.statusCode = 401;
+        throw e;
+    }
+
+    const volunteer = await User.findOne({
+        _id: volunteerId,
+        role: "volunteer",
+    }).select("_id name username email");
+
+    if (!volunteer) {
+        const e = new Error("Volunteer account was not found.");
+        e.statusCode = 403;
+        throw e;
+    }
+
+    // Atomic claim: only one volunteer can update an Open assignment.
+    const assignment = await RescueAssignment.findOneAndUpdate(
+        {
+            _id: assignmentId,
+            status: "open",
+            $or: [
+                { volunteerId: null },
+                { volunteerId: { $exists: false } },
+            ],
+        },
+        {
+            $set: {
+                volunteerId: volunteer._id,
+                volunteerName: volunteer.name || volunteer.username || "Volunteer",
+                volunteerEmail: volunteer.email || "",
+                status: "accepted",
+                acceptedAt: new Date(),
+            },
+        },
+        {
+            new: true,
+            runValidators: true,
+        }
+    );
+
+    if (!assignment) {
+        const existing = await RescueAssignment.findById(assignmentId);
+
+        if (!existing) {
+            const e = new Error("Rescue assignment not found.");
+            e.statusCode = 404;
+            throw e;
+        }
+
+        const e = new Error(
+            existing.status !== "open"
+                ? "This rescue is no longer available to claim."
+                : "This rescue has already been claimed."
+        );
+        e.statusCode = 409;
+        throw e;
+    }
+
+    await createNotification({
+        userId: assignment.adminId,
+        title: "Open Rescue Claimed",
+        message: `${assignment.volunteerName} claimed "${assignment.title}".`,
+        type: "rescue_update",
+    });
+
+    await createNotification({
+        userId: assignment.adminId,
+        title: "Rescue Assignment Claimed",
+        message: `${assignment.volunteerName} claimed "${assignment.title}".`,
+        type: "rescue_update",
+    });
+
+    if (assignment.adminEmail) {
+        await sendRescueAssignmentEmail(
+            assignment.adminEmail,
+            "Open Rescue Claimed",
+            `${assignment.volunteerName} claimed "${assignment.title}".`
+        );
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Rescue assignment claimed successfully.",
+        assignment,
+    });
+};
+
 exports.getAssignmentById = async (req, res) => {
     const assignmentId = String(req.params.id || "").trim();
 
@@ -254,14 +373,6 @@ exports.acceptAssignment = async (req, res) => {
 
     await createNotification({
         userId: assignment.adminId,
-        title: "Rescue Assignment Accepted",
-        message:
-            `${assignment.volunteerName} accepted "${assignment.title}".`,
-        type: "rescue_update",
-    });
-
-    await createNotification({
-        userId: assignment.adminId,
         title: "Rescue Assignment Accepted.",
         message:
             `${assignment.volunteerName} accepted "${assignment.title}".`,
@@ -281,9 +392,12 @@ exports.acceptAssignment = async (req, res) => {
     });
 };
 
+
 exports.declineAssignment = async (req, res) => {
     const assignmentId = String(req.params.id || "").trim();
-    const volunteerId = req.user?.id;
+    const volunteerId = req.user?.id || req.user?._id;
+    const volunteer = await User.findById(volunteerId).select("name username");
+    const volunteerName = volunteer?.name || volunteer?.username || "The assigned volunteer";
 
     if (!mongoose.isValidObjectId(assignmentId)) {
         const e = new Error("Invalid rescue assignment ID.");
@@ -291,57 +405,159 @@ exports.declineAssignment = async (req, res) => {
         throw e;
     }
 
-    if (!volunteerId) {
-        const e = new Error("Auth volunteer is missing.")
-        e.statusCode = 401;
-        throw e;
-    }
-
-    const assignment = await RescueAssignment.findOne({
-        _id: assignmentId,
-        volunteerId,
-    });
-
-    if (!assignment) {
-        const e = new Error("Rescue assignment not found.");
-        e.statusCode = 404;
-        throw e;
-    }
-
-    if (assignment.status !== "pending") {
-        const e = new Error("Only pending can be declined.");
-        e.statusCode = 400;
-        throw e;
-    }
-
     const reason = String(req.body.reason || "").trim();
 
-    assignment.status = "declined";
-    assignment.declinedAt = new Date();
-    assignment.volunteerNotes = reason;
+    const assignment = await RescueAssignment.findOneAndUpdate(
+        {
+            _id: assignmentId,
+            volunteerId,
+            status: "pending",
+        },
+        {
+            $set: {
+                status: "open",
+                volunteerId: null,
+                volunteerName: "",
+                volunteerEmail: "",
+                declinedAt: new Date(),
+                volunteerNotes: reason,
+                acceptedAt: null,
+            },
+        },
+        {
+            new: true,
+            runValidators: true,
+        }
+    );
 
-    await assignment.save();
+    if (!assignment) {
+        const existing = await RescueAssignment.findById(assignmentId);
+
+        if (!existing) {
+            const e = new Error("Rescue assignment not found.");
+            e.statusCode = 404;
+            throw e;
+        }
+
+        const e = new Error(
+            "Only your pending assignments can be declined."
+        );
+        e.statusCode = 409;
+        throw e;
+    }
+
+    const message = `${volunteerName} declined "${assignment.title}".`;
 
     await createNotification({
         userId: assignment.adminId,
         title: "Rescue Assignment Declined",
-        message:
-            `${assignment.volunteerName} declined "${assignment.title}".`,
+        message,
         type: "rescue_update",
     });
 
-    await sendRescueAssignmentEmail(
-        assignment.adminEmail,
-        "Rescue Assignment Declined",
-        `${assignment.volunteerName} declined "${assignment.title}".`
-    );
+    if (assignment.adminEmail) {
+        await sendRescueAssignmentEmail(
+            assignment.adminEmail,
+            "Rescue Assignment Declined",
+            message
+        );
+    }
 
     return res.status(200).json({
         success: true,
-        message: "Rescue assignment declined.",
+        message: "Assignment declined and returned to the Open rescue queue.",
         assignment,
     });
 };
+
+
+exports.dropAssignment = async (req, res) => {
+    const assignmentId = String(req.params.id || "").trim();
+    const volunteerId = req.user?.id || req.user?._id;
+
+    if (!mongoose.isValidObjectId(assignmentId)) {
+        const e = new Error("Invalid rescue assignment ID.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const volunteer = await User.findById(volunteerId)
+        .select("name username");
+
+    if (!volunteer) {
+        const e = new Error("Volunteer account was not found.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    const volunteerName =
+        volunteer.name || volunteer.username || "Volunteer";
+
+    const assignment = await RescueAssignment.findOneAndUpdate(
+        {
+            _id: assignmentId,
+            volunteerId,
+            status: "accepted",
+        },
+        {
+            $set: {
+                status: "open",
+                volunteerId: null,
+                volunteerName: "",
+                volunteerEmail: "",
+                acceptedAt: null,
+                startedAt: null,
+                declinedAt: null,
+                volunteerNotes: String(req.body.reason || "").trim(),
+            },
+        },
+        {
+            new: true,
+            runValidators: true,
+        }
+    );
+
+    if (!assignment) {
+        const existing = await RescueAssignment.findById(assignmentId);
+
+        if (!existing) {
+            const e = new Error("Rescue assignment not found.");
+            e.statusCode = 404;
+            throw e;
+        }
+
+        const e = new Error(
+            "Only your accepted rescue assignments can be dropped."
+        );
+        e.statusCode = 409;
+        throw e;
+    }
+
+    const message =
+        `${volunteerName} released "${assignment.title}" back to the Open rescue queue.`;
+
+    await createNotification({
+        userId: assignment.adminId,
+        title: "Rescue Assignment Released",
+        message: `${volunteerName} released "${assignment.title}" back to the Open rescue list.`,
+        type: "rescue_update",
+    });
+
+    if (assignment.adminEmail) {
+        await sendRescueAssignmentEmail(
+            assignment.adminEmail,
+            "Rescue Assignment Released",
+            message
+        );
+    }
+
+    return res.status(200).json({
+        success: true,
+        message: "Rescue assignment released successfully.",
+        assignment,
+    });
+};
+
 
 exports.startAssignment = async (req, res) => {
     const assignmentId = String(req.params.id || "").trim();
