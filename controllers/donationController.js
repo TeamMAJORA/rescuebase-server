@@ -94,9 +94,10 @@ exports.createDonation = async (req, res) => {
         req.body.amount || 0
     );
 
-    const quantity = Number(
-        req.body.quantity || 1
-    );
+    // Money is counted by amount, not quantity
+    const quantity = donationType === "Money"
+        ? 1
+        : Number(req.body.quantity || 1);
 
     if (Number.isNaN(amount) || amount < 0 || amount > MAX_DONATION_AMOUNT) {
         const error = new Error(
