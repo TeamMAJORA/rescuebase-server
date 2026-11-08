@@ -74,6 +74,10 @@ exports.createDonation = async (req, res) => {
         req.body.paymentMethod || ""
     ).trim();
 
+    const itemPhotoUrl = donationType === "Money"
+        ? ""
+        : String(req.body.itemPhotoUrl || "").trim();
+
     if (!donorName) {
         const error = new Error(
             "Donor name is required."
@@ -189,6 +193,13 @@ exports.createDonation = async (req, res) => {
         "User"
     ).trim();
 
+    // Donors show what they're bringing; staff logging walk-ins don't need a photo
+    if (donationType !== "Money" && !isShelterStaff && !itemPhotoUrl) {
+        const error = new Error("Please upload a photo of the items you're donating.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     const donation = await Donation.create({
         donorName,
         donorEmail,
@@ -207,6 +218,7 @@ exports.createDonation = async (req, res) => {
             : "not_required",
         paymentReference,
         proofOfPayment,
+        itemPhotoUrl,
         status: "pending",
         createdByName: creatorName,
         createdByEmail: creatorEmail,
@@ -277,21 +289,8 @@ exports.updateDonation = async (req, res) => {
         throw error;
     }
 
-    const allowedFields = [
-        "donorName",
-        "donorEmail",
-        "donationType",
-        "amount",
-        "itemName",
-        "quantity",
-        "notes",
-        "status",
-        "neededSupplyId",
-        "paymentMethod",
-        "paymentStatus",
-        "paymentReference",
-        "proofOfPayment",
-    ];
+    // Staff only change the status (mark received / cancel); the donor's details stay as sent
+    const allowedFields = ["status"];
 
     const allowedUpdates = {};
 
@@ -312,38 +311,10 @@ exports.updateDonation = async (req, res) => {
         throw error;
     }
 
-    if (allowedUpdates.donorEmail !== undefined) {
-        allowedUpdates.donorEmail = String(
-            allowedUpdates.donorEmail
-        ).trim().toLowerCase();
-    }
-
-    if (allowedUpdates.amount !== undefined) {
-        const amount = Number(allowedUpdates.amount);
-
-        if (Number.isNaN(amount) || amount < 0 || amount > MAX_DONATION_AMOUNT) {
-            const error = new Error(
-                `Donation amount must be between 0 and ${MAX_DONATION_AMOUNT.toLocaleString()}.`
-            );
-            error.statusCode = 400;
-            throw error;
-        }
-
-        allowedUpdates.amount = amount;
-    }
-
-    if (allowedUpdates.quantity !== undefined) {
-        const quantity = Number(allowedUpdates.quantity);
-
-        if (Number.isNaN(quantity) || quantity < 1 || quantity > MAX_DONATION_QUANTITY) {
-            const error = new Error(
-                `Donation quantity must be between 1 and ${MAX_DONATION_QUANTITY.toLocaleString()}.`
-            );
-            error.statusCode = 400;
-            throw error;
-        }
-
-        allowedUpdates.quantity = quantity;
+    if (allowedUpdates.status === undefined) {
+        const error = new Error("Only the donation status can be changed.");
+        error.statusCode = 400;
+        throw error;
     }
 
     if (allowedUpdates.status !== undefined) {
