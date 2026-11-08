@@ -25,6 +25,12 @@ const vaccinationRecordSchema =
                 default: null,
             },
 
+            // Due date we last sent a reminder for (prevents repeats)
+            reminder_sent_for: {
+                type: Date,
+                default: null,
+            },
+
             veterinarian: {
                 type: String,
                 trim: true,

@@ -259,6 +259,12 @@ const fosterAssignmentSchema = new mongoose.Schema(
 
         endDate: Date,
 
+        // Last time the foster was asked for a weekly update (by staff or the reminder job)
+        lastUpdateRequestedAt: {
+            type: Date,
+            default: null,
+        },
+
         behaviorEvaluation: {
             type: fosterBehaviorEvaluationSchema,
             default: () => ({}),

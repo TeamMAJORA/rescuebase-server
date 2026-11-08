@@ -287,6 +287,27 @@ async function sendLostFoundReunitedEmail(email, petName) {
     });
 }
 
+async function sendLostFoundStaffAlertEmail(email, title, message) {
+    await transporter.sendMail({
+        from: `RescueBase <${UserEmail}>`,
+        to: email,
+        subject: `RescueBase Lost & Found: ${title}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+                <h2>${escapeHtml(title)}</h2>
+
+                <p>${escapeHtml(message)}</p>
+
+                <p>
+                    Please log in to RescueBase and open Lost &amp; Found to review it.
+                </p>
+
+                <p>— RescueBase</p>
+            </div>
+        `,
+    });
+}
+
 async function sendRescueAssignmentEmail(email, title, message) {
     await transporter.sendMail({
         from: `RescueBase <${UserEmail}>`,
@@ -508,15 +529,14 @@ async function sendLostFoundMatchEmail(
     await transporter.sendMail({
         from: `RescueBase <${UserEmail}>`,
         to: email,
-        subject: "RescueBase Lost & Found - Possible Pet Match Confirmed",
+        subject: "RescueBase Lost & Found - Possible Pet Match Found",
         html: `
             <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-                <h2>Lost & Found Match Confirmed</h2>
+                <h2>Possible Lost & Found Match</h2>
 
                 <p>
-                    Good news! A possible match for
+                    Good news! RescueBase found a possible match for 
                     <strong>${petName || "your reported pet"}</strong>
-                    has been confirmed by RescueBase staff.
                 </p>
 
                 <p>
@@ -558,6 +578,7 @@ module.exports = {
     sendRescueAssignmentEmail: gated(sendRescueAssignmentEmail, "rescue"),
     sendFeedbackReplyEmail: gated(sendFeedbackReplyEmail, "feedback"),
     sendLostFoundMatchEmail: gated(sendLostFoundMatchEmail, "lostFound"),
+    sendLostFoundStaffAlertEmail: gated(sendLostFoundStaffAlertEmail, "lostFound"),
     sendDonationConfirmationEmail: gated(
         sendDonationConfirmationEmail,
         "donation",

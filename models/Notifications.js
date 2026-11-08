@@ -26,6 +26,7 @@ const notificationSchema = new mongoose.Schema(
             enum: [
                 "general",
                 "application_update",
+                "role_application",
                 "adoption_update",
                 "vaccination",
                 "donation",

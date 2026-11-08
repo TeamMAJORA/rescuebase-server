@@ -17,6 +17,12 @@ const globalSettingsSchema = new mongoose.Schema(
                 trim: true,
                 maxlength: 100,
             },
+            shelterName: {
+                type: String,
+                default: "RescueBase Shelter",
+                trim: true,
+                maxlength: 100,
+            },
             contactEmail: {
                 type: String,
                 default: "",
@@ -28,6 +34,12 @@ const globalSettingsSchema = new mongoose.Schema(
                 default: "",
                 trim: true,
                 maxlength: 30,
+            },
+            facebookUrl: {
+                type: String,
+                default: "",
+                trim: true,
+                maxlength: 300,
             },
             timezone: {
                 type: String,
@@ -153,6 +165,19 @@ const globalSettingsSchema = new mongoose.Schema(
                 default: "",
                 trim: true,
                 maxlength: 1000,
+            },
+            // Map pin for the drop-off point (both set, or both null)
+            latitude: {
+                type: Number,
+                default: null,
+                min: -90,
+                max: 90,
+            },
+            longitude: {
+                type: Number,
+                default: null,
+                min: -180,
+                max: 180,
             },
         },
 

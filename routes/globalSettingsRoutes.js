@@ -35,10 +35,22 @@ router.get("/contact", verifyToken, asyncHandler(async (req, res) => {
     return res.status(200).json({
         success: true,
         contact: {
-            name: general.appName || "RescueBase",
+            name: general.shelterName || "RescueBase Shelter",
             email: general.contactEmail || "",
             phone: general.contactPhone || "",
+            facebook: general.facebookUrl || "",
         },
+    });
+}));
+
+// Public (landing page footer): the shelter's Facebook page
+router.get("/social", asyncHandler(async (req, res) => {
+    const settings = await getSettingsDocument();
+
+    res.set("Cache-Control", "no-store");
+    return res.status(200).json({
+        success: true,
+        facebook: settings?.general?.facebookUrl || "",
     });
 }));
 
@@ -59,6 +71,8 @@ router.get("/drop-off", asyncHandler(async (req, res) => {
             contactNumber: dropOff.enabled ? String(dropOff.contactNumber || "") : "",
             operatingHours: dropOff.enabled ? String(dropOff.operatingHours || "") : "",
             instructions: dropOff.enabled ? String(dropOff.instructions || "") : "",
+            latitude: dropOff.enabled ? dropOff.latitude ?? null : null,
+            longitude: dropOff.enabled ? dropOff.longitude ?? null : null,
         },
     });
 }));
@@ -82,7 +96,28 @@ function dropOffOf(settings) {
         contactNumber: String(dropOff.contactNumber || ""),
         operatingHours: String(dropOff.operatingHours || ""),
         instructions: String(dropOff.instructions || ""),
+        latitude: dropOff.latitude ?? null,
+        longitude: dropOff.longitude ?? null,
     };
+}
+
+// The pin must be inside the Philippines; empty clears it
+const PHILIPPINES_BOUNDS = { minLatitude: 4, maxLatitude: 22, minLongitude: 116, maxLongitude: 127 };
+
+function readDropOffPin(body) {
+    const hasLatitude = body.latitude !== undefined && body.latitude !== null && body.latitude !== "";
+    const hasLongitude = body.longitude !== undefined && body.longitude !== null && body.longitude !== "";
+
+    if (!hasLatitude && !hasLongitude) return { latitude: null, longitude: null };
+
+    const latitude = Number(body.latitude);
+    const longitude = Number(body.longitude);
+    const insidePhilippines =
+        hasLatitude && hasLongitude &&
+        latitude >= PHILIPPINES_BOUNDS.minLatitude && latitude <= PHILIPPINES_BOUNDS.maxLatitude &&
+        longitude >= PHILIPPINES_BOUNDS.minLongitude && longitude <= PHILIPPINES_BOUNDS.maxLongitude;
+
+    return insidePhilippines ? { latitude, longitude } : null;
 }
 
 router.get("/drop-off/manage", verifyToken, authorizeRoles("admin", "staff"), asyncHandler(async (req, res) => {
@@ -113,6 +148,15 @@ router.patch("/drop-off", verifyToken, authorizeRoles("admin", "staff"), asyncHa
         });
     }
 
+    const pin = readDropOffPin(body);
+
+    if (!pin) {
+        return res.status(400).json({ success: false, message: "The map pin must be a spot in the Philippines." });
+    }
+
+    update["donationDropOff.latitude"] = pin.latitude;
+    update["donationDropOff.longitude"] = pin.longitude;
+
     if (update["donationDropOff.enabled"] && !update["donationDropOff.address"]) {
         return res.status(400).json({ success: false, message: "Add an address before showing the drop-off details." });
     }
@@ -131,7 +175,11 @@ router.get("/capacity", verifyToken, asyncHandler(async (req, res) => {
     const settings = await getSettingsDocument();
     const capacity = Number(settings?.general?.shelterCapacity) || 30;
 
-    return res.status(200).json({ success: true, shelterCapacity: capacity });
+    return res.status(200).json({
+        success: true,
+        shelterCapacity: capacity,
+        shelterName: settings?.general?.shelterName || "RescueBase Shelter",
+    });
 }));
 
 router.use(verifyToken);

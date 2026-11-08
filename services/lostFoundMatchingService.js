@@ -13,9 +13,17 @@ const MATCH_WEIGHTS = {
 };
 
 const MINIMUM_MATCH_SCORE = 45;
+// Breed / colour / size / sex known on BOTH reports before a match is suggested
+const MINIMUM_SHARED_PHYSICAL_DETAILS = 2;
+// Two details that clearly disagree (e.g. wrong colour AND wrong sex) mean a different pet
+const MAXIMUM_CONFLICTING_PHYSICAL_DETAILS = 1;
+// These colours can contain any other colour, so they never conflict
+const COLOURS_THAT_NEVER_CONFLICT = ["mixed", "other"];
 const MAX_MATCHES_PER_REPORT = 10;
 const MAX_SEARCH_DISTANCE_KM = 50;
 const MAX_DATE_DIFFERENCE_DAYS = 90;
+// A found pet with pending claims can still be claimed by its real owner
+const STATUSES_OPEN_FOR_MATCHING = ["open", "claimed"];
 
 function normalize(value) {
     return String(value || "")
@@ -57,6 +65,28 @@ function textSimilarity(first, second) {
     ]).size;
 
     return intersection / union;
+}
+
+// Empty and "Unknown" both mean the detail was not given
+function isKnownDetail(value) {
+    const normalizedValue = normalize(value);
+    return Boolean(normalizedValue) && normalizedValue !== "unknown";
+}
+
+// Known on both reports and with nothing in common
+function isConflictingDetail(detail, first, second) {
+    if (!isKnownDetail(first[detail]) || !isKnownDetail(second[detail])) return false;
+
+    if (
+        detail === "colour" &&
+        [first.colour, second.colour].some((colour) =>
+            COLOURS_THAT_NEVER_CONFLICT.includes(normalize(colour))
+        )
+    ) {
+        return false;
+    }
+
+    return textSimilarity(first[detail], second[detail]) === 0;
 }
 
 function exactSimilarity(first, second) {
@@ -161,6 +191,23 @@ function calculateMatchScore(first, second) {
         return null;
     }
 
+    // Species, place and date alone are a guess, not a match
+    const sharedPhysicalDetails = ["breed", "colour", "size", "sex"].filter(
+        (detail) => isKnownDetail(first[detail]) && isKnownDetail(second[detail])
+    ).length;
+
+    if (sharedPhysicalDetails < MINIMUM_SHARED_PHYSICAL_DETAILS) {
+        return null;
+    }
+
+    const conflictingPhysicalDetails = ["breed", "colour", "size", "sex"].filter(
+        (detail) => isConflictingDetail(detail, first, second)
+    ).length;
+
+    if (conflictingPhysicalDetails > MAXIMUM_CONFLICTING_PHYSICAL_DETAILS) {
+        return null;
+    }
+
     const distance = calculateDistanceKm(first, second);
 
     const factors = {
@@ -168,7 +215,9 @@ function calculateMatchScore(first, second) {
         breed: textSimilarity(first.breed, second.breed),
         colour: textSimilarity(first.colour, second.colour),
         size: exactSimilarity(first.size, second.size),
-        sex: exactSimilarity(first.sex, second.sex),
+        sex: isKnownDetail(first.sex) && isKnownDetail(second.sex)
+            ? exactSimilarity(first.sex, second.sex)
+            : null,
         distance: calculateDistanceSimilarity(distance),
         date: calculateDateSimilarity(first, second),
         description: textSimilarity(
@@ -222,7 +271,7 @@ async function generateMatches(reportId) {
         throw new Error("Lost and Found report not found.");
     }
 
-    if (report.status !== "open") {
+    if (!STATUSES_OPEN_FOR_MATCHING.includes(report.status)) {
         return {
             success: true,
             matchesCreated: 0,
@@ -235,7 +284,7 @@ async function generateMatches(reportId) {
 
     const possibleReports = await LostFoundReport.find({
         reportType: oppositeType,
-        status: "open",
+        status: { $in: STATUSES_OPEN_FOR_MATCHING },
         _id: { $ne: report._id },
     })
         .sort({ createdAt: -1 })
@@ -277,6 +326,8 @@ async function generateMatches(reportId) {
     );
 
     let matchesCreated = 0;
+    
+    const newlyMatchedReports = [];
 
     for (const candidate of selectedCandidates) {
         const pairKey = createPairKey(
@@ -315,6 +366,7 @@ async function generateMatches(reportId) {
                     status: "suggested",
                     suggestedBy: "system",
                 });
+                    newlyMatchedReports.push(candidate.candidate);
             } catch (error) {
                 if (error.code === 11000) {
                     continue;
@@ -348,6 +400,7 @@ async function generateMatches(reportId) {
         success: true,
         matchesCreated,
         candidatesFound: candidates.length,
+        newlyMatchedReports,
     };
 }
 

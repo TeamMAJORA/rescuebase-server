@@ -3,8 +3,10 @@ const GlobalSettings = require("../models/GlobalSettings");
 const DEFAULT_SETTINGS = {
     general: {
         appName: "RESCUEBASE",
+        shelterName: "RescueBase Shelter",
         contactEmail: "",
         contactPhone: "",
+        facebookUrl: "",
         timezone: "Asia/Manila",
         shelterCapacity: 30,
     },
@@ -91,6 +93,12 @@ async function getGlobalSettings() {
     };
 }
 
+// The shelter's display name (System settings > General)
+async function getShelterName() {
+    const settings = await getGlobalSettings();
+    return String(settings?.general?.shelterName || "").trim() || "RescueBase Shelter";
+}
+
 async function isNotificationEnabled(category) {
     const settings = await getGlobalSettings();
 
@@ -113,5 +121,6 @@ async function isNotificationEnabled(category) {
 module.exports = {
     getGlobalSettings,
     isNotificationEnabled,
+    getShelterName,
     DEFAULT_SETTINGS,
 };

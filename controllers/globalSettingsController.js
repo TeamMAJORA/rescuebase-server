@@ -5,8 +5,10 @@ const GlobalSettings = require("../models/GlobalSettings");
 const DEFAULT_SETTINGS = {
     general: {
         appName: "RESCUEBASE",
+        shelterName: "RescueBase Shelter",
         contactEmail: "",
         contactPhone: "",
+        facebookUrl: "",
         timezone: "Asia/Manila",
         shelterCapacity: 30,
     },
@@ -45,8 +47,10 @@ const DEFAULT_SETTINGS = {
 const ALLOWED_FIELDS = {
     general: [
         "appName",
+        "shelterName",
         "contactEmail",
         "contactPhone",
+        "facebookUrl",
         "timezone",
         "shelterCapacity",
     ],
@@ -141,8 +145,10 @@ function validateAndNormalize(body) {
 
     const stringFields = {
         "general.appName": { max: 100 },
+        "general.shelterName": { max: 100 },
         "general.contactEmail": { max: 254 },
         "general.contactPhone": { max: 30 },
+        "general.facebookUrl": { max: 300 },
         "general.timezone": { max: 100 },
         "maintenance.message": { max: 500 },
         "donationDropOff.city": { max: 100 },
@@ -186,11 +192,16 @@ function validateAndNormalize(body) {
                     );
                 }
 
-                if (path === "general.appName" && !trimmed) {
+                if (path === "general.shelterName" && !trimmed) {
                     throw Object.assign(
-                        new Error("Application name is required."),
+                        new Error("Shelter name is required."),
                         { statusCode: 400 }
                     );
+                }
+
+                // The application name is fixed; ignore any change to it
+                if (path === "general.appName") {
+                    continue;
                 }
 
                 if (
@@ -200,6 +211,17 @@ function validateAndNormalize(body) {
                 ) {
                     throw Object.assign(
                         new Error("Enter a valid contact email."),
+                        { statusCode: 400 }
+                    );
+                }
+
+                if (
+                    path === "general.facebookUrl" &&
+                    trimmed &&
+                    !/^https:\/\/(www\.|m\.|web\.)?(facebook|fb)\.com\/\S+$/i.test(trimmed)
+                ) {
+                    throw Object.assign(
+                        new Error("Enter a Facebook page link, e.g. https://www.facebook.com/yourshelter"),
                         { statusCode: 400 }
                     );
                 }

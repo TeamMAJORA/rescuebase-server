@@ -26,7 +26,7 @@ router.get(
 router.get(
     "/",
     verifyToken,
-    authoriseRoles("admin", "staff", "adopter", "foster"),
+    authoriseRoles("admin", "staff", "adopter", "foster", "volunteer"),
     asyncHandler(
         paymentMethodController.getPaymentMethods
     )
