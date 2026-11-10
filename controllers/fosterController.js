@@ -836,6 +836,46 @@ exports.getAllAssignments = async (req, res) => {
     });
 };
 
+// Staff/admin: who is fostering this animal right now, with contacts from their foster application
+exports.getCurrentFosterForAnimal = async (req, res) => {
+    const animalId = String(req.params.animalId || "").trim();
+
+    if (!mongoose.isValidObjectId(animalId)) {
+        const error = new Error("Invalid animal ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const assignment = await FosterAssignment.findOne({ animalId, status: "active" })
+        .sort({ startDate: -1 })
+        .select("fosterName fosterEmail fosterApplicationId startDate")
+        .lean();
+
+    if (!assignment) {
+        return res.status(200).json({ success: true, foster: null });
+    }
+
+    // Phone and address live on the foster application
+    const application = assignment.fosterApplicationId
+        ? await FosterApplication.findById(assignment.fosterApplicationId).select("phoneNumber address").lean()
+        : await FosterApplication.findOne({ applicantEmail: String(assignment.fosterEmail).toLowerCase(), status: "approved" })
+            .sort({ reviewedAt: -1 })
+            .select("phoneNumber address")
+            .lean();
+
+    return res.status(200).json({
+        success: true,
+        foster: {
+            assignmentId: assignment._id,
+            fullName: assignment.fosterName,
+            email: assignment.fosterEmail,
+            phone: application?.phoneNumber || "",
+            address: application?.address || "",
+            fosteringSince: assignment.startDate,
+        },
+    });
+};
+
 exports.getMyActiveAssignment = async (req, res) => {
     const email = String(
         req.user?.email || ""

@@ -45,6 +45,16 @@ router.get(
     )
 );
 
+// Must come before "/:id", or "open" is read as an assignment id
+router.get(
+    "/open",
+    verifyToken,
+    authorizeRoles("volunteer"),
+    asyncHandler(
+        rescueAssignmentController.getOpenAssignments
+    )
+);
+
 router.get(
     "/:id",
     verifyToken,
@@ -139,15 +149,6 @@ router.delete(
     ),
     asyncHandler(
         rescueAssignmentController.deleteAssignment
-    )
-);
-
-router.get(
-    "/open",
-    verifyToken,
-    authorizeRoles("volunteer"),
-    asyncHandler(
-        rescueAssignmentController.getOpenAssignments
     )
 );
 

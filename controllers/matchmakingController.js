@@ -3,6 +3,14 @@ const Animal = require("../models/Animal");
 const AdoptionApplication = require("../models/AdoptionApplication");
 const { generateMatches, calculateAnimalMatch } = require("../services/matchmakingService");
 
+// The same animals adopters see in Browse Pets: available, with an approved intake
+// (older records have no intakeStatus). Keeps the adopter's and staff's match lists identical.
+const ADOPTABLE_ANIMALS = {
+    availabilityStatus: "available",
+    adoptionStatus: "available",
+    $or: [{ intakeStatus: "approved" }, { intakeStatus: { $exists: false } }],
+};
+
 exports.submitMatchmakingQuiz = async (req, res) => {
     try {
         const quizData = req.body;
@@ -49,10 +57,7 @@ exports.submitMatchmakingQuiz = async (req, res) => {
             completedAt: quizData.completedAt || new Date(),
         });
 
-        const animals = await Animal.find({
-            availabilityStatus: "available",
-            adoptionStatus: "available",
-        }).lean();
+        const animals = await Animal.find(ADOPTABLE_ANIMALS).lean();
 
         const matches = await generateMatches(animals, quizResponse)
 
@@ -102,10 +107,7 @@ exports.getMyLatestQuizResponse = async (req, res) => {
             return res.status(200).json({ success: true, quizResponse: null, matches: [] });
         }
 
-        const animals = await Animal.find({
-            availabilityStatus: "available",
-            adoptionStatus: "available",
-        }).lean();
+        const animals = await Animal.find(ADOPTABLE_ANIMALS).lean();
 
         const matches = await generateMatches(animals, quizResponse);
 
@@ -166,10 +168,7 @@ exports.getAllQuizResponses = async (req, res) => {
             }
         }
 
-        const animals = await Animal.find({
-            availabilityStatus: "available",
-            adoptionStatus: "available",
-        }).lean();
+        const animals = await Animal.find(ADOPTABLE_ANIMALS).lean();
 
         // Score the exact pet each adopter applied for, even if it's no longer "available"
         const appliedIds = Object.values(latestApplication)

@@ -88,6 +88,16 @@ router.get(
 
 
 router.get(
+    "/assignments/animal/:animalId/current",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.getCurrentFosterForAnimal
+    )
+);
+
+
+router.get(
     "/assignments/me/active",
     verifyToken,
     authoriseRoles("foster"),

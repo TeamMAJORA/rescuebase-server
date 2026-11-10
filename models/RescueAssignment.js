@@ -129,6 +129,12 @@ const rescueAssignmentSchema = new mongoose.Schema(
             default: "",
         },
 
+        // Photos the volunteer uploads when completing the job (shown to staff)
+        completionPhotos: {
+            type: [String],
+            default: [],
+        },
+
         adminId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
@@ -171,24 +177,6 @@ const rescueAssignmentSchema = new mongoose.Schema(
         declinedAt: {
             type: Date,
             default: null,
-        },
-        volunteerId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            default: null,
-        },
-
-        volunteerName: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        volunteerEmail: {
-            type: String,
-            trim: true,
-            lowercase: true,
-            default: "",
         },
     },
     {
