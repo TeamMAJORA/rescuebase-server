@@ -194,6 +194,39 @@ exports.getAllApplications = async (req, res) => {
     });
 };
 
+// Staff/admin: who adopted this animal (the approved application), so the shelter can follow up
+exports.getAnimalAdopter = async (req, res) => {
+    const animalId = String(req.params.animalId || "").trim();
+
+    if (!mongoose.isValidObjectId(animalId)) {
+        const error = new Error("Invalid animal ID.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const application = await AdoptionApplication.findOne({ animalId, status: "approved" })
+        .sort({ reviewedAt: -1, updatedAt: -1 })
+        .select("fullName email phone address reviewedAt reviewedByName isFosterAdoption")
+        .lean();
+
+    return res.status(200).json({
+        success: true,
+        // null: marked adopted without an approved application in RescueBase
+        adopter: application
+            ? {
+                applicationId: application._id,
+                fullName: application.fullName,
+                email: application.email,
+                phone: application.phone,
+                address: application.address,
+                adoptedAt: application.reviewedAt,
+                approvedByName: application.reviewedByName,
+                isFosterAdoption: Boolean(application.isFosterAdoption),
+            }
+            : null,
+    });
+};
+
 exports.getLatestUserApplication = async (req, res) => {
     const email = String(req.user?.email || "").trim().toLowerCase();
 

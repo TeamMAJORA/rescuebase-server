@@ -34,6 +34,12 @@ router.get("/",
     asyncHandler(adoptionController.getAllApplications)
 );
 
+router.get("/animal/:animalId/adopter",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(adoptionController.getAnimalAdopter)
+);
+
 router.get("/user/latest",
     verifyToken,
     authoriseRoles("adopter", "foster", "volunteer"),
