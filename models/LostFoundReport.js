@@ -1,8 +1,16 @@
 const mongoose = require("mongoose");
 
-// One ownership claim. A found report can have several pending at once;
-// staff approve one and the rest are rejected.
+// One claim on a report:
+// - "ownership": "this is my pet", on a found report
+// - "found": "I found your pet", on a lost report (only the lost pet's owner sees it)
+// A report can have several pending at once; whoever decides approves one and the rest are rejected.
 const claimSchema = new mongoose.Schema({
+    claimType: {
+        type: String,
+        enum: ["ownership", "found"],
+        default: "ownership",
+    },
+
     claimantName: {
         type: String,
         required: true,
@@ -32,6 +40,24 @@ const claimSchema = new mongoose.Schema({
         type: String,
         default: "",
         trim: true,
+    },
+
+    // Found claims: where and when the claimant found the pet
+    foundLocation: {
+        type: String,
+        default: "",
+        trim: true,
+    },
+
+    foundDate: {
+        type: Date,
+        default: null,
+    },
+
+    // When the person who decides first opened it; unseen pending claims show as "New"
+    seenByReviewerAt: {
+        type: Date,
+        default: null,
     },
 
     status: {

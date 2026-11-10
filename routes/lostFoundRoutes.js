@@ -79,15 +79,34 @@ router.post(
     )
 );
 
+// The report's owner decides; staff/admin only for shelter intake listings (checked in the controller)
 router.patch(
     "/reports/:id/claim",
     verifyToken,
     authorizeRoles(
         "admin",
-        "staff"
+        "staff",
+        "adopter",
+        "volunteer",
+        "foster"
     ),
     asyncHandler(
         lostFoundController.reviewClaim
+    )
+);
+
+router.patch(
+    "/reports/:id/claims/seen",
+    verifyToken,
+    authorizeRoles(
+        "admin",
+        "staff",
+        "adopter",
+        "volunteer",
+        "foster"
+    ),
+    asyncHandler(
+        lostFoundController.markClaimsSeen
     )
 );
 
