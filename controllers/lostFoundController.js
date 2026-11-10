@@ -46,6 +46,35 @@ async function notifyShelterStaff(title, message) {
     }
 }
 
+// The shelter is in Cebu: "today" is the calendar day there, whatever the server's time zone
+const SHELTER_TIME_ZONE = "Asia/Manila";
+
+function shelterDay(date) {
+    return date.toLocaleDateString("en-CA", { timeZone: SHELTER_TIME_ZONE }); // "YYYY-MM-DD"
+}
+
+// Date lost/found: required, a real date, and not in the future
+function readPastDate(value, label) {
+    const date = new Date(value);
+
+    if (!value || Number.isNaN(date.getTime())) {
+        const e = new Error(`A valid ${label} is required.`);
+        e.statusCode = 400;
+        throw e;
+    }
+
+    // "YYYY-MM-DD" from the form is compared as a calendar day, not a UTC instant
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(String(value)) ? String(value) : shelterDay(date);
+
+    if (day > shelterDay(new Date())) {
+        const e = new Error(`The ${label} can't be in the future.`);
+        e.statusCode = 400;
+        throw e;
+    }
+
+    return date;
+}
+
 function getActorName(req) {
     return String(req.user?.name || req.user?.username || "User").trim();
 }
@@ -433,11 +462,11 @@ exports.createReport = async (req, res) => {
         ? { latitude, longitude }
         : { latitude: null, longitude: null };
 
-    const eventDateValue =
-        req.body.eventDate ||
-        req.body.dateLost ||
-        req.body.dateFound ||
-        null;
+    const dateLabel = reportType === "lost" ? "date lost" : "date found";
+    const dateReported = readPastDate(req.body.dateReported, dateLabel);
+
+    const eventDateInput = req.body.eventDate || req.body.dateLost || req.body.dateFound;
+    const eventDateValue = eventDateInput ? readPastDate(eventDateInput, dateLabel) : null;
 
     const report = await LostFoundReport.create({
         reporterName,
@@ -449,7 +478,7 @@ exports.createReport = async (req, res) => {
         breed: String(req.body.breed || "").trim(),
         description,
         location,
-        dateReported: req.body.dateReported || new Date(),
+        dateReported,
         photoUrl: String(req.body.photoUrl || "").trim(),
         colour,
         size,
