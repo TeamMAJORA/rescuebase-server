@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const GISLocation = require("../models/GISLocation");
 const LostFoundReport = require("../models/LostFoundReport");
 const LedgerEntry = require("../models/LedgerEntry");
@@ -589,6 +590,7 @@ function reportForViewer(report, req) {
 
     plain.isMine = Boolean(viewerEmail) && plain.reporterEmail === viewerEmail;
     plain.canReviewClaims = canReviewClaims(plain, req);
+    plain.canDelete = canDeleteReport(plain, req);
     plain.myClaimStatus = myLatestClaim ? myLatestClaim.status : null;
     plain.myClaimType = myLatestClaim ? myLatestClaim.claimType : null;
 
@@ -703,10 +705,19 @@ exports.getReportById = async (req, res) => {
     });
 };
 
+// Admin can delete any report; everyone else only their own. Shelter intake listings
+// are removed with their animal (removeShelterListing), not by hand.
+function canDeleteReport(report, req) {
+    if (req.user?.role === "admin") return true;
+
+    const isMine = Boolean(getActorEmail(req)) && report.reporterEmail === getActorEmail(req);
+    return isMine && !report.linkedAnimal;
+}
+
 exports.deleteReport = async (req, res) => {
     const { reportId } = req.params;
 
-    const report = await LostFoundReport.findById(reportId);
+    const report = mongoose.isValidObjectId(reportId) ? await LostFoundReport.findById(reportId) : null;
 
     if (!report) {
         const e = new Error("Lost and found report not found.");
@@ -714,7 +725,24 @@ exports.deleteReport = async (req, res) => {
         throw e;
     }
 
+    if (!canDeleteReport(report, req)) {
+        const e = new Error("You can only delete your own Lost & Found reports.");
+        e.statusCode = 403;
+        throw e;
+    }
+
+    await LostFoundMatch.deleteMany({ $or: [{ reportA: report._id }, { reportB: report._id }] });
     await LostFoundReport.findByIdAndDelete(reportId);
+
+    // People still waiting on a claim shouldn't be left hanging
+    const petLabel = report.petName || `the ${String(report.species).toLowerCase()}`;
+    for (const claim of report.claims.filter((each) => each.status === "pending")) {
+        await notifyUserInApp(
+            claim.claimantEmail,
+            "Lost & Found Report Removed",
+            `The report for ${petLabel} was deleted, so your claim on it was closed.`
+        );
+    }
 
     return res.status(200).json({
         success: true,

@@ -110,10 +110,11 @@ router.patch(
     )
 );
 
+// Admin: any report. Everyone else: their own (checked in the controller)
 router.delete(
     "/reports/:reportId",
     verifyToken,
-    authorizeRoles("admin"),
+    authorizeRoles("admin", "staff", "adopter", "volunteer", "foster"),
     asyncHandler(
         lostFoundController.deleteReport
     )
