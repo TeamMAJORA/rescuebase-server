@@ -7,6 +7,29 @@ const Notification = require("../models/Notifications");
 const { sendRescueAssignmentEmail } = require("../services/emailService");
 
 const PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
+const MAX_COMPLETION_PHOTOS = 5;
+// Proof photos must come from our own image upload (/api/uploads/image)
+const UPLOADED_PHOTO_URL = /^https:\/\/res\.cloudinary\.com\//;
+
+function readCompletionProof(body) {
+    const completionNotes = String(body.completionNotes || "").trim();
+    const completionPhotos = Array.isArray(body.completionPhotos)
+        ? body.completionPhotos.map((url) => String(url || "").trim()).filter(Boolean)
+        : [];
+
+    const fail = (message) => {
+        const e = new Error(message);
+        e.statusCode = 400;
+        throw e;
+    };
+
+    if (!completionNotes) fail("Describe what was done before completing.");
+    if (completionPhotos.length === 0) fail("Add at least one photo as proof.");
+    if (completionPhotos.length > MAX_COMPLETION_PHOTOS) fail(`Add up to ${MAX_COMPLETION_PHOTOS} photos only.`);
+    if (!completionPhotos.every((url) => UPLOADED_PHOTO_URL.test(url))) fail("Proof photos must be uploaded through RescueBase.");
+
+    return { completionNotes, completionPhotos };
+}
 
 // Volunteers and staff can both be given a rescue
 async function findAssignablePerson(personId) {
@@ -664,26 +687,31 @@ exports.completeAssignment = async (req, res) => {
         throw e;
     }
 
-    const completionNotes = String(req.body.completionNotes || "").trim();
+    const { completionNotes, completionPhotos } = readCompletionProof(req.body);
 
     assignment.status = "completed";
     assignment.completedAt = new Date();
     assignment.completionNotes = completionNotes;
+    assignment.completionPhotos = completionPhotos;
 
     await assignment.save();
+
+    const photoCount = completionPhotos.length === 1 ? "1 photo" : `${completionPhotos.length} photos`;
+    const completedMessage =
+        `${assignment.volunteerName} completed "${assignment.title}" with ${photoCount} as proof. ` +
+        "Open Rescue Assignments to view it.";
 
     await createNotification({
         userId: assignment.adminId,
         title: "Rescue Assignment Completed",
-        message:
-            `${assignment.volunteerName} completed "${assignment.title}".`,
+        message: completedMessage,
         type: "rescue_update",
     });
 
     await emailSafely(
         assignment.adminEmail,
         "Rescue Assignment Completed",
-        `${assignment.volunteerName} completed "${assignment.title}".`
+        completedMessage
     );
 
     return res.status(200).json({
