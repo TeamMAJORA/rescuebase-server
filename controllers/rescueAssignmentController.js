@@ -6,6 +6,69 @@ const Animal = require("../models/Animal");
 const Notification = require("../models/Notifications");
 const { sendRescueAssignmentEmail } = require("../services/emailService");
 
+const PRIORITY_RANK = { urgent: 0, high: 1, normal: 2, low: 3 };
+
+// Volunteers and staff can both be given a rescue
+async function findAssignablePerson(personId) {
+    if (!mongoose.isValidObjectId(personId)) {
+        const e = new Error("Invalid volunteer ID.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const person = await User.findOne({
+        _id: personId,
+        role: { $in: ["volunteer", "staff"] },
+    }).select("_id name username email");
+
+    if (!person) {
+        const e = new Error("Volunteer or staff account was not found.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    return person;
+}
+
+async function emailSafely(email, title, message) {
+    if (!email) return;
+
+    try {
+        await sendRescueAssignmentEmail(email, title, message);
+    } catch (error) {
+        console.error("Rescue assignment email failed:", error.message);
+    }
+}
+
+// An open rescue is shown to every volunteer, so tell them all it's there
+async function announceOpenRescue(assignment) {
+    const volunteers = await User.find({ role: "volunteer" }).select("_id");
+
+    if (!volunteers.length) return;
+
+    await Notification.insertMany(
+        volunteers.map((volunteer) => ({
+            user: volunteer._id,
+            title: "Open Rescue Available",
+            message: `"${assignment.title}" at ${assignment.location} is open. The first volunteer to claim it takes it.`,
+            type: "rescue_update",
+        }))
+    );
+}
+
+async function notifyAssignedPerson(assignment) {
+    const message = `You have been assigned a new rescue task: ${assignment.title}.`;
+
+    await createNotification({
+        userId: assignment.volunteerId,
+        title: "New Rescue Assignment",
+        message,
+        type: "rescue_update",
+    });
+
+    await emailSafely(assignment.volunteerEmail, "New Rescue Assignment", message);
+}
+
 async function createNotification({
     userId,
     title,
@@ -56,27 +119,8 @@ exports.createAssignment = async (req, res) => {
         throw e;
     }
 
-    // A volunteer is optional.
-    let volunteer = null;
-
-    if (volunteerId) {
-        if (!mongoose.isValidObjectId(volunteerId)) {
-            const e = new Error("Invalid volunteer ID.");
-            e.statusCode = 400;
-            throw e;
-        }
-
-        volunteer = await User.findOne({
-            _id: volunteerId,
-            role: "volunteer",
-        }).select("_id name username email");
-
-        if (!volunteer) {
-            const e = new Error("Volunteer account was not found.");
-            e.statusCode = 404;
-            throw e;
-        }
-    }
+    // No one chosen = open for any volunteer to claim
+    const volunteer = volunteerId ? await findAssignablePerson(volunteerId) : null;
 
     // Validate optional animal.
     let animal = null;
@@ -145,22 +189,9 @@ exports.createAssignment = async (req, res) => {
     });
 
     if (volunteer) {
-        const message = `You have been assigned a new rescue task: ${assignment.title}.`;
-
-        await createNotification({
-            userId: volunteer._id,
-            title: "New Rescue Assignment",
-            message,
-            type: "rescue_update",
-        });
-
-        if (volunteer.email) {
-            await sendRescueAssignmentEmail(
-                volunteer.email,
-                "New Rescue Assignment",
-                message
-            );
-        }
+        await notifyAssignedPerson(assignment);
+    } else {
+        await announceOpenRescue(assignment);
     }
 
     return res.status(201).json({
@@ -198,17 +229,15 @@ exports.getMyAssignments = async (req, res) => {
 };
 
 exports.getOpenAssignments = async (req, res) => {
-    const assignments = await RescueAssignment.find({
+    const assignments = (await RescueAssignment.find({
         status: "open",
         $or: [
             { volunteerId: null },
             { volunteerId: { $exists: false } },
         ],
-    }).sort({
-        priority: -1,
-        scheduledDate: 1,
-        createdAt: -1,
-    });
+    }).sort({ scheduledDate: 1, createdAt: -1 }))
+        // Most urgent first, then soonest
+        .sort((first, second) => (PRIORITY_RANK[first.priority] ?? 2) - (PRIORITY_RANK[second.priority] ?? 2));
 
     return res.status(200).json({
         success: true,
@@ -294,20 +323,11 @@ exports.claimAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
-    await createNotification({
-        userId: assignment.adminId,
-        title: "Rescue Assignment Claimed",
-        message: `${assignment.volunteerName} claimed "${assignment.title}".`,
-        type: "rescue_update",
-    });
-
-    if (assignment.adminEmail) {
-        await sendRescueAssignmentEmail(
-            assignment.adminEmail,
-            "Open Rescue Claimed",
-            `${assignment.volunteerName} claimed "${assignment.title}".`
-        );
-    }
+    await emailSafely(
+        assignment.adminEmail,
+        "Open Rescue Claimed",
+        `${assignment.volunteerName} claimed "${assignment.title}".`
+    );
 
     return res.status(200).json({
         success: true,
@@ -379,7 +399,7 @@ exports.acceptAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
-    await sendRescueAssignmentEmail(
+    await emailSafely(
         assignment.adminEmail,
         "Rescue Assignment Accepted",
         `${assignment.volunteerName} accepted "${assignment.title}".`,
@@ -456,12 +476,14 @@ exports.declineAssignment = async (req, res) => {
     });
 
     if (assignment.adminEmail) {
-        await sendRescueAssignmentEmail(
+        await emailSafely(
             assignment.adminEmail,
             "Rescue Assignment Declined",
             message
         );
     }
+
+    await announceOpenRescue(assignment);
 
     return res.status(200).json({
         success: true,
@@ -544,12 +566,14 @@ exports.dropAssignment = async (req, res) => {
     });
 
     if (assignment.adminEmail) {
-        await sendRescueAssignmentEmail(
+        await emailSafely(
             assignment.adminEmail,
             "Rescue Assignment Released",
             message
         );
     }
+
+    await announceOpenRescue(assignment);
 
     return res.status(200).json({
         success: true,
@@ -599,7 +623,7 @@ exports.startAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
-    await sendRescueAssignmentEmail(
+    await emailSafely(
         assignment.adminEmail,
         "Rescue Assignment Started",
         `${assignment.volunteerName} started "${assignment.title}".`
@@ -656,7 +680,7 @@ exports.completeAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
-    await sendRescueAssignmentEmail(
+    await emailSafely(
         assignment.adminEmail,
         "Rescue Assignment Completed",
         `${assignment.volunteerName} completed "${assignment.title}".`
@@ -773,6 +797,33 @@ exports.updateAssignment = async (req, res) => {
         }
     }
 
+    // Change who it's for ("" = open). Not once someone has accepted or started it.
+    let assigneeChange = null;
+
+    if (req.body.volunteerId !== undefined) {
+        const newVolunteerId = String(req.body.volunteerId || "").trim();
+        const currentVolunteerId = assignment.volunteerId ? String(assignment.volunteerId) : "";
+
+        if (newVolunteerId !== currentVolunteerId) {
+            if (!["open", "pending", "declined"].includes(assignment.status)) {
+                const error = new Error(
+                    "Someone is already working on this rescue, so it can't be reassigned."
+                );
+                error.statusCode = 409;
+                throw error;
+            }
+
+            const person = newVolunteerId ? await findAssignablePerson(newVolunteerId) : null;
+
+            assignment.volunteerId = person?._id || null;
+            assignment.volunteerName = person ? person.name || person.username || "Volunteer" : "";
+            assignment.volunteerEmail = person?.email || "";
+            assignment.status = person ? "pending" : "open";
+            assignment.acceptedAt = null;
+            assigneeChange = person ? "assigned" : "opened";
+        }
+    }
+
     if (
         req.body.scheduledDate !==
         undefined
@@ -794,19 +845,22 @@ exports.updateAssignment = async (req, res) => {
 
     await assignment.save();
 
-    await createNotification({
-        userId: assignment.volunteerId,
-        title: "Rescue Assignment Updated",
-        message:
-            `Your rescue assignment "${assignment.title}" has been updated.`,
-        type: "rescue_update",
-    });
+    if (assigneeChange === "assigned") {
+        await notifyAssignedPerson(assignment);
+    } else if (assigneeChange === "opened") {
+        await announceOpenRescue(assignment);
+    } else if (assignment.volunteerId) {
+        const message = `Your rescue assignment "${assignment.title}" has been updated.`;
 
-    await sendRescueAssignmentEmail(
-        assignment.volunteerEmail,
-        "Rescue Assignment Updated",
-        `Your rescue assignment "${assignment.title}" has been updated.`
-    );
+        await createNotification({
+            userId: assignment.volunteerId,
+            title: "Rescue Assignment Updated",
+            message,
+            type: "rescue_update",
+        });
+
+        await emailSafely(assignment.volunteerEmail, "Rescue Assignment Updated", message);
+    }
 
     return res.status(200).json({
         success: true,
@@ -867,7 +921,7 @@ exports.cancelAssignment = async (req, res) => {
         type: "rescue_update",
     });
 
-    await sendRescueAssignmentEmail(
+    await emailSafely(
         assignment.volunteerEmail,
         "Rescue Assignment Cancelled",
         `Your rescue assignment "${assignment.title}" has been cancelled.`

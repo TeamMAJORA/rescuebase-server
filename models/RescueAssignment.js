@@ -172,24 +172,6 @@ const rescueAssignmentSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
-        volunteerId: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "User",
-            default: null,
-        },
-
-        volunteerName: {
-            type: String,
-            trim: true,
-            default: "",
-        },
-
-        volunteerEmail: {
-            type: String,
-            trim: true,
-            lowercase: true,
-            default: "",
-        },
     },
     {
         timestamps: true,
