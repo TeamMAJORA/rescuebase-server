@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const GISLocation = require("../models/GISLocation");
 const LostFoundReport = require("../models/LostFoundReport");
 const LedgerEntry = require("../models/LedgerEntry");
 const LostFoundMatch = require("../models/LostFoundMatch");
@@ -344,7 +343,6 @@ exports.listShelterIntakeAsFoundReport = async (animal, approvingUser) => {
 };
 
 exports.createReport = async (req, res) => {
-    preventStaffAdmin(req);
 
     const allowedColours = [
         "Black",
@@ -490,32 +488,6 @@ exports.createReport = async (req, res) => {
         matchStatus: "none",
         claimStatus: "none",
     });
-
-    if (
-        Number.isFinite(latitude) && Number.isFinite(longitude) &&
-        Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 &&
-        (latitude !== 0 || longitude !== 0)
-    ) {
-        try {
-            const speciesKey = species.toLowerCase();
-
-            await GISLocation.create({
-                petName: report.petName || "Unknown",
-                reportType,
-                species: ["dog", "cat", "other"].includes(speciesKey) ? speciesKey : "unknown",
-                locationName: location,
-                latitude,
-                longitude,
-                status: "open",
-                description: String(req.body.mapNote || description).slice(0, 500),
-                createdBy: req.user?.id || req.user?._id || null,
-                createdByName: reporterName || "",
-                createdByEmail: reporterEmail || "",
-            });
-        } catch (gisError) {
-            console.error("Lost & found map pin failed:", gisError.message);
-        }
-    }
 
     await LedgerEntry.create({
         type: "lost_found",

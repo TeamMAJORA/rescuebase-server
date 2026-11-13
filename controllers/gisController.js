@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const GISLocation = require("../models/GISLocation");
+const LostFoundReport = require("../models/LostFoundReport");
 const User = require("../models/User");
 const Shelter = require("../models/Shelter");
 const stripLegacyContact = require("../utils/stripLegacyContact");
@@ -23,10 +24,16 @@ exports.createLocation = async (req, res) => {
         throw error;
     }
 
+    if (["lost", "found"].includes(reportType)) {
+        const error = new Error(
+            "Lost and found pets are reported in Lost & Found. They show on the map from there."
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
     if (
         ![
-            "lost",
-            "found",
             "stray",
             "rescue",
             "intake",
@@ -203,6 +210,42 @@ exports.createStraySighting = async (req, res) => {
     })
 }
 
+// Lost and found pins come straight from Lost & Found (one source of truth, no copies).
+// Reports without a map point are skipped. Reunited / closed reports show as "resolved".
+async function loadLostFoundMapPins({ onlyOpen = false } = {}) {
+    const reports = await LostFoundReport.find({
+        "coordinates.latitude": { $ne: null },
+        "coordinates.longitude": { $ne: null },
+        ...(onlyOpen ? { status: { $nin: ["reunited", "rejected"] } } : {}),
+    })
+        .select("petName reportType species location coordinates status description reporterName photoUrl createdAt updatedAt")
+        .lean();
+
+    return reports.map((report) => {
+        const speciesKey = String(report.species || "").trim().toLowerCase();
+        return {
+            _id: report._id,
+            source: "lost-found",
+            lostFoundReportId: report._id,
+            petName: report.petName || "Unknown",
+            reportType: report.reportType,
+            species: ["dog", "cat", "other"].includes(speciesKey) ? speciesKey : "unknown",
+            locationName: report.location,
+            latitude: report.coordinates.latitude,
+            longitude: report.coordinates.longitude,
+            status: ["reunited", "rejected"].includes(report.status) ? "resolved" : "open",
+            description: report.description || "",
+            photoUrl: report.photoUrl || "",
+            createdBy: null,
+            createdByName: report.reporterName || "",
+            createdAt: report.createdAt,
+            updatedAt: report.updatedAt,
+        };
+    });
+}
+
+const newestFirst = (a, b) => new Date(b.createdAt) - new Date(a.createdAt);
+
 exports.getAllLocations = async (
     req,
     res
@@ -236,15 +279,16 @@ exports.getAllLocations = async (
                 .toLowerCase();
     }
 
-    const locations =
+    const gisLocations =
         await GISLocation.find(
             filter
         )
             .populate("createdBy", "role")
-            .sort({
-                createdAt: -1,
-            });
-
+            .lean();
+    const lostFoundPins = (await loadLostFoundMapPins()).filter((pin) =>
+        Object.entries(filter).every(([field, value]) => pin[field] === value)
+    );
+    const locations = [...gisLocations, ...lostFoundPins].sort(newestFirst);
     return res.status(200).json({
         success: true,
         locations,
@@ -269,11 +313,13 @@ exports.getPublicLocations = async (
             .select(
                 "_id petName reportType species locationName latitude longitude status description createdAt"
             )
-            .sort({
-                createdAt: -1,
-            })
             .lean();
-
+    const lostFoundPins = (await loadLostFoundMapPins({ onlyOpen: true })).map(
+        ({ _id, source, lostFoundReportId, petName, reportType, species, locationName, latitude, longitude, status, description, photoUrl, createdAt }) =>
+            ({ _id, source, lostFoundReportId, petName, reportType, species, locationName, latitude, longitude, status, description, photoUrl, createdAt })
+    );
+    locations.push(...lostFoundPins);
+    locations.sort(newestFirst);
     return res.status(200).json({
         success: true,
         locations: locations.map((location) => ({
@@ -380,6 +426,14 @@ exports.updateLocation = async (
             )
                 .trim()
                 .toLowerCase();
+
+        if (["lost", "found"].includes(updates.reportType)) {
+            const error = new Error(
+                "Lost and found pets are reported in Lost & Found."
+            );
+            error.statusCode = 400;
+            throw error;
+        }
     }
 
     if (
@@ -609,7 +663,8 @@ exports.getHotspotAnalysis = async (req, res) => {
         },
         latitude: { $exists: true, $ne: null },
         longitude: { $exists: true, $ne: null },
-    }).select("latitude longitude reportType locationName");
+    }).select("latitude longitude reportType locationName").lean();
+    locations.push(...(await loadLostFoundMapPins({ onlyOpen: true })));
 
     const reports = locations.filter((location) => {
         const latitude = Number(location.latitude);

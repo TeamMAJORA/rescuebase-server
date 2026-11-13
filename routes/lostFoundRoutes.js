@@ -14,7 +14,9 @@ router.post(
     authorizeRoles(
         "adopter",
         "volunteer",
-        "foster"
+        "foster",
+        "staff",
+        "admin"
     ),
     asyncHandler(
         lostFoundController.createReport
