@@ -51,6 +51,7 @@ const app = express();
 const allowedOrigins = [
     // This will be put in the env and put it the ipv4 adress with the port used in it.
     process.env.CLIENT_URL,
+    "https://rescue-base.vercel.app/",
     "http://localhost:5173",
     "http://192.168.1.15:5173"
 ];
