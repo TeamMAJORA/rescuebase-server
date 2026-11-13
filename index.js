@@ -1,19 +1,29 @@
+require("dotenv").config();
+
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-const dotenv = require("dotenv");
+const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
+const { parseCookie } = require("cookie");
+
 const {
-    initializeApp, cert
+    initializeApp,
+    cert,
+    getApps
 } = require("firebase-admin/app");
+
 const admin = require("firebase-admin");
+
 const securityGuard = require("./middleware/securityGuard");
-const errorhandler = require("./middleware/errorHandler")
+const errorhandler = require("./middleware/errorHandler");
 const maintenanceMode = require("./middleware/maintenanceMode");
 const activityLogger = require("./middleware/activityLogger");
 
-dotenv.config();
-
+// Firebase
 const serviceAccount = require("./config/serviceAccountKey.json");
+
+// Routes
 const authRoutes = require("./routes/authRoutes");
 const adoptionRoutes = require("./routes/adoptionRoutes");
 const ledgerRoutes = require("./routes/ledgerRoutes");
@@ -36,54 +46,172 @@ const qrTagRoutes = require("./routes/qrTagRoutes");
 const vaccinationRoutes = require("./routes/vaccinationRoutes");
 const medicalRecordRoutes = require("./routes/medicalRecordRoutes");
 const animalTransferRoutes = require("./routes/animalTransferRoutes");
-const startVaccinationReminders = require("./jobs/vaccinationReminders");
-const startFosterUpdateReminders = require("./jobs/fosterUpdateReminders");
 const analyticsRoutes = require("./routes/analyticsRoutes");
 const activityLogRoutes = require("./routes/activityLogRoutes");
 const globalSettingsRoutes = require("./routes/globalSettingsRoutes");
 const foodInventoryRoutes = require("./routes/foodInventoryRoutes");
-
-//Upload to cloudinary
 const uploadRoutes = require("./routes/uploadRoutes");
+
+// Jobs
+const startVaccinationReminders = require("./jobs/vaccinationReminders");
+const startFosterUpdateReminders = require("./jobs/fosterUpdateReminders");
 
 const app = express();
 
-const allowedOrigins = [
-    // This will be put in the env and put it the ipv4 adress with the port used in it.
-    process.env.CLIENT_URL,
-    "https://rescue-base.vercel.app/",
-    "http://localhost:5173",
-    "http://192.168.1.15:5173"
-];
+// --------------------------------------------------
+// TRUST PROXY / SECURITY
+// --------------------------------------------------
+
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+
+app.use(helmet());
+
+// --------------------------------------------------
+// CORS
+// --------------------------------------------------
+
+const allowedOrigins = (
+    process.env.CLIENT_URL ||
+    "http://localhost:5173"
+)
+    .split(",")
+    .map(origin => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
 
 app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error(`CORS blocked origin: ${origin}`));
+    origin: (origin, callback) => {
+        if (!origin) {
+            return callback(null, true);
         }
+
+        const normalizedOrigin = origin.replace(/\/+$/, "");
+
+        if (allowedOrigins.includes(normalizedOrigin)) {
+            return callback(null, true);
+        }
+
+        console.warn(`[CORS] Rejected origin: ${origin}`);
+
+        return callback(
+            new Error(`CORS blocked origin: ${origin}`)
+        );
     },
     credentials: true,
+    methods: [
+        "GET",
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+        "OPTIONS"
+    ],
+    allowedHeaders: [
+        "Content-Type",
+        "Authorization",
+        "ngrok-skip-browser-warning"
+    ],
+    optionsSuccessStatus: 204
 }));
 
-app.use(express.json());
+// --------------------------------------------------
+// REQUEST PARSING
+// --------------------------------------------------
+
+app.use(express.json({
+    limit: "1mb"
+}));
+
+app.use(express.urlencoded({
+    extended: true,
+    limit: "1mb"
+}));
+
+app.use((req, res, next) => {
+    req.cookies = parseCookie(
+        req.headers.cookie || ""
+    );
+
+    next();
+});
+
+// --------------------------------------------------
+// RATE LIMITING
+// --------------------------------------------------
+
+app.use(
+    "/api/",
+    rateLimit({
+        windowMs: 15 * 60 * 1000,
+        limit: 300,
+        standardHeaders: "draft-7",
+        legacyHeaders: false,
+        message: {
+            success: false,
+            message: "Too many requests. Please try again later."
+        }
+    })
+);
+
+// --------------------------------------------------
+// FIREBASE INITIALIZATION
+// --------------------------------------------------
+
+if (getApps().length === 0) {
+    initializeApp({
+        credential: cert(serviceAccount)
+    });
+}
+
+// --------------------------------------------------
+// MONGODB CONNECTION
+// --------------------------------------------------
+
+let mongoConnectionPromise = null;
+
+async function connectDatabase() {
+    if (mongoose.connection.readyState === 1) {
+        return;
+    }
+
+    if (!mongoConnectionPromise) {
+        mongoConnectionPromise = mongoose.connect(
+            process.env.MONGO_URI
+        )
+        .then(() => {
+            console.log("[MongoDB] Connected");
+        })
+        .catch(error => {
+            mongoConnectionPromise = null;
+            console.error("[MongoDB] Connection failed:", error);
+            throw error;
+        });
+    }
+
+    return mongoConnectionPromise;
+}
+
+// Ensure database connection before processing requests.
+app.use(async (req, res, next) => {
+    try {
+        await connectDatabase();
+        next();
+    } catch (error) {
+        next(error);
+    }
+});
+
+// --------------------------------------------------
+// EXISTING RESCUEBASE MIDDLEWARE
+// --------------------------------------------------
+
 app.use(securityGuard);
 app.use(maintenanceMode);
 app.use(activityLogger);
 
-initializeApp({
-    credential: cert(serviceAccount),
-});
-
-mongoose
-    .connect(process.env.MONGO_URI)
-    .then(() => {
-        console.log("MongoDB Connected");
-        startVaccinationReminders();
-        startFosterUpdateReminders();
-    })
-    .catch((error) => console.error("MongoDB error :", error));
+// --------------------------------------------------
+// API ROUTES
+// --------------------------------------------------
 
 app.use("/api/auth", authRoutes);
 app.use("/api/adoptions", adoptionRoutes);
@@ -111,18 +239,70 @@ app.use("/api/animal-transfers", animalTransferRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/settings", globalSettingsRoutes);
 app.use("/api/food-inventory", foodInventoryRoutes);
-
-// Image route
 app.use("/api/uploads", uploadRoutes);
 
+// --------------------------------------------------
+// HEALTH CHECK
+// --------------------------------------------------
+
 app.get("/", (req, res) => {
-    res.send("RescueBase Backend is now running.");
+    res.status(200).json({
+        name: "RescueBase Backend",
+        version: "1.0.0",
+        status: "online",
+        database:
+            mongoose.connection.readyState === 1
+                ? "connected"
+                : "disconnected"
+    });
 });
+
+// --------------------------------------------------
+// 404 HANDLER
+// --------------------------------------------------
+
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        message: "API endpoint not found"
+    });
+});
+
+// --------------------------------------------------
+// ERROR HANDLER
+// --------------------------------------------------
 
 app.use(errorhandler);
 
-const PORT = process.env.PORT || 5000;
+// --------------------------------------------------
+// EXPORT APPLICATION
+// --------------------------------------------------
 
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`)
-});
+module.exports = app;
+
+// --------------------------------------------------
+// LOCAL DEVELOPMENT SERVER
+// --------------------------------------------------
+
+if (require.main === module) {
+    const PORT = process.env.PORT || 5000;
+
+    connectDatabase()
+        .then(() => {
+            console.log("[Server] MongoDB ready");
+
+            app.listen(PORT, "0.0.0.0", () => {
+                console.log(
+                    `[Server] Running on port ${PORT}`
+                );
+            });
+        })
+        .catch(error => {
+            console.error(
+                "[Server] Startup failed:",
+                error
+            );
+
+            process.exit(1);
+        });
+}
