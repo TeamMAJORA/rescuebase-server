@@ -34,3 +34,4 @@ function startFosterUpdateReminders() {
 }
 
 module.exports = startFosterUpdateReminders;
+module.exports.runFosterUpdateReminders = runFosterUpdateReminders;

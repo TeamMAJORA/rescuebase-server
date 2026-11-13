@@ -5,5 +5,15 @@
             "source": "/(.*)",
             "destination": "/api"
         }
+    ],
+    "crons": [
+        {
+            "path": "/api/cron/vaccination-reminders",
+            "schedule": "0 0 * * *"
+        },
+        {
+            "path": "/api/cron/foster-update-reminders",
+            "schedule": "0 1 * * *"
+        }
     ]
 }

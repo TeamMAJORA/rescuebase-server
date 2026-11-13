@@ -102,6 +102,7 @@ const activityLogRoutes = require("./routes/activityLogRoutes");
 const globalSettingsRoutes = require("./routes/globalSettingsRoutes");
 const foodInventoryRoutes = require("./routes/foodInventoryRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
+const cronRoutes = require("./routes/cronRoutes");
 
 // --------------------------------------------------
 // APPLICATION INITIALIZATION
@@ -312,6 +313,7 @@ app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/settings", globalSettingsRoutes);
 app.use("/api/food-inventory", foodInventoryRoutes);
 app.use("/api/uploads", uploadRoutes);
+app.use("/api/cron", cronRoutes);
 
 // --------------------------------------------------
 // ROOT ENDPOINT
@@ -364,6 +366,10 @@ if (require.main === module) {
 
             app.listen(PORT, "0.0.0.0", () => {
                 console.log(`[Server] Running on port ${PORT}`);
+
+                // Local server only: on Vercel the reminders run from vercel.json "crons"
+                require("./jobs/vaccinationReminders")();
+                require("./jobs/fosterUpdateReminders")();
             });
         })
         .catch(error => {
