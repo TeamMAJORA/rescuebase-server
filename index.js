@@ -1,3 +1,4 @@
+
 require("dotenv").config();
 
 const express = require("express");
@@ -5,7 +6,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const { parseCookie } = require("cookie");
+const cookie = require("cookie");
 
 const {
     initializeApp,
@@ -13,12 +14,19 @@ const {
     getApps
 } = require("firebase-admin/app");
 
+// --------------------------------------------------
+// MIDDLEWARE IMPORTS
+// --------------------------------------------------
+
 const securityGuard = require("./middleware/securityGuard");
-const errorhandler = require("./middleware/errorHandler");
+const errorHandler = require("./middleware/errorHandler");
 const maintenanceMode = require("./middleware/maintenanceMode");
 const activityLogger = require("./middleware/activityLogger");
 
-// Firebase
+// --------------------------------------------------
+// FIREBASE CONFIGURATION
+// --------------------------------------------------
+
 const serviceAccount = {
     type: "service_account",
     project_id: process.env.PROJECT_ID,
@@ -28,15 +36,45 @@ const serviceAccount = {
     client_id: process.env.CLIENT_ID,
     auth_uri: process.env.AUTH_URI,
     token_uri: process.env.TOKEN_URI,
-    auth_provider_x509_cert_url:
-        process.env.AUTH_PROVIDER_CERT_URL,
-    client_x509_cert_url:
-        process.env.CLIENT_CERT_URL,
-    universe_domain:
-        process.env.UNI_DOMAIN || "googleapis.com"
+    auth_provider_x509_cert_url: process.env.AUTH_PROVIDER_CERT_URL,
+    client_x509_cert_url: process.env.CLIENT_CERT_URL,
+    universe_domain: process.env.UNI_DOMAIN || "googleapis.com"
+};
+
+function initializeFirebase() {
+    if (getApps().length > 0) {
+        return;
+    }
+
+    const requiredFields = [
+        "project_id",
+        "private_key",
+        "client_email"
+    ];
+
+    const missingFields = requiredFields.filter(
+        field => !serviceAccount[field]
+    );
+
+    if (missingFields.length > 0) {
+        throw new Error(
+            `[Firebase] Missing configuration: ${missingFields.join(", ")}`
+        );
+    }
+
+    initializeApp({
+        credential: cert(serviceAccount)
+    });
+
+    console.log("[Firebase] Initialized");
 }
 
-// Routes
+initializeFirebase();
+
+// --------------------------------------------------
+// ROUTE IMPORTS
+// --------------------------------------------------
+
 const authRoutes = require("./routes/authRoutes");
 const adoptionRoutes = require("./routes/adoptionRoutes");
 const ledgerRoutes = require("./routes/ledgerRoutes");
@@ -65,30 +103,23 @@ const globalSettingsRoutes = require("./routes/globalSettingsRoutes");
 const foodInventoryRoutes = require("./routes/foodInventoryRoutes");
 const uploadRoutes = require("./routes/uploadRoutes");
 
-// Jobs
-const startVaccinationReminders = require("./jobs/vaccinationReminders");
-const startFosterUpdateReminders = require("./jobs/fosterUpdateReminders");
+// --------------------------------------------------
+// APPLICATION INITIALIZATION
+// --------------------------------------------------
 
 const app = express();
-
-app.get("/health", (req, res) => {
-    res.status(200).json({
-        status: "online",
-        message: "Express application loaded"
-    });
-});
-
-// --------------------------------------------------
-// TRUST PROXY / SECURITY
-// --------------------------------------------------
 
 app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
+// --------------------------------------------------
+// SECURITY HEADERS
+// --------------------------------------------------
+
 app.use(helmet());
 
 // --------------------------------------------------
-// CORS
+// CORS CONFIGURATION
 // --------------------------------------------------
 
 const allowedOrigins = (
@@ -111,9 +142,12 @@ app.use(cors({
         }
 
         console.warn(`[CORS] Rejected origin: ${origin}`);
+
         return callback(new Error(`CORS blocked: ${origin}`));
     },
+
     credentials: true,
+
     methods: [
         "GET",
         "POST",
@@ -122,11 +156,13 @@ app.use(cors({
         "DELETE",
         "OPTIONS"
     ],
+
     allowedHeaders: [
         "Content-Type",
         "Authorization",
         "ngrok-skip-browser-warning"
     ],
+
     optionsSuccessStatus: 204
 }));
 
@@ -143,12 +179,17 @@ app.use(express.urlencoded({
     limit: "1mb"
 }));
 
+// Cookie parsing
 app.use((req, res, next) => {
-    req.cookies = parseCookie(
-        req.headers.cookie || ""
-    );
+    try {
+        req.cookies = cookie.parse(
+            req.headers.cookie || ""
+        );
 
-    next();
+        next();
+    } catch (error) {
+        next(error);
+    }
 });
 
 // --------------------------------------------------
@@ -156,28 +197,19 @@ app.use((req, res, next) => {
 // --------------------------------------------------
 
 app.use(
-    "/api/",
+    "/api",
     rateLimit({
         windowMs: 15 * 60 * 1000,
         limit: 300,
         standardHeaders: "draft-7",
         legacyHeaders: false,
+
         message: {
             success: false,
             message: "Too many requests. Please try again later."
         }
     })
 );
-
-// --------------------------------------------------
-// FIREBASE INITIALIZATION
-// --------------------------------------------------
-
-if (getApps().length === 0) {
-    initializeApp({
-        credential: cert(serviceAccount)
-    });
-}
 
 // --------------------------------------------------
 // MONGODB CONNECTION
@@ -190,25 +222,35 @@ async function connectDatabase() {
         return;
     }
 
+    if (!process.env.MONGO_URI) {
+        throw new Error("[MongoDB] MONGO_URI is not configured");
+    }
+
     if (!mongoConnectionPromise) {
         mongoConnectionPromise = mongoose.connect(
             process.env.MONGO_URI
         )
-        .then(() => {
-            console.log("[MongoDB] Connected");
-        })
-        .catch(error => {
-            mongoConnectionPromise = null;
-            console.error("[MongoDB] Connection failed:", error);
-            throw error;
-        });
+            .then(() => {
+                console.log("[MongoDB] Connected");
+            })
+            .catch(error => {
+                mongoConnectionPromise = null;
+
+                console.error(
+                    "[MongoDB] Connection failed:",
+                    error.message
+                );
+
+                throw error;
+            });
     }
 
     return mongoConnectionPromise;
 }
 
-// Ensure database connection before processing requests.
-app.use(async (req, res, next) => {
+// Only API requests require MongoDB.
+// Health checks remain accessible if MongoDB is unavailable.
+app.use("/api", async (req, res, next) => {
     try {
         await connectDatabase();
         next();
@@ -218,12 +260,26 @@ app.use(async (req, res, next) => {
 });
 
 // --------------------------------------------------
-// EXISTING RESCUEBASE MIDDLEWARE
+// RESCUEBASE MIDDLEWARE
 // --------------------------------------------------
 
 app.use(securityGuard);
 app.use(maintenanceMode);
 app.use(activityLogger);
+
+// --------------------------------------------------
+// HEALTH CHECK
+// --------------------------------------------------
+
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        status: "online",
+        message: "RescueBase application loaded",
+        database: mongoose.connection.readyState === 1
+            ? "connected"
+            : "disconnected"
+    });
+});
 
 // --------------------------------------------------
 // API ROUTES
@@ -258,7 +314,7 @@ app.use("/api/food-inventory", foodInventoryRoutes);
 app.use("/api/uploads", uploadRoutes);
 
 // --------------------------------------------------
-// HEALTH CHECK
+// ROOT ENDPOINT
 // --------------------------------------------------
 
 app.get("/", (req, res) => {
@@ -266,10 +322,9 @@ app.get("/", (req, res) => {
         name: "RescueBase Backend",
         version: "1.0.0",
         status: "online",
-        database:
-            mongoose.connection.readyState === 1
-                ? "connected"
-                : "disconnected"
+        database: mongoose.connection.readyState === 1
+            ? "connected"
+            : "disconnected"
     });
 });
 
@@ -288,7 +343,7 @@ app.use((req, res) => {
 // ERROR HANDLER
 // --------------------------------------------------
 
-app.use(errorhandler);
+app.use(errorHandler);
 
 // --------------------------------------------------
 // EXPORT APPLICATION
@@ -308,9 +363,7 @@ if (require.main === module) {
             console.log("[Server] MongoDB ready");
 
             app.listen(PORT, "0.0.0.0", () => {
-                console.log(
-                    `[Server] Running on port ${PORT}`
-                );
+                console.log(`[Server] Running on port ${PORT}`);
             });
         })
         .catch(error => {

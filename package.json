@@ -3,7 +3,7 @@
     "archiver": "^7.0.1",
     "bcrypt": "^6.0.0",
     "cloudinary": "^2.10.0",
-    "cookie": "^2.0.2",
+    "cookie": "^0.6.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
