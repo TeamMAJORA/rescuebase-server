@@ -72,8 +72,7 @@ app.use(helmet());
 // --------------------------------------------------
 
 const allowedOrigins = (
-    process.env.CLIENT_URL ||
-    "http://localhost:5173"
+    process.env.CLIENT_URL || "http://localhost:5173"
 )
     .split(",")
     .map(origin => origin.trim().replace(/\/+$/, ""))
@@ -92,10 +91,7 @@ app.use(cors({
         }
 
         console.warn(`[CORS] Rejected origin: ${origin}`);
-
-        return callback(
-            new Error(`CORS blocked origin: ${origin}`)
-        );
+        return callback(new Error(`CORS blocked: ${origin}`));
     },
     credentials: true,
     methods: [
