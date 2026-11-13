@@ -1,5 +1,6 @@
-const AI_SERVICE_URL =
-    process.env.BEHAVIORAL_AI_URL || "http://127.0.0.1:8001";
+const AI_SERVICE_URL = (
+    process.env.BEHAVIORAL_AI_URL || "http://127.0.0.1:8001"
+).replace(/\/+$/, "");
 
 const FACTOR_CONFIG = {
     energy: {
@@ -247,6 +248,7 @@ async function getAIPrediction(animal, adopter) {
                     "ngrok-skip-browser-warning": "true",
                 },
                 body: JSON.stringify(requestBody),
+                signal: AbortSignal.timeout(15000),
             }
         );
 

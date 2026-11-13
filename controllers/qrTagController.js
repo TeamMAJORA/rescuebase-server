@@ -5,8 +5,10 @@ const QRTag = require("../models/QRTag");
 const Animal = require("../models/Animal");
 
 // Scanning a tag with any phone camera opens the public pet page: <website>/pet/<tagCode>
+// CLIENT_URL can list several sites for CORS ("https://rescue-base.vercel.app,http://localhost:5173");
+// the QR link uses the first one, so put the live site first.
 function petProfileUrl(tagCode) {
-    const website = String(process.env.CLIENT_URL || "http://localhost:5173").trim().replace(/\/+$/, "");
+    const website = String(process.env.CLIENT_URL || "http://localhost:5173").split(",")[0].trim().replace(/\/+$/, "");
     return `${website}/pet/${encodeURIComponent(tagCode)}`;
 }
 
