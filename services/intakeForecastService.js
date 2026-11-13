@@ -74,7 +74,10 @@ async function requestPrediction(history) {
     try {
         response = await fetch(`${ML_SERVICE_URL}/predict/intake`, {
             method: "POST",
-            headers,
+            headers: {
+                ...headers,
+                "ngrok-skip-browser-warning": "true",
+            },
             body: JSON.stringify({ history }),
             signal: AbortSignal.timeout(15000),
         });
