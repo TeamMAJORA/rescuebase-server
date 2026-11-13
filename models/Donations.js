@@ -61,10 +61,25 @@ const DonationSchema = new mongoose.Schema(
             default: "",
         },
 
+        // "cancelled" is shown as "Not received": the donation never reached the shelter
         status: {
             type: String,
             enum: ["pending", "received", "cancelled"],
             default: "pending",
+        },
+
+        // Why staff marked it not received (shown to the donor)
+        notReceivedReason: {
+            type: String,
+            trim: true,
+            maxlength: 300,
+            default: "",
+        },
+
+        notReceivedByName: {
+            type: String,
+            trim: true,
+            default: "",
         },
 
         paymentMethod: {

@@ -53,6 +53,29 @@ const MAX_DONATION_AMOUNT = 100000;
 const MAX_DONATION_QUANTITY = 1000;
 
 
+// Donor's account, found by the donation's email. Never throws.
+async function notifyDonorNotReceived(donation) {
+    try {
+        const email = String(donation.donorEmail || donation.createdByEmail || "").trim().toLowerCase();
+        const donor = email ? await User.findOne({ email }).select("_id role") : null;
+
+        if (!donor || ["admin", "staff"].includes(donor.role)) return;
+
+        const what = donation.donationType === "Money"
+            ? `Your ₱${Number(donation.amount || 0).toLocaleString("en-PH")} donation`
+            : `Your donation of ${donation.itemName || donation.donationType}`;
+
+        await Notification.create({
+            user: donor._id,
+            title: "Donation Not Received",
+            message: `${what} was marked as not received. Reason: ${donation.notReceivedReason}`,
+            type: "donation_update",
+        });
+    } catch (error) {
+        console.error("Donation not-received notification failed:", error);
+    }
+}
+
 exports.createDonation = async (req, res) => {
     const donorName = String(
         req.body.donorName || ""
@@ -192,6 +215,12 @@ exports.createDonation = async (req, res) => {
         creator.username ||
         "User"
     ).trim();
+
+    if (donationType === "Other" && !String(req.body.itemName || "").trim()) {
+        const error = new Error("Please say what item you're donating.");
+        error.statusCode = 400;
+        throw error;
+    }
 
     // Donors show what they're bringing; staff logging walk-ins don't need a photo
     if (donationType !== "Money" && !isShelterStaff && !itemPhotoUrl) {
@@ -354,6 +383,24 @@ exports.updateDonation = async (req, res) => {
         allowedUpdates.receivedDate = null;
     }
 
+    // Not received: staff must say why; the donor is told
+    if (newStatus === "cancelled") {
+        const notReceivedReason = String(req.body.notReceivedReason || "").trim();
+
+        if (notReceivedReason.length < 5 || notReceivedReason.length > 300) {
+            const error = new Error("Please give a reason (5 to 300 characters) for marking it not received.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        allowedUpdates.notReceivedReason = notReceivedReason;
+        const staffMember = await User.findById(req.user?.id).select("name username");
+        allowedUpdates.notReceivedByName = String(staffMember?.name || staffMember?.username || "Staff").trim();
+    } else {
+        allowedUpdates.notReceivedReason = "";
+        allowedUpdates.notReceivedByName = "";
+    }
+
     if (oldStatus === "received" && oldSupplyId) {
         const shouldRemoveOldQuantity =
             newStatus !== "received" ||
@@ -390,6 +437,10 @@ exports.updateDonation = async (req, res) => {
                 runValidators: true,
             }
         );
+
+    if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+        await notifyDonorNotReceived(donation);
+    }
 
     return res.status(200).json({
         success: true,
