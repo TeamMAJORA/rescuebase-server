@@ -222,7 +222,7 @@ async function buildFoodForecast(predictedIntake) {
 
 }
 
-exports.getIntakeForecast = async () => {
+exports.getFoodForecast = async () => {
     const now = new Date();
 
     const firstMonth = new Date(
