@@ -71,6 +71,13 @@ const startFosterUpdateReminders = require("./jobs/fosterUpdateReminders");
 
 const app = express();
 
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        status: "online",
+        message: "Express application loaded"
+    });
+});
+
 // --------------------------------------------------
 // TRUST PROXY / SECURITY
 // --------------------------------------------------
