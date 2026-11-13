@@ -138,6 +138,18 @@ const DonationSchema = new mongoose.Schema(
             ref: "NeededSupply",
             default: null,
         },
+
+        // Set when a Received donation is "deleted": it is hidden from the ledger list
+        // but still counts in every total (donation counts, money, supply totals).
+        hiddenFromLedgerAt: {
+            type: Date,
+            default: null,
+        },
+
+        hiddenFromLedgerBy: {
+            type: String,
+            default: "",
+        },
     },
     {
         timestamps: true,

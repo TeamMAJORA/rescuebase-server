@@ -1,6 +1,15 @@
 
 const PaymentMethod = require("../models/PaymentMethods");
 
+const SUPPORTED_PAYMENT_METHOD_TYPES = ["GCash", "Maya", "Bank Account"];
+
+function paymentMethodTypeError(methodType) {
+    if (!SUPPORTED_PAYMENT_METHOD_TYPES.includes(methodType)) {
+        return `Payment method must be one of: ${SUPPORTED_PAYMENT_METHOD_TYPES.join(", ")}.`;
+    }
+    return null;
+}
+
 exports.getPaymentMethods = async (req, res) => {
     const methods = await PaymentMethod.find({
         is_active: true,
@@ -39,8 +48,8 @@ exports.createPaymentMethod = async (req, res) => {
 
     if (
         !method_type ||
-        !account_name ||
-        !account_number
+        !String(account_name || "").trim() ||
+        !String(account_number || "").trim()
     ) {
         return res.status(400).json({
             success: false,
@@ -49,11 +58,16 @@ exports.createPaymentMethod = async (req, res) => {
         });
     }
 
+    const typeError = paymentMethodTypeError(method_type);
+    if (typeError) {
+        return res.status(400).json({ success: false, message: typeError });
+    }
+
     const paymentMethod =
         await PaymentMethod.create({
             method_type,
-            account_name,
-            account_number,
+            account_name: String(account_name).trim(),
+            account_number: String(account_number).trim(),
             qr_image_url: qr_image_url || "",
             instructions: instructions || "",
             is_test: true,
@@ -93,6 +107,25 @@ exports.updatePaymentMethod = async (req, res) => {
             updates[field] = req.body[field];
         }
     });
+
+    if (updates.method_type !== undefined) {
+        const typeError = paymentMethodTypeError(updates.method_type);
+        if (typeError) {
+            return res.status(400).json({ success: false, message: typeError });
+        }
+    }
+
+    for (const field of ["account_name", "account_number"]) {
+        if (updates[field] !== undefined) {
+            updates[field] = String(updates[field]).trim();
+            if (!updates[field]) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Account name and account number cannot be empty.",
+                });
+            }
+        }
+    }
 
     const paymentMethod =
         await PaymentMethod.findByIdAndUpdate(

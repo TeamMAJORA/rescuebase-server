@@ -6,6 +6,7 @@ const Notification = require("../models/Notifications");
 const { sendDonationConfirmationEmail } = require("../services/emailService");
 const NeededSupply = require("../models/NeededSupply.js")
 const FoodInventory = require("../models/FoodInventory");
+const PaymentMethod = require("../models/PaymentMethods");
 
 const MAX_FOOD_STOCK_KG = 100000;
 
@@ -183,6 +184,21 @@ exports.createDonation = async (req, res) => {
             );
             error.statusCode = 400;
             throw error;
+        }
+
+        if (!isShelterStaff) {
+            const registeredPaymentMethod = await PaymentMethod.exists({
+                method_type: paymentMethod,
+                is_active: true,
+            });
+
+            if (!registeredPaymentMethod) {
+                const error = new Error(
+                    "Please choose one of the shelter's available payment methods."
+                );
+                error.statusCode = 400;
+                throw error;
+            }
         }
     }
 
@@ -463,52 +479,43 @@ exports.deleteDonation = async (req, res) => {
 
     const donation = await Donation.findById(donationId);
 
-    if (!donation) {
+    if (!donation || donation.hiddenFromLedgerAt) {
         const error = new Error("Donation record not found.");
         error.statusCode = 404;
         throw error;
     }
 
-    if (
-        donation.status === "received" &&
-        donation.neededSupplyId
-    ) {
-        const receivedQuantity = Number(
-            donation.quantity || 0
-        );
-
-        const supply = await NeededSupply.findOneAndUpdate(
+    // A Received donation stays in the database and keeps counting in all totals
+    // (donation counts, money received, supply totals); it is only hidden from the ledger.
+    if (donation.status === "received") {
+        const hidden = await Donation.findOneAndUpdate(
+            { _id: donationId, status: "received", hiddenFromLedgerAt: null },
             {
-                _id: donation.neededSupplyId,
-                quantityReceived: {
-                    $gte: receivedQuantity,
+                $set: {
+                    hiddenFromLedgerAt: new Date(),
+                    hiddenFromLedgerBy: req.user?.name || req.user?.username || req.user?.email || "",
                 },
             },
-            {
-                $inc: {
-                    quantityReceived: -receivedQuantity,
-                },
-            },
-            {
-                returnDocument: "after",
-            }
+            { returnDocument: "after" }
         );
 
-        if (!supply) {
-            const error = new Error(
-                "Could not reverse the received quantity. The linked supply may be missing or its recorded total is insufficient."
-            );
-            error.statusCode = 409;
+        if (!hidden) {
+            const error = new Error("Donation record not found.");
+            error.statusCode = 404;
             throw error;
         }
 
-        await changeLinkedFoodStock(supply, -receivedQuantity, req);
+        return res.status(200).json({
+            success: true,
+            message: "Donation removed from the ledger. It still counts in the totals.",
+        });
     }
 
+    // Pending and Cancelled donations were never added to any total, so they are deleted for real
     await Donation.findByIdAndDelete(donationId);
 
     return res.status(200).json({
         success: true,
-        message: "Donation record deleted and totals updated successfully.",
+        message: "Donation record deleted successfully.",
     });
 };
