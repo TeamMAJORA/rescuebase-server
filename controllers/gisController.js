@@ -295,6 +295,26 @@ exports.getAllLocations = async (
     });
 };
 
+// Lost and found pins are usually someone's home, so the public map only gets
+// an approximate spot (snapped to a ~200 m grid). Strays keep their exact
+// sighting point because volunteers use this endpoint to find them.
+const PUBLIC_PIN_GRID_STEPS_PER_DEGREE = 500;
+
+function approximateCoordinate(value) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return value;
+    return Math.round(number * PUBLIC_PIN_GRID_STEPS_PER_DEGREE) / PUBLIC_PIN_GRID_STEPS_PER_DEGREE;
+}
+
+function hideExactHomeLocation(location) {
+    if (location.reportType !== "lost" && location.reportType !== "found") return location;
+    return {
+        ...location,
+        latitude: approximateCoordinate(location.latitude),
+        longitude: approximateCoordinate(location.longitude),
+    };
+}
+
 exports.getPublicLocations = async (
     req,
     res
@@ -323,7 +343,7 @@ exports.getPublicLocations = async (
     return res.status(200).json({
         success: true,
         locations: locations.map((location) => ({
-            ...location,
+            ...hideExactHomeLocation(location),
             description: stripLegacyContact(location.description),
         })),
     });
@@ -1052,4 +1072,4 @@ exports.getAllShelters = async (req, res) => {
         success: true,
         shelters,
     });
-};
+};
