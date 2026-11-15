@@ -133,6 +133,13 @@ const DonationSchema = new mongoose.Schema(
             default: "admin",
         },
 
+        // Donor ticked "Thank me by name": once received, the landing page lists
+        // their first name, last initial and what they gave (money gifts show the amount)
+        showNamePublicly: {
+            type: Boolean,
+            default: false,
+        },
+
         neededSupplyId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "NeededSupply",
@@ -156,4 +163,4 @@ const DonationSchema = new mongoose.Schema(
     }
 );
 
-module.exports = mongoose.models.Donation || mongoose.model("Donation", DonationSchema);
+module.exports = mongoose.models.Donation || mongoose.model("Donation", DonationSchema);

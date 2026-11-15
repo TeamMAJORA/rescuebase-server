@@ -268,6 +268,7 @@ exports.createDonation = async (req, res) => {
         createdByName: creatorName,
         createdByEmail: creatorEmail,
         neededSupplyId: req.body.neededSupplyId || null,
+        showNamePublicly: req.body.showNamePublicly === true,
     });
 
     await Notification.create({
@@ -288,6 +289,84 @@ exports.createDonation = async (req, res) => {
     });
 };
 
+
+const SUPPORTER_WINDOW_DAYS = 30;
+const SUPPORTER_WINDOW_LIMIT = 12;
+const RECENT_SUPPORTER_LIMIT = 8;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// "Ana Maria Reyes" -> "Ana R." (first name and last initial only)
+function toPublicName(fullName) {
+    const parts = String(fullName || "").trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return "A supporter";
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+}
+
+// What they gave: "₱2,500" or "10 kilograms of dog food".
+// The donation form saves the unit in the notes as "Unit: Kilograms".
+function describeGift(donation) {
+    if (donation.donationType === "Money") return `₱${Number(donation.amount || 0).toLocaleString("en-PH")}`;
+
+    const item = String(donation.itemName || donation.donationType).trim();
+    const unit = String(donation.notes || "").match(/^Unit: (.+)$/m)?.[1]?.trim().toLowerCase();
+
+    return unit ? `${donation.quantity} ${unit} of ${item}` : `${donation.quantity} × ${item}`;
+}
+
+function toPublicSupporter(donation) {
+    return {
+        id: donation._id,
+        name: toPublicName(donation.donorName),
+        gift: describeGift(donation),
+        receivedAt: donation.receivedDate || donation.updatedAt,
+    };
+}
+
+// Public (landing page): donors who opted in to be thanked by name.
+// Shows the last 30 days ("this month"); if nobody opted in during that time,
+// falls back to the most recent supporters so the wall isn't empty for long.
+// The summary counts every donation received in the 30 days (counts only: no names, no amounts).
+exports.getPublicSupporters = async (req, res) => {
+    const since = new Date(Date.now() - SUPPORTER_WINDOW_DAYS * DAY_MS);
+    const received = { status: "received" };
+    const inWindow = { ...received, receivedDate: { $gte: since } };
+    const publicFields = "donorName donationType amount itemName quantity notes receivedDate updatedAt";
+    const shown = { showNamePublicly: true, hiddenFromLedgerAt: null };
+
+    // Hidden-from-ledger donations still count in totals, so they count here too
+    const [windowDonations, monthSupporters] = await Promise.all([
+        Donation.find(inWindow).select("donationType").lean(),
+        Donation.find({ ...inWindow, ...shown })
+            .sort({ receivedDate: -1 })
+            .limit(SUPPORTER_WINDOW_LIMIT)
+            .select(publicFields)
+            .lean(),
+    ]);
+
+    const period = monthSupporters.length > 0 ? "month" : "recent";
+    const supporters = period === "month"
+        ? monthSupporters
+        : await Donation.find({ ...received, ...shown })
+            .sort({ receivedDate: -1, updatedAt: -1 })
+            .limit(RECENT_SUPPORTER_LIMIT)
+            .select(publicFields)
+            .lean();
+
+    const cashGifts = windowDonations.filter((donation) => donation.donationType === "Money").length;
+
+    return res.status(200).json({
+        success: true,
+        period,
+        windowDays: SUPPORTER_WINDOW_DAYS,
+        summary: {
+            donations: windowDonations.length,
+            cashGifts,
+            itemGifts: windowDonations.length - cashGifts,
+        },
+        supporters: supporters.map(toPublicSupporter),
+    });
+};
 
 exports.getAllDonations = async (req, res) => {
     const donations = await Donation.find()
@@ -518,4 +597,4 @@ exports.deleteDonation = async (req, res) => {
         success: true,
         message: "Donation record deleted successfully.",
     });
-};
+};
