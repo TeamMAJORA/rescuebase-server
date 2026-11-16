@@ -9,6 +9,12 @@ const validateRequest = require("../middleware/validateRequest");
 const donationController = require("../controllers/donationController");
 
 
+// Public (landing page): donors who chose to be thanked by name
+router.get(
+    "/supporters",
+    asyncHandler(donationController.getPublicSupporters)
+);
+
 router.post(
     "/",
     verifyToken,
@@ -58,4 +64,4 @@ router.delete(
     )
 );
 
-module.exports = router;
+module.exports = router;
