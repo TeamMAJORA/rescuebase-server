@@ -29,6 +29,38 @@ async function createLedgerEntrySafely(data) {
     }
 }
 
+// A pet can go to a foster only while it is still in the shelter's care:
+// not adopted, not returned to its owner, and not already with another foster.
+async function findAnimalThatCanBeFostered(animalId) {
+    if (!mongoose.Types.ObjectId.isValid(animalId)) {
+        const error = new Error("Please select a registered pet.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const animal = await Animal.findById(animalId);
+
+    if (!animal) {
+        const error = new Error("Selected pet was not found.");
+        error.statusCode = 404;
+        throw error;
+    }
+
+    if (animal.adoptionStatus === "adopted" || animal.adoptionStatus === "returned_to_owner") {
+        const error = new Error(`${animal.name} has left the shelter (adopted or returned to the owner).`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (animal.fosterStatus === "in_foster") {
+        const error = new Error(`${animal.name} is already in foster care.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return animal;
+}
+
 exports.createApplication = async (req, res) => {
     const applicantEmail = String(req.user?.email || "").trim().toLowerCase();
     const applicantName = String(req.body.applicantName || "").trim();
@@ -673,28 +705,9 @@ exports.createAssignment = async (req, res) => {
         throw error;
     }
 
-    // Link the assignment to a registered animal
+    // Link the assignment to a registered animal that is still in the shelter's care
     const animalId = String(req.body.animalId || "").trim();
-
-    if (!mongoose.Types.ObjectId.isValid(animalId)) {
-        const error = new Error("Please select a registered pet.");
-        error.statusCode = 400;
-        throw error;
-    }
-
-        const animal = await Animal.findById(animalId);
-
-    if (!animal) {
-        const error = new Error("Selected pet was not found.");
-        error.statusCode = 404;
-        throw error;
-    }
-
-    if (animal.adoptionStatus === "adopted" || animal.fosterStatus === "in_foster") {
-        const error = new Error(`${animal.name} is already adopted or in foster care.`);
-        error.statusCode = 400;
-        throw error;
-    }
+    const animal = await findAnimalThatCanBeFostered(animalId);
 
     const assignment =
         await FosterAssignment.create({
@@ -1622,7 +1635,8 @@ exports.updateAssignment = async (req, res) => {
     }
 
     if (req.body.newAnimalId) {
-        allowedUpdates.animalId = req.body.newAnimalId;
+        const newAnimal = await findAnimalThatCanBeFostered(String(req.body.newAnimalId).trim());
+        allowedUpdates.animalId = newAnimal._id;
     }
 
     if (
