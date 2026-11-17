@@ -10,7 +10,7 @@ const activityLogController = require("../controllers/activityLogController");
 router.get(
     "/",
     verifyToken,
-    authorizeRoles("admin", "volunteer"),
+    authorizeRoles("admin", "staff", "volunteer"),
     asyncHandler(activityLogController.getActivityLogs)
 );
 

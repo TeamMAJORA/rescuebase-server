@@ -197,18 +197,34 @@ app.use((req, res, next) => {
 // RATE LIMITING
 // --------------------------------------------------
 
+const TOO_MANY_REQUESTS_MESSAGE = {
+    success: false,
+    message: "Too many requests. Please try again later."
+};
+
+// Login, sign-up, OTP and password reset stay strict (protects against password guessing)
 app.use(
-    "/api",
+    "/api/auth",
     rateLimit({
         windowMs: 15 * 60 * 1000,
         limit: 300,
         standardHeaders: "draft-7",
         legacyHeaders: false,
+        message: TOO_MANY_REQUESTS_MESSAGE
+    })
+);
 
-        message: {
-            success: false,
-            message: "Too many requests. Please try again later."
-        }
+// Everything else: 100 a minute on average. The dashboards load several lists per page,
+// so the old 300 per 15 min locked out an admin after a few minutes of normal use.
+app.use(
+    "/api",
+    rateLimit({
+        windowMs: 15 * 60 * 1000,
+        limit: 1500,
+        standardHeaders: "draft-7",
+        legacyHeaders: false,
+        skip: (req) => req.path.startsWith("/auth"),
+        message: TOO_MANY_REQUESTS_MESSAGE
     })
 );
 
