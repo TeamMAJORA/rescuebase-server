@@ -246,6 +246,7 @@ async function getAIPrediction(animal, adopter) {
                 headers: {
                     "Content-Type": "application/json",
                     "ngrok-skip-browser-warning": "true",
+                    ...(process.env.ML_SERVICE_TOKEN ? { "X-Service-Token": process.env.ML_SERVICE_TOKEN } : {}),
                 },
                 body: JSON.stringify(requestBody),
                 signal: AbortSignal.timeout(15000),
