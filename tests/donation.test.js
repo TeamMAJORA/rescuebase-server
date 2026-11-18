@@ -270,14 +270,17 @@ describe("Table 35 - Donation Management: Manage Needed Supplies & Delete Donati
         assert.equal(remove.mock.callCount(), 1);
     });
 
-    test("CASE-130 staff cannot delete a donation record", async () => {
+    test("CASE-130 staff can delete a donation record, and an adopter cannot", async () => {
         const donation = { _id: newId(), status: "pending" };
         mock.method(Donation, "findById", async () => donation);
-        const remove = mock.method(Donation, "findByIdAndDelete", async () => donation);
+        const removeById = mock.method(Donation, "findByIdAndDelete", async () => donation);
 
-        const result = await callRoute(donationRoutes, "DELETE", `/${donation._id}`, { role: "staff" });
+        const adopterResult = await callRoute(donationRoutes, "DELETE", `/${donation._id}`, { role: "adopter" });
+        assert.equal(adopterResult.status, 403);
+        assert.equal(removeById.mock.callCount(), 0, "an adopter must not delete anything");
 
-        assert.equal(result.status, 403);
-        assert.equal(remove.mock.callCount(), 0);
+        const staffResult = await callRoute(donationRoutes, "DELETE", `/${donation._id}`, { role: "staff" });
+        assert.equal(staffResult.status, 200);
+        assert.equal(removeById.mock.callCount(), 1, "a pending donation is deleted for real");
     });
 });

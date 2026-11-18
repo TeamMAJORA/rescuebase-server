@@ -84,12 +84,14 @@ describe("Table 35 - Administration: View Activity Logs", () => {
         assert.equal(range.$lte.getDate(), 15);
     });
 
-    test("CASE-189 staff cannot open the activity log", async () => {
-        stubLogQueries([]);
+    test("CASE-189 staff see only their own entries in the activity log, even if they ask for another user", async () => {
+        const find = stubLogQueries([]);
+        const staffId = newId();
 
-        const result = await callRoute(activityLogRoutes, "GET", "/", { role: "staff" });
+        const result = await callRoute(activityLogRoutes, "GET", `/?userId=${newId()}`, { role: "staff", user: { id: staffId } });
 
-        assert.equal(result.status, 403);
+        assert.equal(result.status, 200);
+        assert.equal(String(find.mock.calls[0].arguments[0].user), String(staffId), "the query is limited to the staff member's own entries");
     });
 });
 

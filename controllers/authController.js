@@ -29,6 +29,13 @@ exports.emailSignup = async (req, res) => {
         throw error;
     }
 
+    // Same pattern as the sign-up form (AuthPage.jsx EMAIL_PATTERN), so the server does not rely on the browser
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        const error = new Error("Enter an email like name@example.com.");
+        error.statusCode = 400;
+        throw error;
+    }
+
     if (!password) {
         const error = new Error("Password is required.");
         error.statusCode = 400;

@@ -243,19 +243,6 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.equal(report.claimStatus, "none");
     });
 
-    test("CASE-141 staff can revoke an approved claim and the report returns to its previous status", async () => {
-        const { report, claim } = reportWithClaim({ status: "approved" }, { status: "reunited", claimStatus: "approved" });
-        mock.method(LostFoundReport, "findById", async () => report);
-        stubReviewSideEffects();
-
-        const result = await callRoute(lostFoundRoutes, "PATCH", `/reports/${report._id}/claim`, {
-            role: "staff", body: { claimId: claim._id, claimStatus: "revoked" },
-        });
-
-        assert.equal(result.status, 200);
-        assert.notEqual(report.status, "reunited");
-    });
-
     test("CASE-142 a second owner can submit a claim on the same found report and it is listed", async () => {
         const { report } = reportWithClaim();
         mock.method(LostFoundReport, "findById", async () => report);

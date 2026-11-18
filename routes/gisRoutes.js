@@ -15,18 +15,18 @@ router.get(
     asyncHandler(gisController.getShelters)
 );
 
-// Community members (volunteers and adopters) can pin stray sightings
+// Community members (volunteers, adopters and fosters) can pin stray sightings
 router.post(
     "/stray-sightings",
     verifyToken,
-    authorizeRoles("admin", "staff", "volunteer", "adopter"),
+    authorizeRoles("admin", "staff", "volunteer", "adopter", "foster"),
     asyncHandler(gisController.createStraySighting)
 );
 
 router.get(
     "/hotspots",
     verifyToken,
-    authorizeRoles("admin", "staff", "volunteer", "adopter"),
+    authorizeRoles("admin", "staff", "volunteer", "adopter", "foster"),
     asyncHandler(gisController.getHotspotAnalysis)
 );
 
