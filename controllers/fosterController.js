@@ -1051,6 +1051,12 @@ exports.submitAssignmentUpdate = async (req, res) => {
         },
     });
 
+    await notifyShelterStaff(
+        "Foster weekly update",
+        `${assignment.fosterName} sent a weekly update for ${assignment.petName}. See it in Foster Care.`,
+        { alsoEmail: false }
+    );
+
     return res.status(200).json({
         success: true,
         message:
@@ -1159,6 +1165,12 @@ exports.submitBehaviorEvaluation = async (req, res) => {
                 assignment.fosterEmail,
         },
     });
+
+    await notifyShelterStaff(
+        "Behavior evaluation to review",
+        `${assignment.fosterName} sent a behavior evaluation for ${assignment.petName}. Review it in Foster Care.`,
+        { alsoEmail: false }
+    );
 
     return res.status(200).json({
         success: true,
@@ -1835,8 +1847,8 @@ exports.deleteAssignment = async (req, res) => {
 // ===== Early return: foster requests, admin/staff confirm or decline =====
 const RETURN_REASONS = ["Medical", "Behavior", "Personal", "Emergency"];
 
-// Tell every admin/staff account (in-app always, email too)
-async function notifyShelterStaff(title, message) {
+// Tell every admin/staff account (in-app always, email unless alsoEmail is false)
+async function notifyShelterStaff(title, message, { alsoEmail = true } = {}) {
     try {
         const staff = await User.find({ role: { $in: ["admin", "staff"] } }).select("_id email");
 
@@ -1846,11 +1858,13 @@ async function notifyShelterStaff(title, message) {
             );
         }
 
-        await Promise.allSettled(
-            staff.map((user) => sendFosterUpdateEmail(user.email, title, message))
-        );
+        if (alsoEmail) {
+            await Promise.allSettled(
+                staff.map((user) => sendFosterUpdateEmail(user.email, title, message))
+            );
+        }
     } catch (error) {
-        console.error("Return request staff notification error:", error);
+        console.error("Shelter staff notification error:", error);
     }
 }
 
@@ -2278,6 +2292,13 @@ exports.submitMedicalRequest = async (req, res) => {
             issue,
         },
     });
+
+    const isUrgentMedicalRequest = urgency === "High" || urgency === "Emergency";
+    await notifyShelterStaff(
+        isUrgentMedicalRequest ? `URGENT: Medical help for ${assignment.petName}` : `Medical help for ${assignment.petName}`,
+        `${assignment.fosterName} asked for medical help (${urgency}): ${issue}. See it in Foster Care.`,
+        { alsoEmail: isUrgentMedicalRequest }
+    );
 
     return res.status(201).json({
         success: true,
