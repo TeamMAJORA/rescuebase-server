@@ -1,4 +1,4 @@
-// Table 35 - Rescue Assignment Module (CASE-159 to CASE-162)
+// Table 35 - Rescue Assignment Module (CASE-158 to CASE-161)
 // Real rescue assignment routes (login check, role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -32,7 +32,7 @@ function stubCreate({ volunteer = null } = {}) {
 }
 
 describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
-    test("CASE-159 a rescue task with all required details is saved as open", async () => {
+    test("CASE-158 a rescue task with all required details is saved as open", async () => {
         const { create } = stubCreate();
 
         const result = await callRoute(rescueRoutes, "POST", "/", { role: "staff", body: TASK });
@@ -44,7 +44,7 @@ describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
         assert.equal(saved.priority, "urgent");
     });
 
-    test("CASE-160 leaving a required rescue field empty is refused with a message", async () => {
+    test("CASE-159 leaving a required rescue field empty is refused with a message", async () => {
         const { create } = stubCreate();
 
         for (const [field, pattern] of [["title", /title is required/i], ["description", /description is required/i], ["location", /location is required/i]]) {
@@ -55,7 +55,7 @@ describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-161 assigning a rescue task to a volunteer notifies the volunteer and the volunteer can see the task", async () => {
+    test("CASE-160 assigning a rescue task to a volunteer notifies the volunteer and the volunteer can see the task", async () => {
         const volunteerId = newId();
         const { create, notification } = stubCreate({ volunteer: { _id: volunteerId, name: "Vic Volunteer", email: "vic@test.rescuebase" } });
 
@@ -74,7 +74,7 @@ describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
         assert.equal(find.mock.calls[0].arguments[0].volunteerId, mine.account._id);
     });
 
-    test("CASE-162 a volunteer accepts, starts and completes a rescue task with a proof photo and staff are notified at each step", async () => {
+    test("CASE-161 a volunteer accepts, starts and completes a rescue task with a proof photo and staff are notified at each step", async () => {
         const volunteer = { id: newId() };
         const task = fakeDocument({
             title: "Rescue injured dog", status: "pending", volunteerName: "Vic Volunteer", adminId: newId(), adminEmail: "staff@test.rescuebase",

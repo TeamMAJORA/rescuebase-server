@@ -1,4 +1,4 @@
-// Table 35 - Lost-and-Found Module (CASE-131 to CASE-144)
+// Table 35 - Lost-and-Found Module (CASE-131 to CASE-143)
 // Real Lost & Found routes (login check, role check, controller, matching service) run with mocked models.
 // The matching score itself is also covered by lostFoundMatching.test.js (U-22, U-23).
 const { describe, test, afterEach } = require("node:test");
@@ -243,7 +243,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.equal(report.claimStatus, "none");
     });
 
-    test("CASE-142 a second owner can submit a claim on the same found report and it is listed", async () => {
+    test("CASE-141 a second owner can submit a claim on the same found report and it is listed", async () => {
         const { report } = reportWithClaim();
         mock.method(LostFoundReport, "findById", async () => report);
         mock.method(LedgerEntry, "create", async () => ({}));
@@ -260,7 +260,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.equal(report.claimStatus, "pending");
     });
 
-    test("CASE-143 an admin deletes a lost or found report and it is removed", async () => {
+    test("CASE-142 an admin deletes a lost or found report and it is removed", async () => {
         const report = fakeDocument({ reporterEmail: FINDER, species: "Dog", claims: [] });
         mock.method(LostFoundReport, "findById", async () => report);
         const deleteMatches = mock.method(LostFoundMatch, "deleteMany", async () => ({}));
@@ -273,7 +273,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.equal(deleteMatches.mock.callCount(), 1);
     });
 
-    test("CASE-144 staff cannot delete a report filed by someone else", async () => {
+    test("CASE-143 staff cannot delete a report filed by someone else", async () => {
         const report = fakeDocument({ reporterEmail: FINDER, species: "Dog", claims: [] });
         mock.method(LostFoundReport, "findById", async () => report);
         const remove = mock.method(LostFoundReport, "findByIdAndDelete", async () => report);
