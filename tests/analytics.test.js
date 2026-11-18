@@ -22,6 +22,7 @@ function stubOverview({ count = 0, rows = [] } = {}) {
     for (const model of [Animal, FosterAssignment, LostFoundReport]) {
         mock.method(model, "find", () => query(rows));
     }
+    mock.method(AdoptionApplication, "find", () => query([]));
 }
 
 describe("Table 35 - Analytics: View Operational Analytics Dashboard", () => {
@@ -50,6 +51,30 @@ describe("Table 35 - Analytics: View Operational Analytics Dashboard", () => {
         const result = await callRoute(analyticsRoutes, "GET", "/overview", { role: "adopter" });
 
         assert.equal(result.status, 403);
+    });
+});
+
+describe("Table 35 - Analytics: adoptions are counted by approval month", () => {
+    test("CASE-176 (variant) an adoption is counted in the month its application was approved, not the month the animal was last edited", async () => {
+        const animalId = "665f1c2a9b1e4a0012345678";
+        const approvedAt = new Date();
+        approvedAt.setMonth(approvedAt.getMonth() - 2);
+        const editedLater = new Date(); // the animal was edited this month
+        mock.method(Animal, "countDocuments", async () => 1);
+        for (const model of [AdoptionApplication, FosterAssignment, LostFoundReport]) {
+            mock.method(model, "countDocuments", async () => 0);
+        }
+        mock.method(Animal, "find", () => query([{ _id: animalId, updatedAt: editedLater }]));
+        mock.method(FosterAssignment, "find", () => query([]));
+        mock.method(LostFoundReport, "find", () => query([]));
+        mock.method(AdoptionApplication, "find", () => query([{ animalId, reviewedAt: approvedAt }]));
+
+        const result = await callRoute(analyticsRoutes, "GET", "/overview", { role: "staff" });
+
+        assert.equal(result.status, 200);
+        const months = result.body.monthlyStats;
+        assert.equal(months[months.length - 1].adoptions, 0, "this month must not get the adoption");
+        assert.equal(months[months.length - 3].adoptions, 1, "the approval month gets the adoption");
     });
 });
 

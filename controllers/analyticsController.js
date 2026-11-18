@@ -89,10 +89,10 @@ exports.getOverview = async (req, res) => {
             status: "pending",
         }),
 
+        // All adopted animals: the month comes from the approved application (below), not from updatedAt
         Animal.find({
             adoptionStatus: "adopted",
-            updatedAt: { $gte: firstMonth },
-        }).select("updatedAt"),
+        }).select("_id updatedAt"),
 
         Animal.find({
             intakeType: "Rescued",
@@ -112,8 +112,24 @@ exports.getOverview = async (req, res) => {
         }),
     ]);
 
+    // An adoption is counted in the month its application was approved.
+    // updatedAt changes on every later edit, so it is only the fallback for animals with no approved application.
+    const approvedApplications = await AdoptionApplication.find({
+        status: "approved",
+        animalId: { $in: adoptionAnimals.map((animal) => animal._id) },
+    }).select("animalId reviewedAt");
+
+    const approvedAtByAnimalId = new Map();
+    approvedApplications.forEach((application) => {
+        const key = String(application.animalId);
+        const reviewedAt = application.reviewedAt ? new Date(application.reviewedAt) : null;
+        if (!reviewedAt || Number.isNaN(reviewedAt.getTime())) return;
+        const current = approvedAtByAnimalId.get(key);
+        if (!current || reviewedAt > current) approvedAtByAnimalId.set(key, reviewedAt);
+    });
+
     adoptionAnimals.forEach((animal) =>
-        addToMonth(animal.updatedAt, "adoptions")
+        addToMonth(approvedAtByAnimalId.get(String(animal._id)) || animal.updatedAt, "adoptions")
     );
 
     rescuedAnimals.forEach((animal) =>
