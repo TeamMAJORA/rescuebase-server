@@ -1,0 +1,133 @@
+// Table 35 - Feedback Management Module (CASE-168 to CASE-176)
+// Real feedback routes (login check, role check, controller) run with mocked models.
+const { describe, test, afterEach } = require("node:test");
+const assert = require("node:assert/strict");
+
+const { mock, query, fakeDocument, callRoute, newId, sentEmails } = require("./helpers/http");
+
+const Feedback = require("../models/Feedback");
+const User = require("../models/User");
+const Notification = require("../models/Notifications");
+
+const feedbackRoutes = require("../routes/feedbackRoutes");
+
+afterEach(() => {
+    mock.restoreAll();
+    sentEmails.length = 0;
+});
+
+function stubSender() {
+    mock.method(User, "findById", () => query({ _id: newId(), name: "Ana Adopter", email: "adopter@test.rescuebase", role: "adopter" }));
+}
+
+describe("Table 35 - Feedback Management: Submit Feedback & View Feedback History", () => {
+    test("CASE-168 feedback with a rating and a message is saved as active and appears in the sender's history", async () => {
+        stubSender();
+        const saved = [];
+        const create = mock.method(Feedback, "create", async (data) => { const row = { _id: newId(), ...data }; saved.push(row); return row; });
+
+        const result = await callRoute(feedbackRoutes, "POST", "/", { role: "adopter", body: { rating: 5, message: "Great service", category: "adoption" } });
+
+        assert.equal(result.status, 201);
+        assert.equal(create.mock.calls[0].arguments[0].rating, 5);
+        assert.equal(create.mock.calls[0].arguments[0].status, "active");
+
+        mock.method(Feedback, "find", () => query(saved));
+        const history = await callRoute(feedbackRoutes, "GET", "/me", { role: "adopter" });
+        assert.equal(history.body.feedback[0].message, "Great service");
+    });
+
+    test("CASE-169 feedback with the rating or message empty is refused with a message", async () => {
+        stubSender();
+        const create = mock.method(Feedback, "create", async () => ({}));
+
+        const noRating = await callRoute(feedbackRoutes, "POST", "/", { role: "adopter", body: { message: "Great service" } });
+        const noMessage = await callRoute(feedbackRoutes, "POST", "/", { role: "adopter", body: { rating: 4, message: "  " } });
+
+        assert.equal(noRating.status, 400);
+        assert.match(noRating.body.message, /rating/i);
+        assert.equal(noMessage.status, 400);
+        assert.match(noMessage.body.message, /message is required/i);
+        assert.equal(create.mock.callCount(), 0);
+    });
+
+    test("CASE-170 the feedback history only asks for the signed-in user's own feedback", async () => {
+        const find = mock.method(Feedback, "find", () => query([{ message: "Mine" }]));
+
+        const result = await callRoute(feedbackRoutes, "GET", "/me", { role: "adopter" });
+
+        assert.equal(result.status, 200);
+        assert.equal(find.mock.calls[0].arguments[0].userEmail, "adopter@test.rescuebase");
+    });
+});
+
+describe("Table 35 - Feedback Management: Review, Reply To, Archive & Restore Feedback", () => {
+    function feedbackEntry(overrides = {}) {
+        return fakeDocument({ user: newId(), userName: "Ana Adopter", userEmail: "ana@test.rescuebase", message: "Great service", rating: 5, status: "active", ...overrides });
+    }
+
+    test("CASE-171 staff open the feedback list and see each entry with its rating", async () => {
+        mock.method(Feedback, "find", () => query([{ _id: newId(), rating: 4, message: "Good", userEmail: "a@test.rescuebase" }]));
+        mock.method(User, "find", () => query([]));
+
+        const result = await callRoute(feedbackRoutes, "GET", "/", { role: "staff" });
+
+        assert.equal(result.status, 200);
+        assert.equal(result.body.feedback[0].rating, 4);
+    });
+
+    test("CASE-172 a staff reply is saved and the sender is notified in the app and by email", async () => {
+        const entry = feedbackEntry();
+        mock.method(Feedback, "findById", async () => entry);
+        mock.method(User, "findById", () => query({ name: "Staff Sam" }));
+        const notification = mock.method(Notification, "create", async () => ({}));
+
+        const result = await callRoute(feedbackRoutes, "PATCH", `/${entry._id}/reply`, { role: "staff", body: { reply: "Thank you for your kind words!" } });
+
+        assert.equal(result.status, 200);
+        assert.equal(entry.reply, "Thank you for your kind words!");
+        assert.equal(entry.savedTimes, 1);
+        assert.equal(notification.mock.calls[0].arguments[0].title, "We replied to your feedback");
+        assert.equal(sentEmails.some((mail) => mail.name === "sendFeedbackReplyEmail"), true);
+    });
+
+    test("CASE-173 archiving a feedback entry moves it to the archive", async () => {
+        const entry = feedbackEntry();
+        mock.method(Feedback, "findById", async () => entry);
+
+        const result = await callRoute(feedbackRoutes, "PATCH", `/${entry._id}/archive`, { role: "staff" });
+
+        assert.equal(result.status, 200);
+        assert.equal(entry.status, "archived");
+    });
+
+    test("CASE-174 restoring an archived feedback entry returns it to the active list", async () => {
+        const entry = feedbackEntry({ status: "archived" });
+        mock.method(Feedback, "findById", async () => entry);
+
+        const result = await callRoute(feedbackRoutes, "PATCH", `/${entry._id}/restore`, { role: "staff" });
+
+        assert.equal(result.status, 200);
+        assert.equal(entry.status, "active");
+    });
+});
+
+describe("Table 35 - Feedback Management: Delete Feedback", () => {
+    test("CASE-175 an admin deletes a feedback entry and it is removed", async () => {
+        const remove = mock.method(Feedback, "findByIdAndDelete", async () => ({ _id: newId() }));
+
+        const result = await callRoute(feedbackRoutes, "DELETE", `/${newId()}`, { role: "admin" });
+
+        assert.equal(result.status, 200);
+        assert.equal(remove.mock.callCount(), 1);
+    });
+
+    test("CASE-176 staff cannot delete a feedback entry", async () => {
+        const remove = mock.method(Feedback, "findByIdAndDelete", async () => ({ _id: newId() }));
+
+        const result = await callRoute(feedbackRoutes, "DELETE", `/${newId()}`, { role: "staff" });
+
+        assert.equal(result.status, 403);
+        assert.equal(remove.mock.callCount(), 0);
+    });
+});
