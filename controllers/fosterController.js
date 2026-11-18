@@ -482,6 +482,13 @@ exports.updateMyApplication = async (req, res) => {
 
         let value = req.body[field];
 
+        // Approved fosters change capacity through a capacity request staff approve
+        if (field === "capacity" && application.status === "approved" && Number(value) !== application.capacity) {
+            const e = new Error("Use \"Foster more animals\" to change how many animals you can foster.");
+            e.statusCode = 400;
+            throw e;
+        }
+
         if (["hasChildren", "hasPets", "petFriendly"].includes(field)) value = Boolean(value);
         else if (field === "capacity") value = Number(value);
         else value = String(value).trim();
@@ -545,6 +552,162 @@ exports.updateMyApplication = async (req, res) => {
     return res.status(200).json({
         success: true,
         message: "Changes saved. The shelter has been notified.",
+        application,
+    });
+};
+
+// ===== Capacity request: an approved foster asks to foster more animals at once =====
+const MAX_FOSTER_CAPACITY = 10;
+
+async function findApprovedApplicationForUser(req) {
+    const applicantEmail = String(req.user?.email || "").trim().toLowerCase();
+
+    const application = await FosterApplication.findOne({
+        applicantEmail,
+        status: "approved",
+    }).sort({ createdAt: -1 });
+
+    if (!application) {
+        const e = new Error("Only approved fosters can ask to foster more animals.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    return application;
+}
+
+exports.requestMoreFosterCapacity = async (req, res) => {
+    const application = await findApprovedApplicationForUser(req);
+    const requestedCapacity = Number(req.body.requestedCapacity);
+    const reason = String(req.body.reason || "").trim().slice(0, 300);
+
+    if (application.capacityRequest?.status === "pending") {
+        const e = new Error("You already have a request waiting for review.");
+        e.statusCode = 409;
+        throw e;
+    }
+
+    if (
+        !Number.isInteger(requestedCapacity) ||
+        requestedCapacity <= application.capacity ||
+        requestedCapacity > MAX_FOSTER_CAPACITY
+    ) {
+        const e = new Error(
+            `Choose a number from ${application.capacity + 1} to ${MAX_FOSTER_CAPACITY}.`
+        );
+        e.statusCode = 400;
+        throw e;
+    }
+
+    application.capacityRequest = {
+        requestedCapacity,
+        reason,
+        status: "pending",
+        requestedAt: new Date(),
+        decidedAt: null,
+    };
+    await application.save();
+
+    await notifyShelterStaff(
+        "Foster capacity request",
+        `${application.applicantName} asks to foster up to ${requestedCapacity} animals (now ${application.capacity}).`,
+        { alsoEmail: false }
+    );
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: "foster_capacity_requested",
+        actorName: application.applicantName,
+        actorEmail: application.applicantEmail,
+        targetType: "FosterApplication",
+        targetId: application._id.toString(),
+        description: `${application.applicantName} asked to foster up to ${requestedCapacity} animals (now ${application.capacity}).`,
+        status: "pending",
+        metadata: { currentCapacity: application.capacity, requestedCapacity },
+    });
+
+    return res.status(201).json({
+        success: true,
+        message: "Request sent. Staff will review it.",
+        application,
+    });
+};
+
+exports.cancelFosterCapacityRequest = async (req, res) => {
+    const application = await findApprovedApplicationForUser(req);
+
+    if (application.capacityRequest?.status !== "pending") {
+        const e = new Error("You have no request waiting for review.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    application.capacityRequest.status = "none";
+    await application.save();
+
+    return res.status(200).json({
+        success: true,
+        message: "Request cancelled.",
+        application,
+    });
+};
+
+exports.decideFosterCapacityRequest = async (req, res) => {
+    const decision = String(req.body.decision || "").trim().toLowerCase();
+
+    if (!["approved", "declined"].includes(decision)) {
+        const e = new Error("Decision must be approved or declined.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const application = await FosterApplication.findById(req.params.id);
+
+    if (!application || application.capacityRequest?.status !== "pending") {
+        const e = new Error("This capacity request was not found or is already decided.");
+        e.statusCode = 404;
+        throw e;
+    }
+
+    if (application.status !== "approved") {
+        const e = new Error("This foster is no longer approved.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const previousCapacity = application.capacity;
+    const requestedCapacity = application.capacityRequest.requestedCapacity;
+
+    application.capacityRequest.status = decision;
+    application.capacityRequest.decidedAt = new Date();
+    if (decision === "approved") application.capacity = requestedCapacity;
+    await application.save();
+
+    await createFosterNotification(
+        application.applicantEmail,
+        decision === "approved" ? "Capacity request approved" : "Capacity request declined",
+        decision === "approved"
+            ? `You can now foster up to ${requestedCapacity} animals at a time.`
+            : `Your request to foster up to ${requestedCapacity} animals was declined. Your limit stays at ${previousCapacity}.`
+    );
+
+    await createLedgerEntrySafely({
+        type: "foster",
+        action: `foster_capacity_${decision}`,
+        actorName: req.user?.name || req.user?.email || "Staff",
+        actorEmail: req.user?.email || "",
+        targetType: "FosterApplication",
+        targetId: application._id.toString(),
+        description: `Capacity request for ${application.applicantName} ${decision} (${previousCapacity} → ${requestedCapacity}).`,
+        status: decision,
+        metadata: { previousCapacity, requestedCapacity },
+    });
+
+    return res.status(200).json({
+        success: true,
+        message: decision === "approved"
+            ? `${application.applicantName} can now foster up to ${requestedCapacity} animals.`
+            : "Request declined.",
         application,
     });
 };

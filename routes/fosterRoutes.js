@@ -57,6 +57,33 @@ router.patch(
     )
 );
 
+router.post(
+    "/applications/me/capacity-request",
+    verifyToken,
+    authoriseRoles("foster"),
+    asyncHandler(
+        fosterController.requestMoreFosterCapacity
+    )
+);
+
+router.delete(
+    "/applications/me/capacity-request",
+    verifyToken,
+    authoriseRoles("foster"),
+    asyncHandler(
+        fosterController.cancelFosterCapacityRequest
+    )
+);
+
+router.patch(
+    "/applications/:id/capacity-request",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.decideFosterCapacityRequest
+    )
+);
+
 router.patch(
     "/applications/:id/status",
     verifyToken,
