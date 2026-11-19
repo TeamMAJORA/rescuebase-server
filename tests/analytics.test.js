@@ -1,4 +1,4 @@
-// Table 35 - Analytics Module (CASE-177 to CASE-181)
+// Table 35 - Analytics Module (CASE-176 to CASE-180)
 // Real analytics routes run with mocked models; the AI forecast service is a mocked fetch.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -22,10 +22,11 @@ function stubOverview({ count = 0, rows = [] } = {}) {
     for (const model of [Animal, FosterAssignment, LostFoundReport]) {
         mock.method(model, "find", () => query(rows));
     }
+    mock.method(AdoptionApplication, "find", () => query([]));
 }
 
 describe("Table 35 - Analytics: View Operational Analytics Dashboard", () => {
-    test("CASE-177 staff open the analytics dashboard and get totals and six months of chart data", async () => {
+    test("CASE-176 staff open the analytics dashboard and get totals and six months of chart data", async () => {
         stubOverview({ count: 4, rows: [{ updatedAt: new Date(), intakeDate: new Date(), dateReported: new Date(), startDate: new Date() }] });
 
         const result = await callRoute(analyticsRoutes, "GET", "/overview", { role: "staff" });
@@ -36,7 +37,7 @@ describe("Table 35 - Analytics: View Operational Analytics Dashboard", () => {
         assert.ok(result.body.monthlyStats.some((month) => month.adoptions > 0));
     });
 
-    test("CASE-178 the dashboard with no data returns zero totals and empty months without an error", async () => {
+    test("CASE-177 the dashboard with no data returns zero totals and empty months without an error", async () => {
         stubOverview({ count: 0, rows: [] });
 
         const result = await callRoute(analyticsRoutes, "GET", "/overview", { role: "admin" });
@@ -46,10 +47,34 @@ describe("Table 35 - Analytics: View Operational Analytics Dashboard", () => {
         assert.equal(result.body.monthlyStats.every((month) => month.adoptions === 0 && month.rescues === 0), true);
     });
 
-    test("CASE-179 an adopter cannot open the analytics dashboard", async () => {
+    test("CASE-178 an adopter cannot open the analytics dashboard", async () => {
         const result = await callRoute(analyticsRoutes, "GET", "/overview", { role: "adopter" });
 
         assert.equal(result.status, 403);
+    });
+});
+
+describe("Table 35 - Analytics: adoptions are counted by approval month", () => {
+    test("CASE-176 (variant) an adoption is counted in the month its application was approved, not the month the animal was last edited", async () => {
+        const animalId = "665f1c2a9b1e4a0012345678";
+        const approvedAt = new Date();
+        approvedAt.setMonth(approvedAt.getMonth() - 2);
+        const editedLater = new Date(); // the animal was edited this month
+        mock.method(Animal, "countDocuments", async () => 1);
+        for (const model of [AdoptionApplication, FosterAssignment, LostFoundReport]) {
+            mock.method(model, "countDocuments", async () => 0);
+        }
+        mock.method(Animal, "find", () => query([{ _id: animalId, updatedAt: editedLater }]));
+        mock.method(FosterAssignment, "find", () => query([]));
+        mock.method(LostFoundReport, "find", () => query([]));
+        mock.method(AdoptionApplication, "find", () => query([{ animalId, reviewedAt: approvedAt }]));
+
+        const result = await callRoute(analyticsRoutes, "GET", "/overview", { role: "staff" });
+
+        assert.equal(result.status, 200);
+        const months = result.body.monthlyStats;
+        assert.equal(months[months.length - 1].adoptions, 0, "this month must not get the adoption");
+        assert.equal(months[months.length - 3].adoptions, 1, "the approval month gets the adoption");
     });
 });
 
@@ -59,7 +84,7 @@ describe("Table 35 - Analytics: View AI Intake Forecast", () => {
         mock.method(FoodInventory, "find", () => query([]));
     }
 
-    test("CASE-180 staff open the AI intake forecast and see the predicted intake for next month", async () => {
+    test("CASE-179 staff open the AI intake forecast and see the predicted intake for next month", async () => {
         stubForecastData();
         const ai = mock.method(globalThis, "fetch", async () => ({
             ok: true, json: async () => ({ success: true, predictedIntake: 7.4, roundedPredictedIntake: 7 }),
@@ -73,7 +98,7 @@ describe("Table 35 - Analytics: View AI Intake Forecast", () => {
         assert.equal(JSON.parse(ai.mock.calls[0].arguments[1].body).history.length, 12);
     });
 
-    test("CASE-181 when the AI service is unavailable a clear error message is returned", async () => {
+    test("CASE-180 when the AI service is unavailable a clear error message is returned", async () => {
         stubForecastData();
         mock.method(globalThis, "fetch", async () => { throw new Error("connect ECONNREFUSED"); });
 

@@ -181,6 +181,19 @@ const fosterApplicationSchema = new mongoose.Schema(
             default: [],
         },
 
+        // An approved foster asking to foster more animals at once; staff approve or decline
+        capacityRequest: {
+            requestedCapacity: { type: Number, default: null },
+            reason: { type: String, default: "", trim: true },
+            status: {
+                type: String,
+                enum: ["none", "pending", "approved", "declined"],
+                default: "none",
+            },
+            requestedAt: { type: Date, default: null },
+            decidedAt: { type: Date, default: null },
+        },
+
         withdrawnAt: {
             type: Date,
             default: null,

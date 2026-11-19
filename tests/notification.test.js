@@ -1,4 +1,4 @@
-// Table 35 - Notification Module (CASE-163 to CASE-167)
+// Table 35 - Notification Module (CASE-162 to CASE-166)
 // Real notification routes run with an in-memory list of notifications instead of the database.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -48,7 +48,7 @@ function stubNotificationStore(userId, readFlags) {
 }
 
 describe("Table 35 - Notification: View Automated Notifications", () => {
-    test("CASE-163 an application status change creates a notification for the adopter and raises the unread count", async () => {
+    test("CASE-162 an application status change creates a notification for the adopter and raises the unread count", async () => {
         const adopterId = newId();
         const application = fakeDocument({
             applicantUserId: adopterId, fullName: "Ana Adopter", email: "ana@test.rescuebase", animalId: newId(), petName: "Buddy",
@@ -78,7 +78,7 @@ describe("Table 35 - Notification: View Automated Notifications", () => {
         assert.equal(bell.body.count, 2);
     });
 
-    test("CASE-164 the notification list returns the signed-in user's notifications", async () => {
+    test("CASE-163 the notification list returns the signed-in user's notifications", async () => {
         const userId = newId();
         stubNotificationStore(userId, [false, true]);
 
@@ -88,7 +88,7 @@ describe("Table 35 - Notification: View Automated Notifications", () => {
         assert.equal(result.body.notifications.length, 2);
     });
 
-    test("CASE-165 marking one notification as read lowers the unread count by one", async () => {
+    test("CASE-164 marking one notification as read lowers the unread count by one", async () => {
         const userId = newId();
         const store = stubNotificationStore(userId, [false, false, false]);
 
@@ -101,7 +101,7 @@ describe("Table 35 - Notification: View Automated Notifications", () => {
         assert.equal(after.body.count, 2);
     });
 
-    test("CASE-166 marking all notifications as read makes the unread count zero", async () => {
+    test("CASE-165 marking all notifications as read makes the unread count zero", async () => {
         const userId = newId();
         stubNotificationStore(userId, [false, false, false]);
 
@@ -112,7 +112,7 @@ describe("Table 35 - Notification: View Automated Notifications", () => {
         assert.equal(after.body.count, 0);
     });
 
-    test("CASE-167 a vaccination due in 3 days sends an in-app reminder to staff and an email to the foster", async () => {
+    test("CASE-166 a vaccination due in 3 days sends an in-app reminder to staff and an email to the foster", async () => {
         stubSettings();
         const originalState = Object.getOwnPropertyDescriptor(mongoose.connection, "readyState");
         Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });
