@@ -43,7 +43,7 @@ async function verifiedUser(overrides = {}) {
 }
 
 describe("Table 35 - Authentication & Account: Register, Log In & Reset Password", () => {
-    test("CASE-001 registration with an invalid email format is refused", async () => {
+    test("CASE-001 | Description: User registers with an invalid email (not-an-email) | Expected: Server refuses with a 4xx error; no account created", async () => {
         stubSettings();
         mock.method(User, "findOne", () => query(null));
         const created = mock.method(User, "create", async (data) => fakeDocument(data));
@@ -52,12 +52,12 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
             body: signupBody({ email: "not-an-email" }),
         });
 
-        // The sign-up form checks the format in the browser (AuthPage.jsx EMAIL_PATTERN); this checks the server on its own.
+       
         assert.equal(result.status >= 400 && result.status < 500, true, "the server should refuse a badly formed email");
         assert.equal(created.mock.callCount(), 0, "no account should be created");
     });
 
-    test("CASE-002 registration with an email that already has a verified account is refused", async () => {
+    test("CASE-002 | Description: User registers with an email that already has a verified account | Expected: 409 'already registered'; no account created", async () => {
         stubSettings();
         mock.method(User, "findOne", () => query(fakeDocument({ verified: true, provider: "local" })));
         const created = mock.method(User, "create", async (data) => fakeDocument(data));
@@ -69,7 +69,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.equal(created.mock.callCount(), 0);
     });
 
-    test("CASE-003 registration with a password that breaks the password rules is refused", async () => {
+    test("CASE-003 | Description: User registers with a password that breaks the password rules | Expected: 400 error; no account created", async () => {
         stubSettings();
         mock.method(User, "findOne", () => query(null));
 
@@ -81,7 +81,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.equal(result.body.success, false);
     });
 
-    test("CASE-004 valid registration saves an unverified adopter and emails a 6-digit OTP; the correct OTP verifies the account", async () => {
+    test("CASE-004 | Description: User registers with valid details, then enters the emailed 6-digit OTP | Expected: 201; unverified adopter saved; OTP emailed; correct OTP verifies the account", async () => {
         stubSettings();
         mock.method(User, "findOne", () => query(null));
         let savedData;
@@ -113,7 +113,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.ok(verify.body.token, "a session token is issued so the app can open the dashboard");
     });
 
-    test("CASE-005 a wrong or expired registration OTP is refused", async () => {
+    test("CASE-005 | Description: User enters a wrong or expired registration OTP | Expected: 400 'invalid OTP' (attempt counted) or 'expired'", async () => {
         stubSettings();
         const wrong = fakeDocument({ verified: false, emailOtp: "123456", emailOtpExpires: new Date(Date.now() + 60000), emailOtpAttempts: 0 });
         mock.method(User, "findOne", () => query(wrong));
@@ -132,7 +132,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.match(expiredResult.body.message, /request a new code/i, "the user is told to request a new OTP");
     });
 
-    test("CASE-005 (new code) the resend route issues a fresh OTP and email", async () => {
+    test("CASE-005 (new code) | Description: User asks for a new registration OTP | Expected: 200; fresh 6-digit OTP emailed; attempts reset to 0", async () => {
         const pending = fakeDocument({ verified: false, emailOtp: "111111", emailOtpAttempts: 3 });
         mock.method(User, "findOne", () => query(pending));
 
@@ -144,7 +144,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.equal(sentEmails.length, 1);
     });
 
-    test("CASE-006 Google sign-in for an existing account starts the login OTP step", async () => {
+    test("CASE-006 | Description: Existing user signs in with Google | Expected: 200; login OTP sent (requiresOtp); OTP then verifies", async () => {
         const existing = fakeDocument({ email: "google@test.rescuebase", role: "adopter", status: "active", provider: "google" });
         mock.method(User, "findOne", () => query(existing));
         const controller = require("../controllers/authController");
@@ -166,7 +166,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.ok(verified.body.token);
     });
 
-    test("CASE-007 login with an empty email or password is refused with the missing fields named", async () => {
+    test("CASE-007 | Description: User logs in with the email or password empty | Expected: 400; the missing field is named", async () => {
         const noPassword = await callRoute(authRoutes, "POST", "/email/login", { body: { email: "a@test.rescuebase", password: "" } });
         assert.equal(noPassword.status, 400);
         assert.deepEqual(noPassword.body.missingFields, ["password"]);
@@ -176,7 +176,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.deepEqual(noEmail.body.missingFields, ["email"]);
     });
 
-    test("CASE-008 login with a correct email and a wrong password gives an invalid-credentials message", async () => {
+    test("CASE-008 | Description: User logs in with a correct email and a wrong password | Expected: 401 'invalid email or password'; failed attempt counted", async () => {
         const user = await verifiedUser();
         mock.method(User, "findOne", () => query(user));
 
@@ -187,7 +187,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.equal(user.passwordLoginAttempts, 1);
     });
 
-    test("CASE-009 correct credentials send a login OTP; the correct OTP returns a token with the user's role", async () => {
+    test("CASE-009 | Description: User logs in with correct credentials, then the correct login OTP | Expected: OTP sent, no token yet; correct OTP returns a token with the user's role", async () => {
         const user = await verifiedUser({ role: "staff" });
         mock.method(User, "findOne", () => query(user));
 
@@ -203,7 +203,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.equal(decoded.role, "staff");
     });
 
-    test("CASE-010 a wrong login OTP entered until the attempt limit locks the login", async () => {
+    test("CASE-010 | Description: User enters wrong login OTPs until the attempt limit | Expected: 429; account locked, even the right OTP is refused", async () => {
         const user = await verifiedUser({
             loginOtp: "123456",
             loginOtpExpires: new Date(Date.now() + 60000),
@@ -223,7 +223,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.equal(locked.status, 429, "even the right OTP is refused while locked");
     });
 
-    test("CASE-011 a deactivated user cannot log in", async () => {
+    test("CASE-011 | Description: Deactivated user tries to log in | Expected: 403 'deactivated'", async () => {
         const user = await verifiedUser({ status: "disabled" });
         mock.method(User, "findOne", () => query(user));
 
@@ -233,7 +233,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.match(result.body.message, /deactivated/i);
     });
 
-    test("CASE-012 the correct reset OTP with a new valid password updates the password", async () => {
+    test("CASE-012 | Description: User resets the password with the correct reset OTP and a valid new password | Expected: 200; password hash changed; reset token cleared", async () => {
         const user = await verifiedUser({ passwordResetToken: "654321", passwordResetExpires: new Date(Date.now() + 60000) });
         mock.method(User, "findOne", () => query(user));
         const oldHash = user.password;
@@ -248,7 +248,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
         assert.equal(user.passwordResetToken, "");
     });
 
-    test("CASE-013 an invalid or expired reset OTP leaves the password unchanged", async () => {
+    test("CASE-013 | Description: User enters an invalid or expired reset OTP | Expected: 400 'invalid or expired'; password unchanged", async () => {
         mock.method(User, "findOne", () => query(null));
 
         const result = await callRoute(authRoutes, "POST", "/reset-password", {
@@ -261,7 +261,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
 });
 
 describe("Table 35 - Authentication & Account: Update Profile & Account Settings", () => {
-    test("CASE-014 editing the profile with valid values saves and returns the new values", async () => {
+    test("CASE-014 | Description: User edits the profile with valid values | Expected: 200; new name and username returned and saved once", async () => {
         const me = await verifiedUser({ name: "Old Name", username: "oldname" });
         mock.method(User, "findById", () => query(me));
         mock.method(User, "exists", async () => null);
@@ -277,7 +277,7 @@ describe("Table 35 - Authentication & Account: Update Profile & Account Settings
         assert.equal(me.savedTimes, 1);
     });
 
-    test("CASE-015 clearing the required name field is refused", async () => {
+    test("CASE-015 | Description: User clears the required name field and saves | Expected: 400 'name can't be empty'; nothing saved", async () => {
         const me = await verifiedUser({ name: "Old Name" });
         mock.method(User, "findById", () => query(me));
 
@@ -288,7 +288,7 @@ describe("Table 35 - Authentication & Account: Update Profile & Account Settings
         assert.equal(me.savedTimes, 0);
     });
 
-    test("CASE-016 changing to a new valid password saves a hash that matches the new password", async () => {
+    test("CASE-016 | Description: User changes the password to a valid new one | Expected: 200; saved hash matches the new password", async () => {
         const me = await verifiedUser();
         mock.method(User, "findById", () => query(me));
 
@@ -301,7 +301,7 @@ describe("Table 35 - Authentication & Account: Update Profile & Account Settings
         assert.equal(await bcrypt.compare("Another1!", me.password), true);
     });
 
-    test("CASE-017 changing to a password that breaks the password rules is refused", async () => {
+    test("CASE-017 | Description: User changes the password to one that breaks the rules | Expected: 400; password unchanged", async () => {
         const me = await verifiedUser();
         mock.method(User, "findById", () => query(me));
         const before = me.password;
@@ -325,7 +325,7 @@ describe("Table 35 - Authentication & Account: Apply for Volunteer or Foster Rol
         return { adopter, notified };
     }
 
-    test("CASE-018 an adopter's volunteer application with a reason is saved as pending and admins are notified", async () => {
+    test("CASE-018 | Description: Adopter applies for the volunteer role with a reason | Expected: 201; application saved as pending; admins notified", async () => {
         const { adopter, notified } = stubApplicant();
 
         const result = await callRoute(userRoutes, "POST", "/role-application", {
@@ -339,7 +339,7 @@ describe("Table 35 - Authentication & Account: Apply for Volunteer or Foster Rol
         assert.equal(notified.mock.callCount(), 1);
     });
 
-    test("CASE-019 the foster role is not accepted here: it goes through the foster application form", async () => {
+    test("CASE-019 | Description: Adopter applies for the foster role on the role form | Expected: 400 'invalid application role'; foster uses its own form", async () => {
         stubApplicant();
 
         const result = await callRoute(userRoutes, "POST", "/role-application", {
@@ -353,7 +353,7 @@ describe("Table 35 - Authentication & Account: Apply for Volunteer or Foster Rol
         // The foster form itself is covered in the Foster Management tests (CASE-093 onward).
     });
 
-    test("CASE-020 an application without a reason is refused", async () => {
+    test("CASE-020 | Description: Adopter applies without a reason | Expected: 400 'reason is required'", async () => {
         stubApplicant();
 
         const result = await callRoute(userRoutes, "POST", "/role-application", {
@@ -365,7 +365,7 @@ describe("Table 35 - Authentication & Account: Apply for Volunteer or Foster Rol
         assert.match(result.body.message, /reason is required/i);
     });
 
-    test("CASE-021 applying again while one is pending is refused", async () => {
+    test("CASE-021 | Description: Adopter applies again while one is pending | Expected: 400 'already have a pending'; nothing saved", async () => {
         const { adopter } = stubApplicant({ roleApplication: { status: "pending", targetRole: "volunteer" } });
 
         const result = await callRoute(userRoutes, "POST", "/role-application", {
@@ -378,7 +378,7 @@ describe("Table 35 - Authentication & Account: Apply for Volunteer or Foster Rol
         assert.equal(adopter.savedTimes, 0);
     });
 
-    test("CASE-022 after approval the next login token carries the new role", async () => {
+    test("CASE-022 | Description: Applicant logs in after approval | Expected: Token carries the new role (volunteer)", async () => {
         const approved = await verifiedUser({ role: "volunteer" });
         mock.method(User, "findOne", () => query(approved));
         await callRoute(authRoutes, "POST", "/email/login", { body: { email: approved.email, password: STRONG_PASSWORD } });
@@ -400,7 +400,7 @@ describe("Table 35 - Authentication & Account: Review Role Applications", () => 
         });
     }
 
-    test("CASE-023 the admin's user list is available, so pending applications can be found", async () => {
+    test("CASE-023 | Description: Admin opens the user list to find pending applications | Expected: 200; pending application listed", async () => {
         const rows = [{ _id: newId(), role: "adopter", roleApplication: { status: "pending", targetRole: "volunteer" } }];
         mock.method(User, "find", () => query(rows));
 
@@ -410,7 +410,7 @@ describe("Table 35 - Authentication & Account: Review Role Applications", () => 
         assert.equal(result.body.users[0].roleApplication.status, "pending");
     });
 
-    test("CASE-024 staff opening the role application list is denied (only the admin reviews role applications)", async () => {
+    test("CASE-024 | Description: Staff opens the role application list | Expected: 403; the list is never read", async () => {
         const find = mock.method(User, "find", () => query([]));
 
         const result = await callRoute(userRoutes, "GET", "/", { role: "staff" });
@@ -419,7 +419,7 @@ describe("Table 35 - Authentication & Account: Review Role Applications", () => 
         assert.equal(find.mock.callCount(), 0);
     });
 
-    test("CASE-025 approving a role application gives the user the new role", async () => {
+    test("CASE-025 | Description: Admin approves a role application | Expected: 200; application approved; user gets the new role", async () => {
         const applicant = pendingApplicant();
         mock.method(User, "findById", () => query(applicant));
         mock.method(Notification, "create", async () => ({}));
@@ -436,7 +436,7 @@ describe("Table 35 - Authentication & Account: Review Role Applications", () => 
         assert.equal(applicant.roleApplication.status, "approved");
     });
 
-    test("CASE-026 rejecting needs a reason; a rejection is saved and the role stays the same", async () => {
+    test("CASE-026 | Description: Admin rejects a role application, first without then with a reason | Expected: 400 'rejection reason is required'; with a reason 200, role unchanged", async () => {
         const applicant = pendingApplicant();
         mock.method(User, "findById", () => query(applicant));
         mock.method(Notification, "create", async () => ({}));
@@ -457,7 +457,7 @@ describe("Table 35 - Authentication & Account: Review Role Applications", () => 
         assert.equal(applicant.roleApplication.rejectionReason, "Not enough time");
     });
 
-    test("CASE-027 the applicant is notified of the decision", async () => {
+    test("CASE-027 | Description: Admin decides on a role application | Expected: Applicant gets an in-app notification and an email", async () => {
         const applicant = pendingApplicant();
         mock.method(User, "findById", () => query(applicant));
         const created = mock.method(Notification, "create", async () => ({}));
@@ -478,7 +478,7 @@ describe("Table 35 - Authentication & Account: Review Role Applications", () => 
 });
 
 describe("Table 35 - Authentication & Account: Manage Users, Roles & Account Status", () => {
-    test("CASE-028 the admin creates a user with valid details", async () => {
+    test("CASE-028 | Description: Admin creates a user with valid details | Expected: 201; staff user created, verified, password not returned", async () => {
         mock.method(User, "findOne", () => query(null));
         mock.method(User, "create", async (data) => fakeDocument(data));
 
@@ -493,7 +493,7 @@ describe("Table 35 - Authentication & Account: Manage Users, Roles & Account Sta
         assert.equal(result.body.user.password, undefined);
     });
 
-    test("CASE-029 creating a user with an email already in use is refused", async () => {
+    test("CASE-029 | Description: Admin creates a user with an email already in use | Expected: 409; user not created", async () => {
         mock.method(User, "findOne", () => query(fakeDocument({ email: "taken@test.rescuebase" })));
 
         const result = await callRoute(userRoutes, "POST", "/", {
@@ -504,7 +504,7 @@ describe("Table 35 - Authentication & Account: Manage Users, Roles & Account Sta
         assert.equal(result.status, 409);
     });
 
-    test("CASE-030 the admin edits another user's role and status", async () => {
+    test("CASE-030 | Description: Admin edits another user's role and status | Expected: 200; role and status updated", async () => {
         const targetId = newId();
         mock.method(User, "findById", () => query({ _id: targetId, role: "adopter", status: "active" }));
         const updated = mock.method(User, "findByIdAndUpdate", () => query({ _id: targetId, role: "staff", status: "active" }));
@@ -521,7 +521,7 @@ describe("Table 35 - Authentication & Account: Manage Users, Roles & Account Sta
         assert.deepEqual(updated.mock.calls[0].arguments[1].$set, { role: "staff", status: "active" });
     });
 
-    test("CASE-031 deactivating a user sets them disabled, and their next request is refused as deactivated", async () => {
+    test("CASE-031 | Description: Admin deactivates a user | Expected: 200; user disabled; next request 401 with accountDisabled", async () => {
         const target = fakeDocument({ status: "active" });
         mock.method(User, "findById", () => query(target));
         const controller = require("../controllers/userController");
@@ -542,7 +542,7 @@ describe("Table 35 - Authentication & Account: Manage Users, Roles & Account Sta
         assert.equal(next.body.accountDisabled, true);
     });
 
-    test("CASE-032 reactivating a deactivated user lets them log in again", async () => {
+    test("CASE-032 | Description: Admin reactivates a deactivated user | Expected: Login blocked (403) before, allowed (200) after", async () => {
         const target = await verifiedUser({ status: "disabled" });
         mock.method(User, "findOne", () => query(target));
         const blocked = await callRoute(authRoutes, "POST", "/email/login", { body: { email: target.email, password: STRONG_PASSWORD } });
@@ -554,7 +554,7 @@ describe("Table 35 - Authentication & Account: Manage Users, Roles & Account Sta
         assert.equal(allowed.body.requiresOtp, true);
     });
 
-    test("CASE-033 an admin cannot change their own role or deactivate themselves", async () => {
+    test("CASE-033 | Description: Admin changes their own role or deactivates their own account | Expected: 400; action refused", async () => {
         const adminId = newId();
         mock.method(User, "findById", () => query({ _id: adminId, role: "admin", status: "active" }));
         const controller = require("../controllers/userController");
@@ -575,7 +575,7 @@ describe("Table 35 - Authentication & Account: Manage Users, Roles & Account Sta
         assert.equal(deactivate.status, 400);
     });
 
-    test("CASE-034 staff opening Manage Users is denied", async () => {
+    test("CASE-034 | Description: Staff opens Manage Users | Expected: 403; the user list is never read", async () => {
         const find = mock.method(User, "find", () => query([]));
 
         const result = await callRoute(userRoutes, "GET", "/", { role: "staff" });

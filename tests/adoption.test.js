@@ -69,7 +69,7 @@ function stubStaffLookupAndNotifications() {
 }
 
 describe("Table 35 - Adoption Management: Browse Pets, Take Matchmaking Quiz & View AI Compatibility Scores", () => {
-    test("CASE-061 the pet list can be filtered by type (the size filter is U-11 in matchmaking.test.js)", async () => {
+    test("CASE-061 | Description: Adopter filters the pets by type (Dog) | Expected: Only available Dogs requested", async () => {
         const find = mock.method(Animal, "find", () => query([]));
 
         await callRoute(animalRoutes, "GET", "/?type=Dog&availabilityStatus=available", { role: "adopter" });
@@ -78,7 +78,7 @@ describe("Table 35 - Adoption Management: Browse Pets, Take Matchmaking Quiz & V
         assert.equal(find.mock.calls[0].arguments[0].availabilityStatus, "available");
     });
 
-    test("CASE-062 opening a pet profile returns the pet's details", async () => {
+    test("CASE-062 | Description: Adopter opens a pet profile | Expected: 200; the pet's name and type shown", async () => {
         const dog = adoptableDog("Buddy");
         mock.method(Animal, "findById", () => query(dog));
 
@@ -89,7 +89,7 @@ describe("Table 35 - Adoption Management: Browse Pets, Take Matchmaking Quiz & V
         assert.equal(result.body.animal.type, "Dog");
     });
 
-    test("CASE-063 submitting the quiz with all 8 answers returns a 0 to 100 score and a tier for each adoptable pet", async () => {
+    test("CASE-063 | Description: Adopter submits the quiz with all 8 answers | Expected: 201; each adoptable pet gets a 0 to 100 score and a tier", async () => {
         mockAiScore(90);
         mock.method(QuizResponse, "create", async (data) => ({ ...data, _id: newId() }));
         mock.method(Animal, "find", () => query([adoptableDog("Buddy"), adoptableDog("Rex")]));
@@ -104,7 +104,7 @@ describe("Table 35 - Adoption Management: Browse Pets, Take Matchmaking Quiz & V
         }
     });
 
-    test("CASE-064 submitting the quiz with a missing answer is refused and nothing is saved", async () => {
+    test("CASE-064 | Description: Adopter submits the quiz with a missing answer | Expected: 400 'missing'; nothing saved", async () => {
         const create = mock.method(QuizResponse, "create", async () => ({}));
 
         const result = await callRoute(matchmakingRoutes, "POST", "/quiz", {
@@ -117,7 +117,7 @@ describe("Table 35 - Adoption Management: Browse Pets, Take Matchmaking Quiz & V
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-065 to CASE-077 are covered by the function-level matchmaking tests", () => {
+    test("CASE-065 | Description: Matching rules (CASE-065 to CASE-077) | Expected: Covered by the function-level tests U-01 to U-16 in matchmaking.test.js", () => {
         // U-01 to U-16 in matchmaking.test.js run the real score, tier, conflict and AI-down logic.
         const service = require("../services/matchmakingService");
         assert.equal(typeof service.calculateAnimalMatch, "function");
@@ -136,7 +136,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
         return create;
     }
 
-    test("CASE-078 submitting an application with complete details saves it as pending and notifies the applicant and staff", async () => {
+    test("CASE-078 | Description: Adopter submits an adoption application with complete details | Expected: 201; saved as pending; applicant and staff emailed", async () => {
         const create = stubSubmitDependencies();
 
         const result = await callRoute(adoptionRoutes, "POST", "/", {
@@ -149,7 +149,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
         assert.equal(sentEmails.some((mail) => mail.name === "sendApplicationUpdateEmail"), true);
     });
 
-    test("CASE-079 an application with the full name left empty is refused", async () => {
+    test("CASE-079 | Description: Adopter leaves the full name empty | Expected: 400; 'fullName' named as missing; nothing saved", async () => {
         const create = stubSubmitDependencies();
 
         const result = await callRoute(adoptionRoutes, "POST", "/", { role: "adopter", body: { fullName: "", animalId: newId() } });
@@ -159,7 +159,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-080 applying while an application is already pending is refused", async () => {
+    test("CASE-080 | Description: Adopter applies while another application is pending | Expected: 409 'already have an active adoption application'", async () => {
         const create = stubSubmitDependencies({ existingActive: { _id: newId(), status: "pending" } });
 
         const result = await callRoute(adoptionRoutes, "POST", "/", { role: "adopter", body: { fullName: "Ana", animalId: newId() } });
@@ -169,7 +169,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-081 applying for a pet that is no longer available is refused with a not-available message", async () => {
+    test("CASE-081 | Description: Adopter applies for a pet that is no longer available | Expected: 409 'no longer available'", async () => {
         const create = stubSubmitDependencies({ animal: null, animalExists: true });
 
         const result = await callRoute(adoptionRoutes, "POST", "/", { role: "adopter", body: { fullName: "Ana", animalId: newId() } });
@@ -179,7 +179,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-082 My Applications returns each application with its current status", async () => {
+    test("CASE-082 | Description: Adopter opens My Applications | Expected: 200; each application with its status (pending, approved)", async () => {
         mock.method(AdoptionApplication, "find", () => query([
             { _id: newId(), petName: "Buddy", status: "pending" },
             { _id: newId(), petName: "Mimi", status: "approved" },
@@ -191,7 +191,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
         assert.deepEqual(result.body.applications.map((application) => application.status), ["pending", "approved"]);
     });
 
-    test("CASE-083 withdrawing a pending application changes its status to withdrawn", async () => {
+    test("CASE-083 | Description: Adopter withdraws a pending application | Expected: 200; status 'withdrawn' (from pending)", async () => {
         const application = applicationDocument({ status: "pending" });
         mock.method(AdoptionApplication, "findOne", () => query(application));
         mock.method(LedgerEntry, "create", async () => ({}));
@@ -203,7 +203,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
         assert.equal(application.withdrawnFromStatus, "pending");
     });
 
-    test("CASE-084 an uploaded ID image is accepted and the resubmitted document is saved for staff", async () => {
+    test("CASE-084 | Description: Adopter uploads an ID image and resubmits it | Expected: 201 image URL; 200 document saved; request marked 'resubmitted'", async () => {
         mock.method(cloudinary.uploader, "upload_stream", (options, done) => {
             const { Writable } = require("node:stream");
             return new Writable({
@@ -236,7 +236,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
         assert.equal(application.documentRequest.status, "resubmitted");
     });
 
-    test("CASE-085 uploading a file that is not an image is rejected with an error message", async () => {
+    test("CASE-085 | Description: Adopter uploads a file that is not an image | Expected: Refused: 'only image files are allowed'; nothing uploaded", async () => {
         const upload = mock.method(cloudinary.uploader, "upload_stream", () => { throw new Error("must not reach Cloudinary"); });
 
         const result = await callRoute(uploadRoutes, "POST", "/image", {
@@ -255,7 +255,7 @@ describe("Table 35 - Adoption Management: Review Applications, Schedule Intervie
         return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
     }
 
-    test("CASE-086 staff opening the application queue get the applications", async () => {
+    test("CASE-086 | Description: Staff opens the application queue | Expected: 200; pending applications listed", async () => {
         mock.method(AdoptionApplication, "find", () => query([{ _id: newId(), status: "pending" }]));
 
         const result = await callRoute(adoptionRoutes, "GET", "/", { role: "staff" });
@@ -264,7 +264,7 @@ describe("Table 35 - Adoption Management: Review Applications, Schedule Intervie
         assert.equal(result.body.applications[0].status, "pending");
     });
 
-    test("CASE-087 scheduling an interview sets the status, saves the date and notifies the adopter", async () => {
+    test("CASE-087 | Description: Staff schedules an interview | Expected: 200; status 'interview_scheduled'; date saved; adopter notified and emailed", async () => {
         const application = applicationDocument({ status: "pending" });
         mock.method(AdoptionApplication, "findById", () => query(application));
         mock.method(Animal, "exists", async () => ({ _id: application.animalId }));
@@ -282,7 +282,7 @@ describe("Table 35 - Adoption Management: Review Applications, Schedule Intervie
         assert.equal(sentEmails.some((mail) => mail.name === "sendInterviewScheduleEmail"), true);
     });
 
-    test("CASE-088 approving marks the pet adopted, rejects other open applications for it and notifies the adopter", async () => {
+    test("CASE-088 | Description: Staff approves an application | Expected: 200; pet marked adopted; other open applications rejected; adopters notified", async () => {
         const application = applicationDocument({ status: "interview_completed" });
         const other = applicationDocument({ _id: newId(), email: "other@test.rescuebase", animalId: application.animalId });
         mock.method(AdoptionApplication, "findById", () => query(application));
@@ -303,7 +303,7 @@ describe("Table 35 - Adoption Management: Review Applications, Schedule Intervie
         assert.equal(notified.mock.callCount() >= 2, true, "the adopter and the other applicant are notified");
     });
 
-    test("CASE-089 rejecting without a reason is refused", async () => {
+    test("CASE-089 | Description: Staff rejects without a reason | Expected: 400 'rejection reason is required'; stays pending", async () => {
         const application = applicationDocument({ status: "pending" });
         mock.method(AdoptionApplication, "findById", () => query(application));
 
@@ -314,7 +314,7 @@ describe("Table 35 - Adoption Management: Review Applications, Schedule Intervie
         assert.equal(application.status, "pending");
     });
 
-    test("CASE-090 rejecting with a reason saves the reason and notifies the adopter", async () => {
+    test("CASE-090 | Description: Staff rejects with a reason | Expected: 200; rejected; reason saved and sent to the adopter", async () => {
         const application = applicationDocument({ status: "pending" });
         mock.method(AdoptionApplication, "findById", () => query(application));
         mock.method(Animal, "exists", async () => ({ _id: application.animalId }));
@@ -332,7 +332,7 @@ describe("Table 35 - Adoption Management: Review Applications, Schedule Intervie
         assert.match(notified.mock.calls[0].arguments[0].message, /Home is too small/);
     });
 
-    test("CASE-091 requesting an ID resubmission asks the adopter to upload again", async () => {
+    test("CASE-091 | Description: Staff requests an ID resubmission | Expected: 200; request 'requested' with reason; document rejected; adopter notified", async () => {
         const application = applicationDocument({ status: "pending", documents: [{ documentName: "ID", status: "pending" }] });
         mock.method(AdoptionApplication, "findById", () => query(application));
         mock.method(User, "findById", () => query({ name: "Staff Sam" }));
@@ -351,7 +351,7 @@ describe("Table 35 - Adoption Management: Review Applications, Schedule Intervie
         assert.equal(notified.mock.callCount(), 1);
     });
 
-    test("CASE-092 reviewing a withdrawn application is refused", async () => {
+    test("CASE-092 | Description: Staff reviews a withdrawn application | Expected: 409 'cannot change application from withdrawn'", async () => {
         const application = applicationDocument({ status: "withdrawn" });
         mock.method(AdoptionApplication, "findById", () => query(application));
         mock.method(Animal, "exists", async () => ({ _id: application.animalId }));

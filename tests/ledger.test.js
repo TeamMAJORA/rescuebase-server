@@ -12,7 +12,7 @@ const ledgerRoutes = require("../routes/ledgerRoutes");
 afterEach(() => mock.restoreAll());
 
 describe("Table 35 - Ledger: View Ledger Entries and Food Transactions", () => {
-    test("CASE-213 the admin opens the ledger and gets the latest entries, newest first", async () => {
+    test("CASE-213 | Description: Admin opens the ledger | Expected: 200; latest entries, newest first", async () => {
         const find = mock.method(LedgerEntry, "find", () => query([{ _id: newId(), action: "foster_assignment_created" }]));
 
         const result = await callRoute(ledgerRoutes, "GET", "/?limit=5", { role: "admin" });
@@ -22,7 +22,7 @@ describe("Table 35 - Ledger: View Ledger Entries and Food Transactions", () => {
         assert.equal(find.mock.callCount(), 1);
     });
 
-    test("CASE-214 the food transaction ledger refuses an invalid inventory ID", async () => {
+    test("CASE-214 | Description: Admin opens the food transactions with an invalid inventory ID | Expected: 400 'invalid inventory id'; nothing read", async () => {
         const find = mock.method(FoodInventoryTransaction, "find", () => query([]));
 
         const result = await callRoute(ledgerRoutes, "GET", "/food-transactions?inventoryId=not-an-id", { role: "admin" });
@@ -32,7 +32,7 @@ describe("Table 35 - Ledger: View Ledger Entries and Food Transactions", () => {
         assert.equal(find.mock.callCount(), 0);
     });
 
-    test("CASE-215 staff cannot open the ledger", async () => {
+    test("CASE-215 | Description: Staff opens the ledger | Expected: 403; nothing read", async () => {
         const find = mock.method(LedgerEntry, "find", () => query([]));
 
         const result = await callRoute(ledgerRoutes, "GET", "/", { role: "staff" });

@@ -21,7 +21,7 @@ function stubStaffAndAnimals() {
 const RANGE = { dateRange: "custom", fromDate: "2026-11-01", toDate: "2026-11-15", reportType: "animals", title: "November intake" };
 
 describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
-    test("CASE-181 generating a report for a custom date range creates it, returns a ZIP and lists it", async () => {
+    test("CASE-181 | Description: Staff generates a report for a custom date range | Expected: 200 ZIP file; report saved with its date range and record counts", async () => {
         stubStaffAndAnimals();
         const saved = [];
         const create = mock.method(Report, "create", async (data) => { const row = fakeDocument({ ...data }); saved.push(row); return row; });
@@ -39,7 +39,7 @@ describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
         assert.equal(list.body.reports[0].title, "November intake");
     });
 
-    test("CASE-182 downloading a generated report returns a ZIP file", async () => {
+    test("CASE-182 | Description: Staff downloads a generated report | Expected: 200; ZIP file with a .zip file name", async () => {
         stubStaffAndAnimals();
         mock.method(Report, "findById", () => query({
             _id: newId(), title: "November intake", type: "animals", exportFormat: "zip",
@@ -54,7 +54,7 @@ describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
         assert.match(result.res.headers["content-disposition"], /November_intake\.zip|November intake\.zip|\.zip/);
     });
 
-    test("CASE-183 a start date after the end date is refused with a message", async () => {
+    test("CASE-183 | Description: Staff sets a start date after the end date | Expected: 400 'fromDate must be earlier'; nothing saved", async () => {
         stubStaffAndAnimals();
         const create = mock.method(Report, "create", async () => ({}));
 
@@ -67,7 +67,7 @@ describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-184 the report list returns the previously generated reports", async () => {
+    test("CASE-184 | Description: Staff opens the generated reports list | Expected: 200; the 2 saved reports", async () => {
         mock.method(Report, "find", () => query([{ _id: newId(), title: "Report A" }, { _id: newId(), title: "Report B" }]));
 
         const result = await callRoute(reportsRoutes, "GET", "/", { role: "staff" });

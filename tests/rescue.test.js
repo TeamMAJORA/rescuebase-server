@@ -32,7 +32,7 @@ function stubCreate({ volunteer = null } = {}) {
 }
 
 describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
-    test("CASE-158 a rescue task with all required details is saved as open", async () => {
+    test("CASE-158 | Description: Staff creates a rescue task with all required details | Expected: 201; saved as open (urgent)", async () => {
         const { create } = stubCreate();
 
         const result = await callRoute(rescueRoutes, "POST", "/", { role: "staff", body: TASK });
@@ -44,7 +44,7 @@ describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
         assert.equal(saved.priority, "urgent");
     });
 
-    test("CASE-159 leaving a required rescue field empty is refused with a message", async () => {
+    test("CASE-159 | Description: Staff leaves a required rescue field empty | Expected: 400 with a field message; nothing saved", async () => {
         const { create } = stubCreate();
 
         for (const [field, pattern] of [["title", /title is required/i], ["description", /description is required/i], ["location", /location is required/i]]) {
@@ -55,7 +55,7 @@ describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-160 assigning a rescue task to a volunteer notifies the volunteer and the volunteer can see the task", async () => {
+    test("CASE-160 | Description: Staff assigns a rescue task to a volunteer | Expected: 201; pending; volunteer notified 'New Rescue Assignment' and can see it", async () => {
         const volunteerId = newId();
         const { create, notification } = stubCreate({ volunteer: { _id: volunteerId, name: "Vic Volunteer", email: "vic@test.rescuebase" } });
 
@@ -74,7 +74,7 @@ describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
         assert.equal(find.mock.calls[0].arguments[0].volunteerId, mine.account._id);
     });
 
-    test("CASE-161 a volunteer accepts, starts and completes a rescue task with a proof photo and staff are notified at each step", async () => {
+    test("CASE-161 | Description: Volunteer accepts, starts and completes a rescue task | Expected: Status accepted, active, completed; completing without a proof photo gives 400; staff notified each step", async () => {
         const volunteer = { id: newId() };
         const task = fakeDocument({
             title: "Rescue injured dog", status: "pending", volunteerName: "Vic Volunteer", adminId: newId(), adminEmail: "staff@test.rescuebase",

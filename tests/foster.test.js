@@ -65,7 +65,7 @@ describe("Table 35 - Foster Management: Assign Animals to Foster Caregivers", ()
 
     const body = (animalId) => ({ fosterEmail: FOSTER_EMAIL, animalId, shelterName: "RescueBase Shelter" });
 
-    test("CASE-093 assigning an available animal to an approved foster saves the assignment and marks the animal as in foster", async () => {
+    test("CASE-093 | Description: Staff assigns an available animal to an approved foster | Expected: 201; assignment active; animal marked in foster", async () => {
         const { create, update, animal } = stubAssign();
 
         const result = await callRoute(fosterRoutes, "POST", "/assignments", { role: "staff", body: body(animal._id) });
@@ -76,7 +76,7 @@ describe("Table 35 - Foster Management: Assign Animals to Foster Caregivers", ()
         assert.ok(update.mock.calls.some((call) => JSON.stringify(call.arguments[1]).includes("in_foster")));
     });
 
-    test("CASE-094 assigning an animal that is already in foster is refused with a message", async () => {
+    test("CASE-094 | Description: Staff assigns an animal that is already in foster | Expected: 400 'already in foster'; nothing saved", async () => {
         const { create, animal } = stubAssign({
             animal: { _id: newId(), name: "Buddy", adoptionStatus: "available", fosterStatus: "in_foster" },
         });
@@ -88,7 +88,7 @@ describe("Table 35 - Foster Management: Assign Animals to Foster Caregivers", ()
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-095 a user who is not an approved foster caregiver cannot be assigned an animal", async () => {
+    test("CASE-095 | Description: Staff assigns an animal to a user who is not an approved foster | Expected: 400 'not approved'; nothing saved", async () => {
         const { create, animal } = stubAssign({ application: null, animal: { _id: newId(), name: "Buddy", fosterStatus: "none" } });
 
         const result = await callRoute(fosterRoutes, "POST", "/assignments", { role: "staff", body: body(animal._id) });
@@ -98,7 +98,7 @@ describe("Table 35 - Foster Management: Assign Animals to Foster Caregivers", ()
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-095 a foster caregiver cannot assign animals (staff and admin only)", async () => {
+    test("CASE-095 (foster) | Description: Foster caregiver tries to assign an animal | Expected: 403; nothing saved", async () => {
         const { create } = stubAssign();
 
         const result = await callRoute(fosterRoutes, "POST", "/assignments", { role: "foster", body: body(newId()) });
@@ -107,7 +107,7 @@ describe("Table 35 - Foster Management: Assign Animals to Foster Caregivers", ()
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-096 the foster caregiver is notified of the assignment by email and in the app", async () => {
+    test("CASE-096 | Description: A foster is assigned an animal | Expected: Email sent and 'New Foster Assignment' notification created", async () => {
         const { notification, animal } = stubAssign();
 
         await callRoute(fosterRoutes, "POST", "/assignments", { role: "staff", body: body(animal._id) });
@@ -118,7 +118,7 @@ describe("Table 35 - Foster Management: Assign Animals to Foster Caregivers", ()
 });
 
 describe("Table 35 - Foster Management: View Foster Pet, Submit Care Updates & View History", () => {
-    test("CASE-097 the foster's assigned animals are listed", async () => {
+    test("CASE-097 | Description: Foster opens their assigned animals | Expected: 200; the foster's 2 active assignments", async () => {
         const find = mock.method(FosterAssignment, "find", () => query([activeAssignment(), activeAssignment({ petName: "Mimi" })]));
 
         const result = await callRoute(fosterRoutes, "GET", "/assignments/me/active", { role: "foster", user: { email: FOSTER_EMAIL } });
@@ -129,7 +129,7 @@ describe("Table 35 - Foster Management: View Foster Pet, Submit Care Updates & V
         assert.equal(find.mock.calls[0].arguments[0].status, "active");
     });
 
-    test("CASE-098 a care update with notes and a photo is saved and staff can see it", async () => {
+    test("CASE-098 | Description: Foster submits a care update with a note and a photo | Expected: 200; update saved with the note and photo URL", async () => {
         const assignment = activeAssignment();
         mock.method(FosterAssignment, "findOne", () => query(assignment));
         stubSideEffects();
@@ -152,7 +152,7 @@ describe("Table 35 - Foster Management: View Foster Pet, Submit Care Updates & V
         assert.equal(JSON.stringify(staffView.body).includes("Eating well"), true);
     });
 
-    test("CASE-099 a care update with no notes is refused with a required-field message", async () => {
+    test("CASE-099 | Description: Foster submits a care update with no note | Expected: 400 'note is required'", async () => {
         const findOne = mock.method(FosterAssignment, "findOne", () => query(activeAssignment()));
         stubSideEffects();
 
@@ -165,7 +165,7 @@ describe("Table 35 - Foster Management: View Foster Pet, Submit Care Updates & V
         assert.equal(findOne.mock.callCount(), 0);
     });
 
-    test("CASE-100 the foster history shows finished (completed and returned) assignments", async () => {
+    test("CASE-100 | Description: Foster opens the foster history | Expected: 200; completed and returned assignments only", async () => {
         const find = mock.method(FosterAssignment, "find", () => query([
             activeAssignment({ status: "completed" }), activeAssignment({ status: "returned" }),
         ]));
@@ -179,7 +179,7 @@ describe("Table 35 - Foster Management: View Foster Pet, Submit Care Updates & V
 });
 
 describe("Table 35 - Foster Management: Submit Behavior Evaluations, Medical Requests & Return Requests", () => {
-    test("CASE-101 a behavior evaluation with all 8 scores is saved as pending for staff review", async () => {
+    test("CASE-101 | Description: Foster submits a behavior evaluation with all 8 scores | Expected: 200; saved as pending staff review", async () => {
         const assignment = activeAssignment();
         mock.method(FosterAssignment, "findOne", () => query(assignment));
         stubSideEffects();
@@ -194,7 +194,7 @@ describe("Table 35 - Foster Management: Submit Behavior Evaluations, Medical Req
         assert.equal(assignment.savedTimes, 1);
     });
 
-    test("CASE-102 a behavior evaluation with a missing score is refused with a message", async () => {
+    test("CASE-102 | Description: Foster submits a behavior evaluation with a score missing | Expected: 400 'anxietyLevel must be a value from 1 to 5'; nothing saved", async () => {
         const assignment = activeAssignment();
         mock.method(FosterAssignment, "findOne", () => query(assignment));
         stubSideEffects();
@@ -209,7 +209,7 @@ describe("Table 35 - Foster Management: Submit Behavior Evaluations, Medical Req
         assert.equal(assignment.savedTimes, 0);
     });
 
-    test("CASE-103 a medical assistance request with a description is saved as pending for staff", async () => {
+    test("CASE-103 | Description: Foster requests medical help with a description | Expected: 201; request saved as pending (High urgency)", async () => {
         const assignment = activeAssignment();
         mock.method(FosterAssignment, "findOne", () => query(assignment));
         stubSideEffects();
@@ -224,7 +224,7 @@ describe("Table 35 - Foster Management: Submit Behavior Evaluations, Medical Req
         assert.equal(assignment.medicalRequests[0].urgency, "High");
     });
 
-    test("CASE-104 a medical assistance request without a description is refused with a message", async () => {
+    test("CASE-104 | Description: Foster requests medical help without a description | Expected: 400 'issue is required'", async () => {
         const findOne = mock.method(FosterAssignment, "findOne", () => query(activeAssignment()));
         stubSideEffects();
 
@@ -237,7 +237,7 @@ describe("Table 35 - Foster Management: Submit Behavior Evaluations, Medical Req
         assert.equal(findOne.mock.callCount(), 0);
     });
 
-    test("CASE-105 a return request is saved as pending and sent to staff for a decision", async () => {
+    test("CASE-105 | Description: Foster requests to return the animal | Expected: 200; return request pending; staff notified", async () => {
         const assignment = activeAssignment();
         mock.method(FosterAssignment, "findOne", () => query(assignment));
         stubSideEffects();
@@ -255,7 +255,7 @@ describe("Table 35 - Foster Management: Submit Behavior Evaluations, Medical Req
 });
 
 describe("Table 35 - Foster Management: Review Evaluations, Medical Requests & Return Requests", () => {
-    test("CASE-106 accepting a behavior evaluation copies the accepted scores onto the animal's profile", async () => {
+    test("CASE-106 | Description: Staff accepts a behavior evaluation | Expected: 200; the 8 scores are copied to the animal; evaluation accepted", async () => {
         const animal = { _id: newId(), name: "Buddy" };
         const assignment = activeAssignment({
             animalId: animal._id, behaviorEvaluation: { status: "pending", ...SCORES, submittedBy: "Fiona Foster" },
@@ -274,7 +274,7 @@ describe("Table 35 - Foster Management: Review Evaluations, Medical Requests & R
         assert.equal(assignment.behaviorEvaluation.status, "accepted");
     });
 
-    test("CASE-107 sending a behavior evaluation back lets the foster edit and resubmit it", async () => {
+    test("CASE-107 | Description: Staff sends a behavior evaluation back, then the foster resubmits | Expected: Status 'revision' with notes; resubmitted returns to 'pending'", async () => {
         const assignment = activeAssignment({ behaviorEvaluation: { status: "pending", ...SCORES } });
         mock.method(FosterAssignment, "findById", () => query(assignment));
         mock.method(FosterAssignment, "findOne", () => query(assignment));
@@ -298,7 +298,7 @@ describe("Table 35 - Foster Management: Review Evaluations, Medical Requests & R
         assert.equal(assignment.behaviorEvaluation.aggressionLevel, 2);
     });
 
-    test("CASE-108 the staff response to a medical request is saved and shown to the foster", async () => {
+    test("CASE-108 | Description: Staff responds to a medical request | Expected: 200; request resolved; response text shown to the foster", async () => {
         const request = { _id: newId(), issue: "Limping", status: "pending" };
         const assignment = activeAssignment({ medicalRequests: Object.assign([request], { id: () => request }) });
         mock.method(FosterAssignment, "findById", () => query(assignment));
@@ -318,7 +318,7 @@ describe("Table 35 - Foster Management: Review Evaluations, Medical Requests & R
         assert.equal(JSON.stringify(fosterView.body).includes("Vet visit booked Friday"), true);
     });
 
-    test("CASE-109 approving a return request closes the assignment and the animal becomes available again", async () => {
+    test("CASE-109 | Description: Staff approves a return request | Expected: 200; assignment 'returned'; animal foster status back to 'none'", async () => {
         const animalId = newId();
         const returned = activeAssignment({ animalId, status: "returned", returnRequest: { reason: "Personal" } });
         const update = mock.method(FosterAssignment, "findOneAndUpdate", async () => returned);
@@ -336,7 +336,7 @@ describe("Table 35 - Foster Management: Review Evaluations, Medical Requests & R
         assert.equal(animalUpdate.mock.calls[0].arguments[1].$set.fosterStatus, "none");
     });
 
-    test("CASE-110 declining a return request keeps the assignment active and needs a note for the foster", async () => {
+    test("CASE-110 | Description: Staff declines a return request, first without then with a note | Expected: 400 without a note; 200 with a note; assignment stays active", async () => {
         const assignment = activeAssignment({ returnRequest: { status: "declined" } });
         const update = mock.method(FosterAssignment, "findOneAndUpdate", async () => assignment);
         const animalUpdate = mock.method(Animal, "findByIdAndUpdate", async () => ({}));

@@ -19,7 +19,7 @@ describe("Table 35 - generateToken", () => {
         else process.env.JWT_SECRET = originalSecret;
     });
 
-    test("U-24 token carries id, email, role, issuer and audience", () => {
+    test("U-24 | Description: A login token is created for a user | Expected: Token carries the user's id, email, role, issuer and audience", () => {
         const user = {
             _id: "64b7f0c2a1b2c3d4e5f60718",
             email: "staff.test@example.com",
