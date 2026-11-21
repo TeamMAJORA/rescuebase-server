@@ -1,4 +1,4 @@
-// Table 35 - Feedback Management Module (CASE-167 to CASE-175)
+// Feedback Management Module (CASE-167 to CASE-175)
 // Real feedback routes (login check, role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -20,7 +20,7 @@ function stubSender() {
     mock.method(User, "findById", () => query({ _id: newId(), name: "Ana Adopter", email: "adopter@test.rescuebase", role: "adopter" }));
 }
 
-describe("Table 35 - Feedback Management: Submit Feedback & View Feedback History", () => {
+describe("Feedback Management: Submit Feedback & View Feedback History", () => {
     test("CASE-167 | Description: User sends feedback with a rating and a message | Expected: 201; saved as active; appears in the sender's history", async () => {
         stubSender();
         const saved = [];
@@ -61,7 +61,7 @@ describe("Table 35 - Feedback Management: Submit Feedback & View Feedback Histor
     });
 });
 
-describe("Table 35 - Feedback Management: Review, Reply To, Archive & Restore Feedback", () => {
+describe("Feedback Management: Review, Reply To, Archive & Restore Feedback", () => {
     function feedbackEntry(overrides = {}) {
         return fakeDocument({ user: newId(), userName: "Ana Adopter", userEmail: "ana@test.rescuebase", message: "Great service", rating: 5, status: "active", ...overrides });
     }
@@ -112,7 +112,7 @@ describe("Table 35 - Feedback Management: Review, Reply To, Archive & Restore Fe
     });
 });
 
-describe("Table 35 - Feedback Management: Delete Feedback", () => {
+describe("Feedback Management: Delete Feedback", () => {
     test("CASE-174 | Description: Admin deletes a feedback entry | Expected: 200; entry removed", async () => {
         const remove = mock.method(Feedback, "findByIdAndDelete", async () => ({ _id: newId() }));
 

@@ -1,4 +1,4 @@
-// Table 35 - Analytics Module (CASE-176 to CASE-180)
+// Analytics Module (CASE-176 to CASE-180)
 // Real analytics routes run with mocked models; the AI forecast service is a mocked fetch.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -25,7 +25,7 @@ function stubOverview({ count = 0, rows = [] } = {}) {
     mock.method(AdoptionApplication, "find", () => query([]));
 }
 
-describe("Table 35 - Analytics: View Operational Analytics Dashboard", () => {
+describe("Analytics: View Operational Analytics Dashboard", () => {
     test("CASE-176 | Description: Staff opens the analytics dashboard | Expected: 200; totals (4 adoptions) and 6 months of chart data", async () => {
         stubOverview({ count: 4, rows: [{ updatedAt: new Date(), intakeDate: new Date(), dateReported: new Date(), startDate: new Date() }] });
 
@@ -54,7 +54,7 @@ describe("Table 35 - Analytics: View Operational Analytics Dashboard", () => {
     });
 });
 
-describe("Table 35 - Analytics: adoptions are counted by approval month", () => {
+describe("Analytics: adoptions are counted by approval month", () => {
     test("CASE-176 (variant) | Description: An animal's adoption is counted by month | Expected: Counted in the month its application was approved, not this month", async () => {
         const animalId = "665f1c2a9b1e4a0012345678";
         const approvedAt = new Date();
@@ -78,7 +78,7 @@ describe("Table 35 - Analytics: adoptions are counted by approval month", () => 
     });
 });
 
-describe("Table 35 - Analytics: View AI Intake Forecast", () => {
+describe("Analytics: View AI Intake Forecast", () => {
     function stubForecastData() {
         mock.method(Animal, "find", () => query([{ intakeDate: new Date(), adoptionStatus: "available", updatedAt: new Date() }]));
         mock.method(FoodInventory, "find", () => query([]));

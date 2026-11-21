@@ -1,4 +1,4 @@
-// Table 35 - Administration Module (CASE-185 to CASE-194)
+// Administration Module (CASE-185 to CASE-194)
 // Real activity-log and global-settings routes run with mocked models. Settings are kept in a small
 // in-memory store so a saved change is really read back by the later steps (maintenance mode, password rule).
 const { describe, test, afterEach } = require("node:test");
@@ -38,7 +38,7 @@ function stubLogQueries(rows = []) {
     return find;
 }
 
-describe("Table 35 - Administration: View Activity Logs", () => {
+describe("Administration: View Activity Logs", () => {
     test("CASE-185 | Description: Admin adds an animal | Expected: Activity 'Added animal Buddy' logged for the admin and shown in the log", async () => {
         const adminId = newId();
         const create = mock.method(ActivityLog, "create", async (data) => data);
@@ -95,7 +95,7 @@ describe("Table 35 - Administration: View Activity Logs", () => {
     });
 });
 
-describe("Table 35 - Administration: Manage Global Settings (including Maintenance Mode)", () => {
+describe("Administration: Manage Global Settings (including Maintenance Mode)", () => {
     test("CASE-189 | Description: Admin saves a new shelter name and capacity (50) | Expected: 200; saved values returned", async () => {
         const { update } = stubSettingsStore();
 

@@ -1,4 +1,4 @@
-// Table 35 - GIS Mapping Module (CASE-144 to CASE-157)
+// GIS Mapping Module (CASE-144 to CASE-157)
 // Real GIS routes (login check, role check, controller) run with mocked models.
 // The screen-only parts (drawing the map, sorting shelters by distance in the browser) cannot be run here:
 // these tests check that the server sends the data the screen needs.
@@ -22,7 +22,7 @@ function stubNoLostFoundPins() {
 
 const SIGHTING = { petName: "Stray dog", species: "Dog", locationName: "Colon Street", latitude: 10.2926, longitude: 123.9026, description: "Brown dog near the market" };
 
-describe("Table 35 - GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest Shelter", () => {
+describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest Shelter", () => {
     test("CASE-144 | Description: User opens the GIS map | Expected: 200; plotted sightings with coordinates and type", async () => {
         mock.method(GISLocation, "find", () => query([{ _id: newId(), reportType: "stray", status: "open", species: "dog", locationName: "Colon", latitude: 10.29, longitude: 123.9, description: "" }]));
         stubNoLostFoundPins();
@@ -108,7 +108,7 @@ describe("Table 35 - GIS Mapping: View GIS Map, Record Stray Sightings & Find th
     });
 });
 
-describe("Table 35 - GIS Mapping: Edit, Resolve & Delete Sightings and Manage Shelters", () => {
+describe("GIS Mapping: Edit, Resolve & Delete Sightings and Manage Shelters", () => {
     test("CASE-151 | Description: Staff edits a stray sighting | Expected: 200; new location name and description saved", async () => {
         const id = newId();
         const update = mock.method(GISLocation, "findByIdAndUpdate", async (_id, change) => ({ _id: id, ...change.$set }));
@@ -167,7 +167,7 @@ describe("Table 35 - GIS Mapping: Edit, Resolve & Delete Sightings and Manage Sh
     });
 });
 
-describe("Table 35 - GIS Mapping: Generate Hotspot Analysis", () => {
+describe("GIS Mapping: Generate Hotspot Analysis", () => {
     test("CASE-156 | Description: Staff opens the hotspot analysis | Expected: 200; 4 reports grouped into 2 hotspots; top one has 3 (Colon)", async () => {
         const near = (latitude, longitude) => ({ latitude, longitude, reportType: "stray", locationName: "Colon, Cebu City" });
         mock.method(GISLocation, "find", () => query([

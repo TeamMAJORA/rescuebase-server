@@ -1,4 +1,4 @@
-// Table 35 - Animal Management Module (CASE-035 to CASE-060)
+// Animal Management Module (CASE-035 to CASE-060)
 // Routes, role checks and controllers run for real; the database, QR image library calls that need
 // the network, and the Lost & Found listing hook are replaced.
 const { describe, test, afterEach } = require("node:test");
@@ -44,7 +44,7 @@ function stubCreator(role = "staff") {
     mock.method(User, "findById", () => query({ _id: newId(), name: `Test ${role}`, username: role, email: `${role}@test.rescuebase`, role }));
 }
 
-describe("Table 35 - Animal Management: View Animal Profiles", () => {
+describe("Animal Management: View Animal Profiles", () => {
     test("CASE-035 | Description: Staff opens the animal list | Expected: 200; each animal shows name, type and availability status", async () => {
         mock.method(Animal, "find", () => query([animalRow({ name: "Buddy" }), animalRow({ name: "Mimi", type: "Cat" })]));
 
@@ -90,7 +90,7 @@ describe("Table 35 - Animal Management: View Animal Profiles", () => {
     });
 });
 
-describe("Table 35 - Animal Management: Register Animal Intake & Review Volunteer Submissions", () => {
+describe("Animal Management: Register Animal Intake & Review Volunteer Submissions", () => {
     test("CASE-039 | Description: Staff registers an animal intake with the required fields | Expected: 201; animal saved as approved intake", async () => {
         stubCreator("staff");
         const create = mock.method(Animal, "create", async (data) => fakeDocument(data));
@@ -173,7 +173,7 @@ describe("Table 35 - Animal Management: Register Animal Intake & Review Voluntee
     });
 });
 
-describe("Table 35 - Animal Management: Edit Animal Profiles, Medical & Vaccination Records", () => {
+describe("Animal Management: Edit Animal Profiles, Medical & Vaccination Records", () => {
     test("CASE-045 | Description: Staff edits an animal's name and age | Expected: 200; only allowed fields saved; new values returned", async () => {
         const existing = animalRow({ name: "Buddy" });
         mock.method(Animal, "findById", () => query(existing));
@@ -252,7 +252,7 @@ describe("Table 35 - Animal Management: Edit Animal Profiles, Medical & Vaccinat
     });
 });
 
-describe("Table 35 - Animal Management: Rate Behavioral Assessment & Generate QR Tags", () => {
+describe("Animal Management: Rate Behavioral Assessment & Generate QR Tags", () => {
     test("CASE-050 | Description: Staff rates all 8 behavior scores and saves | Expected: 200; 8 scores saved; 4 personality tags generated", async () => {
         const existing = animalRow();
         mock.method(Animal, "findById", () => query(existing));
@@ -319,7 +319,7 @@ describe("Table 35 - Animal Management: Rate Behavioral Assessment & Generate QR
     });
 });
 
-describe("Table 35 - Animal Management: Record Animal Transfers", () => {
+describe("Animal Management: Record Animal Transfers", () => {
     const transferBody = (overrides = {}) => ({
         animal_id: newId(), from_location: "Shelter", to_location: "Partner Rescue",
         transfer_date: "2026-11-10", reason: "Needs surgery", status: "Pending", ...overrides,
@@ -355,7 +355,7 @@ describe("Table 35 - Animal Management: Record Animal Transfers", () => {
     });
 });
 
-describe("Table 35 - Animal Management: Delete Animal Records", () => {
+describe("Animal Management: Delete Animal Records", () => {
     function stubDeleteChecks({ openApplications = 0 } = {}) {
         mock.method(Animal, "findById", () => query({ _id: newId(), name: "Buddy" }));
         mock.method(AdoptionApplication, "countDocuments", async () => openApplications);

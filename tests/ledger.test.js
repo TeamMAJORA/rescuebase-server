@@ -1,4 +1,4 @@
-// Table 35 - Ledger Module (CASE-213 to CASE-215)
+// Ledger Module (CASE-213 to CASE-215)
 // Real ledger routes (login check, role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -11,7 +11,7 @@ const ledgerRoutes = require("../routes/ledgerRoutes");
 
 afterEach(() => mock.restoreAll());
 
-describe("Table 35 - Ledger: View Ledger Entries and Food Transactions", () => {
+describe("Ledger: View Ledger Entries and Food Transactions", () => {
     test("CASE-213 | Description: Admin opens the ledger | Expected: 200; latest entries, newest first", async () => {
         const find = mock.method(LedgerEntry, "find", () => query([{ _id: newId(), action: "foster_assignment_created" }]));
 

@@ -6,7 +6,7 @@ const generateToken = require("../utils/generateToken");
 
 const TEST_SECRET = "unit-test-secret-not-for-production";
 
-describe("Table 35 - generateToken", () => {
+describe("generateToken", () => {
     let originalSecret;
 
     beforeEach(() => {

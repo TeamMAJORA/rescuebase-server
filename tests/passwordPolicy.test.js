@@ -19,7 +19,7 @@ afterEach(() => {
     mock.restoreAll();
 });
 
-describe("Table 35 - passwordPolicy", () => {
+describe("passwordPolicy", () => {
     test("U-19 | Description: Strong-password check on 'Abcdef1!', 'abcdefg1' and 'Short1!' | Expected: Strong one accepted; the other two rejected", () => {
         assert.equal(isStrongPassword("Abcdef1!"), true);
         assert.equal(isStrongPassword("abcdefg1"), false);

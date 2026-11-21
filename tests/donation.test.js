@@ -1,4 +1,4 @@
-// Table 35 - Donation Management Module (CASE-111 to CASE-130)
+// Donation Management Module (CASE-111 to CASE-130)
 // Real donation and needed-supply routes (login check, role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -33,7 +33,7 @@ const cashDonation = (overrides = {}) => ({
     paymentMethod: "GCash", paymentReference: "REF-123", proofOfPayment: PROOF, ...overrides,
 });
 
-describe("Table 35 - Donation Management: View Needed Supplies & Submit Donations", () => {
+describe("Donation Management: View Needed Supplies & Submit Donations", () => {
     test("CASE-111 | Description: Adopter opens the needed supplies list | Expected: 200; each item shows quantity needed (20) and received (5)", async () => {
         mock.method(NeededSupply, "find", () => query([{ _id: newId(), name: "Dog food", quantityNeeded: 20, quantityReceived: 5 }]));
 
@@ -124,7 +124,7 @@ describe("Table 35 - Donation Management: View Needed Supplies & Submit Donation
     });
 });
 
-describe("Table 35 - Donation Management: View Donation History", () => {
+describe("Donation Management: View Donation History", () => {
     function stubHistory(donations) {
         mock.method(User, "findById", () => query({ _id: newId(), email: "adopter@test.rescuebase" }));
         return mock.method(Donation, "find", () => query(donations));
@@ -158,7 +158,7 @@ describe("Table 35 - Donation Management: View Donation History", () => {
     });
 });
 
-describe("Table 35 - Donation Management: Verify Donations & Proof of Payment", () => {
+describe("Donation Management: Verify Donations & Proof of Payment", () => {
     test("CASE-121 | Description: Staff opens the donation list | Expected: 200; donations with their proof of payment", async () => {
         mock.method(Donation, "find", () => query([{ _id: newId(), status: "pending", donationType: "Money", proofOfPayment: PROOF }]));
 
@@ -214,7 +214,7 @@ describe("Table 35 - Donation Management: Verify Donations & Proof of Payment", 
     });
 });
 
-describe("Table 35 - Donation Management: Manage Needed Supplies & Delete Donation Records", () => {
+describe("Donation Management: Manage Needed Supplies & Delete Donation Records", () => {
     test("CASE-125 | Description: Admin adds a needed supply with valid details | Expected: 201; supply saved (Dog food, 20 needed)", async () => {
         const create = mock.method(NeededSupply, "create", async (data) => ({ _id: newId(), ...data }));
 

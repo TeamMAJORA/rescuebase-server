@@ -1,4 +1,4 @@
-// Table 35 - Foster Management Module (CASE-093 to CASE-110)
+// Foster Management Module (CASE-093 to CASE-110)
 // Real foster routes (login check, role check, controller) run with mocked models. No database or email is used.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -48,7 +48,7 @@ function activeAssignment(overrides = {}) {
     });
 }
 
-describe("Table 35 - Foster Management: Assign Animals to Foster Caregivers", () => {
+describe("Foster Management: Assign Animals to Foster Caregivers", () => {
     function stubAssign({ application = { _id: newId(), applicantName: "Fiona Foster", capacity: 2 }, animal } = {}) {
         const fosterAnimal = animal === undefined
             ? { _id: newId(), name: "Buddy", breed: "Aspin", adoptionStatus: "available", fosterStatus: "none" }
@@ -117,7 +117,7 @@ describe("Table 35 - Foster Management: Assign Animals to Foster Caregivers", ()
     });
 });
 
-describe("Table 35 - Foster Management: View Foster Pet, Submit Care Updates & View History", () => {
+describe("Foster Management: View Foster Pet, Submit Care Updates & View History", () => {
     test("CASE-097 | Description: Foster opens their assigned animals | Expected: 200; the foster's 2 active assignments", async () => {
         const find = mock.method(FosterAssignment, "find", () => query([activeAssignment(), activeAssignment({ petName: "Mimi" })]));
 
@@ -178,7 +178,7 @@ describe("Table 35 - Foster Management: View Foster Pet, Submit Care Updates & V
     });
 });
 
-describe("Table 35 - Foster Management: Submit Behavior Evaluations, Medical Requests & Return Requests", () => {
+describe("Foster Management: Submit Behavior Evaluations, Medical Requests & Return Requests", () => {
     test("CASE-101 | Description: Foster submits a behavior evaluation with all 8 scores | Expected: 200; saved as pending staff review", async () => {
         const assignment = activeAssignment();
         mock.method(FosterAssignment, "findOne", () => query(assignment));
@@ -254,7 +254,7 @@ describe("Table 35 - Foster Management: Submit Behavior Evaluations, Medical Req
     });
 });
 
-describe("Table 35 - Foster Management: Review Evaluations, Medical Requests & Return Requests", () => {
+describe("Foster Management: Review Evaluations, Medical Requests & Return Requests", () => {
     test("CASE-106 | Description: Staff accepts a behavior evaluation | Expected: 200; the 8 scores are copied to the animal; evaluation accepted", async () => {
         const animal = { _id: newId(), name: "Buddy" };
         const assignment = activeAssignment({

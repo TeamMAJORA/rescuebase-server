@@ -1,4 +1,4 @@
-// Table 35 - Authentication & Account Module (CASE-001 to CASE-034)
+// Authentication & Account Module (CASE-001 to CASE-034)
 // Controllers and routes run for real; the database, email and Firebase are replaced.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -42,7 +42,7 @@ async function verifiedUser(overrides = {}) {
     });
 }
 
-describe("Table 35 - Authentication & Account: Register, Log In & Reset Password", () => {
+describe("Authentication & Account: Register, Log In & Reset Password", () => {
     test("CASE-001 | Description: User registers with an invalid email (not-an-email) | Expected: Server refuses with a 4xx error; no account created", async () => {
         stubSettings();
         mock.method(User, "findOne", () => query(null));
@@ -260,7 +260,7 @@ describe("Table 35 - Authentication & Account: Register, Log In & Reset Password
     });
 });
 
-describe("Table 35 - Authentication & Account: Update Profile & Account Settings", () => {
+describe("Authentication & Account: Update Profile & Account Settings", () => {
     test("CASE-014 | Description: User edits the profile with valid values | Expected: 200; new name and username returned and saved once", async () => {
         const me = await verifiedUser({ name: "Old Name", username: "oldname" });
         mock.method(User, "findById", () => query(me));
@@ -316,7 +316,7 @@ describe("Table 35 - Authentication & Account: Update Profile & Account Settings
     });
 });
 
-describe("Table 35 - Authentication & Account: Apply for Volunteer or Foster Role", () => {
+describe("Authentication & Account: Apply for Volunteer or Foster Role", () => {
     function stubApplicant(overrides = {}) {
         const adopter = fakeDocument({ role: "adopter", name: "Applicant", roleApplication: undefined, ...overrides });
         mock.method(User, "findById", () => query(adopter));
@@ -390,7 +390,7 @@ describe("Table 35 - Authentication & Account: Apply for Volunteer or Foster Rol
     });
 });
 
-describe("Table 35 - Authentication & Account: Review Role Applications", () => {
+describe("Authentication & Account: Review Role Applications", () => {
     function pendingApplicant() {
         return fakeDocument({
             role: "adopter",
@@ -477,7 +477,7 @@ describe("Table 35 - Authentication & Account: Review Role Applications", () => 
     });
 });
 
-describe("Table 35 - Authentication & Account: Manage Users, Roles & Account Status", () => {
+describe("Authentication & Account: Manage Users, Roles & Account Status", () => {
     test("CASE-028 | Description: Admin creates a user with valid details | Expected: 201; staff user created, verified, password not returned", async () => {
         mock.method(User, "findOne", () => query(null));
         mock.method(User, "create", async (data) => fakeDocument(data));

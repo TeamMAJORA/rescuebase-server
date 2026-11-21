@@ -1,4 +1,4 @@
-// Table 35 - Food Inventory (Food Storage) Module (CASE-195 to CASE-205)
+// Food Inventory (Food Storage) Module (CASE-195 to CASE-205)
 // Real food inventory routes (router-wide login and role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -18,7 +18,7 @@ function foodItem(overrides = {}) {
     return fakeDocument({ name: "Dog kibble", quantityInStock: 20, unit: "kg", adjustmentHistory: [], ...overrides });
 }
 
-describe("Table 35 - Food Inventory: View, Add and Edit Food Items", () => {
+describe("Food Inventory: View, Add and Edit Food Items", () => {
     test("CASE-195 | Description: Staff opens food storage | Expected: 200; each item with its stock in kg", async () => {
         mock.method(FoodInventory, "find", () => query([{ _id: newId(), name: "Dog kibble", quantityInStock: 20, unit: "kg" }]));
 
@@ -71,7 +71,7 @@ describe("Table 35 - Food Inventory: View, Add and Edit Food Items", () => {
     });
 });
 
-describe("Table 35 - Food Inventory: Adjust Stock, View History and Delete", () => {
+describe("Food Inventory: Adjust Stock, View History and Delete", () => {
     test("CASE-200 | Description: Staff adds 10 kg to a stock of 20 kg | Expected: 200; stock 30; history records previous 20 and new 30", async () => {
         const item = foodItem({ quantityInStock: 30 });
         const update = mock.method(FoodInventory, "findOneAndUpdate", async () => item);

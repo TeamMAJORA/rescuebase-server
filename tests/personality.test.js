@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const { derivePersonality } = require("../services/personalityService");
 
-describe("Table 35 - personalityService.derivePersonality", () => {
+describe("personalityService.derivePersonality", () => {
     test("U-17 | Description: Animal has no behavior scores | Expected: Status 'unassessed'; no tags", () => {
         const personality = derivePersonality({ name: "No Scores" });
 

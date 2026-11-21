@@ -1,4 +1,4 @@
-// Table 35 - Rescue Assignment Module (CASE-158 to CASE-161)
+// Rescue Assignment Module (CASE-158 to CASE-161)
 // Real rescue assignment routes (login check, role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -31,7 +31,7 @@ function stubCreate({ volunteer = null } = {}) {
     return { create, notification };
 }
 
-describe("Table 35 - Rescue Assignment: Create & Assign Rescue Tasks", () => {
+describe("Rescue Assignment: Create & Assign Rescue Tasks", () => {
     test("CASE-158 | Description: Staff creates a rescue task with all required details | Expected: 201; saved as open (urgent)", async () => {
         const { create } = stubCreate();
 

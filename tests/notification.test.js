@@ -1,4 +1,4 @@
-// Table 35 - Notification Module (CASE-162 to CASE-166)
+// Notification Module (CASE-162 to CASE-166)
 // Real notification routes run with an in-memory list of notifications instead of the database.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -47,7 +47,7 @@ function stubNotificationStore(userId, readFlags) {
     return store;
 }
 
-describe("Table 35 - Notification: View Automated Notifications", () => {
+describe("Notification: View Automated Notifications", () => {
     test("CASE-162 | Description: An adopter's application status changes | Expected: Notification created for the adopter; unread count goes to 2", async () => {
         const adopterId = newId();
         const application = fakeDocument({

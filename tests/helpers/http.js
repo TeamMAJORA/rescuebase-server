@@ -1,4 +1,4 @@
-// Shared helpers for the Table 35 tests. No database, network or email is used:
+// Shared helpers for the unit tests. No database, network or email is used:
 // models and services are replaced with mock.method in each test.
 const { mock } = require("node:test");
 const mongoose = require("mongoose");

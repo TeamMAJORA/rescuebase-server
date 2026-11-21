@@ -58,7 +58,7 @@ afterEach(() => {
     mock.restoreAll();
 });
 
-describe("Table 35 - matchmakingService.calculateFactorSimilarity", () => {
+describe("matchmakingService.calculateFactorSimilarity", () => {
     test("U-01 | Description: Trait equals the adopter's preference (3 vs 3) | Expected: Factor scores 1", () => {
         assert.equal(calculateFactorSimilarity(3, 3, "preference"), 1);
     });
@@ -89,7 +89,7 @@ describe("Table 35 - matchmakingService.calculateFactorSimilarity", () => {
     });
 });
 
-describe("Table 35 - matchmakingService.calculateBehavioralScore", () => {
+describe("matchmakingService.calculateBehavioralScore", () => {
     test("U-08 | Description: Pet matches the adopter on all 8 factors | Expected: Score is 100", () => {
         const { score } = calculateBehavioralScore(
             buildAnimalWithAllScores(3),
@@ -107,7 +107,7 @@ describe("Table 35 - matchmakingService.calculateBehavioralScore", () => {
     });
 });
 
-describe("Table 35 - matchmakingService.getMatchTier", () => {
+describe("matchmakingService.getMatchTier", () => {
     test("U-10 | Description: Scores on a tier boundary: 80, 79.99, 60, 59.99 | Expected: Perfect Paw Match, Paws for Thought, Paws for Thought, No Paw-sible Match", () => {
         assert.equal(getMatchTier(80), "Perfect Paw Match");
         assert.equal(getMatchTier(79.99), "Paws for Thought");
@@ -116,7 +116,7 @@ describe("Table 35 - matchmakingService.getMatchTier", () => {
     });
 });
 
-describe("Table 35 - matchmakingService.matchesBasicPreferences", () => {
+describe("matchmakingService.matchesBasicPreferences", () => {
     test("U-11 | Description: Adopter filters the pets by type and size | Expected: Only pets of that type and size are kept", () => {
         const dogAndSmallAdopter = { preferredPetType: "Dog", preferredSize: "Small" };
 
@@ -138,7 +138,7 @@ describe("Table 35 - matchmakingService.matchesBasicPreferences", () => {
     });
 });
 
-describe("Table 35 - matchmakingService.calculateAnimalMatch (AI service mocked)", () => {
+describe("matchmakingService.calculateAnimalMatch (AI service mocked)", () => {
     test("U-12 | Description: Pet has no conflict with the adopter | Expected: AI score 90 kept; Perfect Paw Match; eligible", async () => {
         mockAiServiceReturningPercentage(90);
 

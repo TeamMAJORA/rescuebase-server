@@ -25,7 +25,7 @@ function buildFoundDogReport() {
     };
 }
 
-describe("Table 35 - lostFoundMatchingService", () => {
+describe("lostFoundMatchingService", () => {
     test("U-22 | Description: Distance between the same point and two Cebu points | Expected: 0 km for the same point; a plausible km for two Cebu points", () => {
         const samePoint = calculateDistanceKm(
             { coordinates: CEBU_CITY_HALL },

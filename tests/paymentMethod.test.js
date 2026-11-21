@@ -1,4 +1,4 @@
-// Table 35 - Payment Methods Module (CASE-206 to CASE-212)
+// Payment Methods Module (CASE-206 to CASE-212)
 // Real payment method routes (login check, role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -12,7 +12,7 @@ afterEach(() => mock.restoreAll());
 
 const GCASH = { method_type: "GCash", account_name: "RescueBase Shelter", account_number: "09171234567", instructions: "Send the exact amount" };
 
-describe("Table 35 - Payment Methods: View and Manage Payment Methods", () => {
+describe("Payment Methods: View and Manage Payment Methods", () => {
     test("CASE-206 | Description: Adopter opens the payment methods | Expected: 200; only active methods (GCash first)", async () => {
         const find = mock.method(PaymentMethod, "find", () => query([{ method_type: "GCash", is_active: true }]));
 

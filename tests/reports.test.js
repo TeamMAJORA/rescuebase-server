@@ -1,4 +1,4 @@
-// Table 35 - Reports Module (CASE-181 to CASE-184)
+// Reports Module (CASE-181 to CASE-184)
 // Real report routes run with mocked models. The ZIP is built by the real archiver; the response headers are checked.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -20,7 +20,7 @@ function stubStaffAndAnimals() {
 
 const RANGE = { dateRange: "custom", fromDate: "2026-11-01", toDate: "2026-11-15", reportType: "animals", title: "November intake" };
 
-describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
+describe("Reports: Generate & Download Operational Reports", () => {
     test("CASE-181 | Description: Staff generates a report for a custom date range | Expected: 200 ZIP file; report saved with its date range and record counts", async () => {
         stubStaffAndAnimals();
         const saved = [];

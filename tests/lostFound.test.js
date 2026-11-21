@@ -1,4 +1,4 @@
-// Table 35 - Lost-and-Found Module (CASE-131 to CASE-143)
+// Lost-and-Found Module (CASE-131 to CASE-143)
 // Real Lost & Found routes (login check, role check, controller, matching service) run with mocked models.
 // The matching score itself is also covered by lostFoundMatching.test.js (U-22, U-23).
 const { describe, test, afterEach } = require("node:test");
@@ -57,7 +57,7 @@ function foundDogCandidate(overrides = {}) {
     };
 }
 
-describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownership Claims", () => {
+describe("Lost-and-Found: Report Lost or Found Pets & Submit Ownership Claims", () => {
     test("CASE-131 | Description: User files a lost-pet report with details and a map pin | Expected: 201; report saved as open with the pin coordinates", async () => {
         const { created } = stubReportCreation();
 
@@ -168,7 +168,7 @@ describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownershi
     });
 });
 
-describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
+describe("Lost-and-Found: Review Ownership Claims & Matches", () => {
     function reportWithClaim(claimOverrides = {}, reportOverrides = {}) {
         const claim = {
             _id: newId(), claimType: "ownership", claimantName: "Owner Olga", claimantEmail: OWNER, status: "pending",

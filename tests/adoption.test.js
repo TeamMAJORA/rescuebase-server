@@ -1,4 +1,4 @@
-// Table 35 - Adoption Management Module (CASE-061 to CASE-092)
+// Adoption Management Module (CASE-061 to CASE-092)
 // CASE-061 and CASE-065 to CASE-077 are the matchmaking calculations: they are checked by the function-level
 // tests in matchmaking.test.js (U-01 to U-16). This file covers the quiz route, applications and reviews.
 const { describe, test, afterEach } = require("node:test");
@@ -68,7 +68,7 @@ function stubStaffLookupAndNotifications() {
     return mock.method(Notification, "create", async () => ({}));
 }
 
-describe("Table 35 - Adoption Management: Browse Pets, Take Matchmaking Quiz & View AI Compatibility Scores", () => {
+describe("Adoption Management: Browse Pets, Take Matchmaking Quiz & View AI Compatibility Scores", () => {
     test("CASE-061 | Description: Adopter filters the pets by type (Dog) | Expected: Only available Dogs requested", async () => {
         const find = mock.method(Animal, "find", () => query([]));
 
@@ -125,7 +125,7 @@ describe("Table 35 - Adoption Management: Browse Pets, Take Matchmaking Quiz & V
     });
 });
 
-describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications and Resubmit ID", () => {
+describe("Adoption Management: Submit, Track & Withdraw Applications and Resubmit ID", () => {
     function stubSubmitDependencies({ existingActive = null, animal = adoptableDog("Buddy"), animalExists = true } = {}) {
         mock.method(AdoptionApplication, "findOne", () => query(existingActive));
         mock.method(Animal, "findOne", () => query(animal));
@@ -250,7 +250,7 @@ describe("Table 35 - Adoption Management: Submit, Track & Withdraw Applications 
     });
 });
 
-describe("Table 35 - Adoption Management: Review Applications, Schedule Interviews, Approve or Reject & Request ID Resubmission", () => {
+describe("Adoption Management: Review Applications, Schedule Interviews, Approve or Reject & Request ID Resubmission", () => {
     function futureDate() {
         return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString();
     }
