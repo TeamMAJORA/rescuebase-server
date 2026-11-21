@@ -19,7 +19,7 @@ function foodItem(overrides = {}) {
 }
 
 describe("Food Inventory: View, Add and Edit Food Items", () => {
-    test("CASE-195 | Description: Staff opens food storage | Expected: 200; each item with its stock in kg", async () => {
+    test("CASE-195 | Description: Staff opens food storage. | Expected: Items are listed with stock in kg.", async () => {
         mock.method(FoodInventory, "find", () => query([{ _id: newId(), name: "Dog kibble", quantityInStock: 20, unit: "kg" }]));
 
         const result = await callRoute(foodRoutes, "GET", "/", { role: "staff" });
@@ -29,7 +29,7 @@ describe("Food Inventory: View, Add and Edit Food Items", () => {
         assert.equal(result.body.inventory[0].unit, "kg");
     });
 
-    test("CASE-196 | Description: Staff adds a food item (Dog kibble, 20 kg) | Expected: 201; saved in kg with the stock", async () => {
+    test("CASE-196 | Description: Staff adds a food item with valid details. | Expected: Item is saved in kg.", async () => {
         const create = mock.method(FoodInventory, "create", async (data) => ({ _id: newId(), ...data }));
 
         const result = await callRoute(foodRoutes, "POST", "/", { role: "staff", body: NEW_FOOD });
@@ -40,7 +40,7 @@ describe("Food Inventory: View, Add and Edit Food Items", () => {
         assert.equal(create.mock.calls[0].arguments[0].quantityInStock, 20);
     });
 
-    test("CASE-197 | Description: Staff adds a food item with an empty name | Expected: 400 'name is required'", async () => {
+    test("CASE-197 | Description: Staff adds a food item with an empty name. | Expected: Save fails with required field message.", async () => {
         const create = mock.method(FoodInventory, "create", async () => ({}));
 
         const result = await callRoute(foodRoutes, "POST", "/", { role: "staff", body: { ...NEW_FOOD, name: "  " } });
@@ -50,7 +50,7 @@ describe("Food Inventory: View, Add and Edit Food Items", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-198 | Description: Staff adds a food item with a negative or too large stock | Expected: 400 'valid stock'; nothing saved", async () => {
+    test("CASE-198 | Description: Staff adds a food item with a negative or too large stock. | Expected: Save fails with error message.", async () => {
         const create = mock.method(FoodInventory, "create", async () => ({}));
 
         for (const stock of [-5, 999999, "abc"]) {
@@ -61,7 +61,7 @@ describe("Food Inventory: View, Add and Edit Food Items", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-199 | Description: Staff adds a food item whose name already exists | Expected: 409 'already exists'", async () => {
+    test("CASE-199 | Description: Staff adds a food item whose name already exists. | Expected: Save fails with already exists message.", async () => {
         mock.method(FoodInventory, "create", async () => { throw Object.assign(new Error("duplicate"), { code: 11000 }); });
 
         const result = await callRoute(foodRoutes, "POST", "/", { role: "staff", body: NEW_FOOD });
@@ -72,7 +72,7 @@ describe("Food Inventory: View, Add and Edit Food Items", () => {
 });
 
 describe("Food Inventory: Adjust Stock, View History and Delete", () => {
-    test("CASE-200 | Description: Staff adds 10 kg to a stock of 20 kg | Expected: 200; stock 30; history records previous 20 and new 30", async () => {
+    test("CASE-200 | Description: Staff adds stock to a food item. | Expected: Stock goes up and the change is recorded.", async () => {
         const item = foodItem({ quantityInStock: 30 });
         const update = mock.method(FoodInventory, "findOneAndUpdate", async () => item);
 
@@ -86,7 +86,7 @@ describe("Food Inventory: Adjust Stock, View History and Delete", () => {
         assert.equal(item.savedTimes, 1);
     });
 
-    test("CASE-201 | Description: Staff removes more stock than is available | Expected: 400 'insufficient stock'", async () => {
+    test("CASE-201 | Description: Staff removes more stock than available. | Expected: Removal fails with insufficient stock message.", async () => {
         mock.method(FoodInventory, "findOneAndUpdate", async () => null);
         mock.method(FoodInventory, "exists", async () => ({ _id: newId() }));
 
@@ -96,7 +96,7 @@ describe("Food Inventory: Adjust Stock, View History and Delete", () => {
         assert.match(result.body.message, /insufficient stock/i);
     });
 
-    test("CASE-202 | Description: Staff adds stock as a delivery or donation | Expected: 200; counted toward the needed supply (10 kg)", async () => {
+    test("CASE-202 | Description: Staff adds stock as a delivery or donation. | Expected: Amount is counted toward the needed supply.", async () => {
         const item = foodItem({ quantityInStock: 30 });
         mock.method(FoodInventory, "findOneAndUpdate", async () => item);
         const supply = fakeDocument({ name: "Dog kibble", quantityNeeded: 50, quantityReceived: 10, status: "active" });
@@ -109,7 +109,7 @@ describe("Food Inventory: Adjust Stock, View History and Delete", () => {
         assert.equal(result.body.supplyUpdate.counted, 10);
     });
 
-    test("CASE-203 | Description: Staff opens a food item's history | Expected: 200; changes listed newest first (remove, add)", async () => {
+    test("CASE-203 | Description: Staff opens a food item's history. | Expected: Changes are listed, newest first.", async () => {
         const item = foodItem({ adjustmentHistory: [{ action: "add", quantity: 5 }, { action: "remove", quantity: 2 }] });
         mock.method(FoodInventory, "findById", () => query(item));
 
@@ -119,7 +119,7 @@ describe("Food Inventory: Adjust Stock, View History and Delete", () => {
         assert.deepEqual(result.body.history.map((change) => change.action), ["remove", "add"]);
     });
 
-    test("CASE-204 | Description: Staff deletes a food item | Expected: 200; removed; linked supply requests unlinked", async () => {
+    test("CASE-204 | Description: Staff deletes a food item. | Expected: Item is removed.", async () => {
         const id = newId();
         mock.method(FoodInventory, "findByIdAndDelete", async () => ({ _id: id, name: "Dog kibble" }));
         const unlink = mock.method(NeededSupply, "updateMany", async () => ({}));
@@ -130,7 +130,7 @@ describe("Food Inventory: Adjust Stock, View History and Delete", () => {
         assert.deepEqual(unlink.mock.calls[0].arguments[1], { $set: { foodInventoryId: null } });
     });
 
-    test("CASE-205 | Description: Adopter opens food storage | Expected: 403; nothing read", async () => {
+    test("CASE-205 | Description: Adopter opens food storage. | Expected: Access is denied.", async () => {
         const find = mock.method(FoodInventory, "find", () => query([]));
 
         const result = await callRoute(foodRoutes, "GET", "/", { role: "adopter" });

@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const generateOtp = require("../utils/generateOtp");
 
 describe("generateOtp", () => {
-    test("U-21 | Description: An OTP is generated | Expected: A 6-digit string from 100000 to 999999", () => {
+    test("U-21 | Description: An OTP is generated. | Expected: It is a 6-digit number.", () => {
         for (let attempt = 0; attempt < 100; attempt++) {
             const otp = generateOtp();
 

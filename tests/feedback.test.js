@@ -21,7 +21,7 @@ function stubSender() {
 }
 
 describe("Feedback Management: Submit Feedback & View Feedback History", () => {
-    test("CASE-167 | Description: User sends feedback with a rating and a message | Expected: 201; saved as active; appears in the sender's history", async () => {
+    test("CASE-167 | Description: User sends feedback with a rating and a message. | Expected: Feedback is saved and shown in their history.", async () => {
         stubSender();
         const saved = [];
         const create = mock.method(Feedback, "create", async (data) => { const row = { _id: newId(), ...data }; saved.push(row); return row; });
@@ -37,7 +37,7 @@ describe("Feedback Management: Submit Feedback & View Feedback History", () => {
         assert.equal(history.body.feedback[0].message, "Great service");
     });
 
-    test("CASE-168 | Description: User sends feedback with the rating or message empty | Expected: 400 'rating' message for both cases", async () => {
+    test("CASE-168 | Description: User sends feedback with the rating or message empty. | Expected: Submission fails with required field message.", async () => {
         stubSender();
         const create = mock.method(Feedback, "create", async () => ({}));
 
@@ -51,7 +51,7 @@ describe("Feedback Management: Submit Feedback & View Feedback History", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-169 | Description: User opens their feedback history | Expected: 200; only the signed-in user's own feedback requested", async () => {
+    test("CASE-169 | Description: User opens their feedback history. | Expected: Only their own feedback is listed.", async () => {
         const find = mock.method(Feedback, "find", () => query([{ message: "Mine" }]));
 
         const result = await callRoute(feedbackRoutes, "GET", "/me", { role: "adopter" });
@@ -66,7 +66,7 @@ describe("Feedback Management: Review, Reply To, Archive & Restore Feedback", ()
         return fakeDocument({ user: newId(), userName: "Ana Adopter", userEmail: "ana@test.rescuebase", message: "Great service", rating: 5, status: "active", ...overrides });
     }
 
-    test("CASE-170 | Description: Staff opens the feedback list | Expected: 200; each entry shows its rating", async () => {
+    test("CASE-170 | Description: Staff opens the feedback list. | Expected: Entries are listed with their rating.", async () => {
         mock.method(Feedback, "find", () => query([{ _id: newId(), rating: 4, message: "Good", userEmail: "a@test.rescuebase" }]));
         mock.method(User, "find", () => query([]));
 
@@ -76,7 +76,7 @@ describe("Feedback Management: Review, Reply To, Archive & Restore Feedback", ()
         assert.equal(result.body.feedback[0].rating, 4);
     });
 
-    test("CASE-171 | Description: Staff replies to a feedback entry | Expected: 200; reply saved; sender notified in the app and by email", async () => {
+    test("CASE-171 | Description: Staff replies to a feedback entry. | Expected: Reply is saved and the sender is notified.", async () => {
         const entry = feedbackEntry();
         mock.method(Feedback, "findById", async () => entry);
         mock.method(User, "findById", () => query({ name: "Staff Sam" }));
@@ -91,7 +91,7 @@ describe("Feedback Management: Review, Reply To, Archive & Restore Feedback", ()
         assert.equal(sentEmails.some((mail) => mail.name === "sendFeedbackReplyEmail"), true);
     });
 
-    test("CASE-172 | Description: Staff archives a feedback entry | Expected: 200; status 'archived'", async () => {
+    test("CASE-172 | Description: Staff archives a feedback entry. | Expected: Entry moves to the archive.", async () => {
         const entry = feedbackEntry();
         mock.method(Feedback, "findById", async () => entry);
 
@@ -101,7 +101,7 @@ describe("Feedback Management: Review, Reply To, Archive & Restore Feedback", ()
         assert.equal(entry.status, "archived");
     });
 
-    test("CASE-173 | Description: Staff restores an archived feedback entry | Expected: 200; status 'active'", async () => {
+    test("CASE-173 | Description: Staff restores an archived feedback entry. | Expected: Entry returns to the active list.", async () => {
         const entry = feedbackEntry({ status: "archived" });
         mock.method(Feedback, "findById", async () => entry);
 
@@ -113,7 +113,7 @@ describe("Feedback Management: Review, Reply To, Archive & Restore Feedback", ()
 });
 
 describe("Feedback Management: Delete Feedback", () => {
-    test("CASE-174 | Description: Admin deletes a feedback entry | Expected: 200; entry removed", async () => {
+    test("CASE-174 | Description: Admin deletes a feedback entry. | Expected: Entry is removed.", async () => {
         const remove = mock.method(Feedback, "findByIdAndDelete", async () => ({ _id: newId() }));
 
         const result = await callRoute(feedbackRoutes, "DELETE", `/${newId()}`, { role: "admin" });
@@ -122,7 +122,7 @@ describe("Feedback Management: Delete Feedback", () => {
         assert.equal(remove.mock.callCount(), 1);
     });
 
-    test("CASE-175 | Description: Staff deletes a feedback entry | Expected: 403; nothing deleted", async () => {
+    test("CASE-175 | Description: Staff deletes a feedback entry. | Expected: Access is denied.", async () => {
         const remove = mock.method(Feedback, "findByIdAndDelete", async () => ({ _id: newId() }));
 
         const result = await callRoute(feedbackRoutes, "DELETE", `/${newId()}`, { role: "staff" });

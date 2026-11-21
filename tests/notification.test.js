@@ -48,7 +48,7 @@ function stubNotificationStore(userId, readFlags) {
 }
 
 describe("Notification: View Automated Notifications", () => {
-    test("CASE-162 | Description: An adopter's application status changes | Expected: Notification created for the adopter; unread count goes to 2", async () => {
+    test("CASE-162 | Description: An application status changes. | Expected: Adopter gets a notification and the unread count goes up.", async () => {
         const adopterId = newId();
         const application = fakeDocument({
             applicantUserId: adopterId, fullName: "Ana Adopter", email: "ana@test.rescuebase", animalId: newId(), petName: "Buddy",
@@ -78,7 +78,7 @@ describe("Notification: View Automated Notifications", () => {
         assert.equal(bell.body.count, 2);
     });
 
-    test("CASE-163 | Description: User opens their notifications | Expected: 200; own notifications listed", async () => {
+    test("CASE-163 | Description: User opens their notifications. | Expected: Their notifications are listed.", async () => {
         const userId = newId();
         stubNotificationStore(userId, [false, true]);
 
@@ -88,7 +88,7 @@ describe("Notification: View Automated Notifications", () => {
         assert.equal(result.body.notifications.length, 2);
     });
 
-    test("CASE-164 | Description: User marks one notification as read | Expected: Unread count drops from 3 to 2", async () => {
+    test("CASE-164 | Description: User marks one notification as read. | Expected: Unread count goes down by one.", async () => {
         const userId = newId();
         const store = stubNotificationStore(userId, [false, false, false]);
 
@@ -101,7 +101,7 @@ describe("Notification: View Automated Notifications", () => {
         assert.equal(after.body.count, 2);
     });
 
-    test("CASE-165 | Description: User marks all notifications as read | Expected: Unread count becomes 0", async () => {
+    test("CASE-165 | Description: User marks all notifications as read. | Expected: Unread count is zero.", async () => {
         const userId = newId();
         stubNotificationStore(userId, [false, false, false]);
 
@@ -112,7 +112,7 @@ describe("Notification: View Automated Notifications", () => {
         assert.equal(after.body.count, 0);
     });
 
-    test("CASE-166 | Description: A vaccination is due in 3 days | Expected: Staff reminder 'Vaccination due soon' and foster email; same dose not reminded twice", async () => {
+    test("CASE-166 | Description: A vaccination is due in 3 days. | Expected: Staff and foster are reminded.", async () => {
         stubSettings();
         const originalState = Object.getOwnPropertyDescriptor(mongoose.connection, "readyState");
         Object.defineProperty(mongoose.connection, "readyState", { value: 1, configurable: true });

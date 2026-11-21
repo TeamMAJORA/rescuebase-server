@@ -45,7 +45,7 @@ function stubCreator(role = "staff") {
 }
 
 describe("Animal Management: View Animal Profiles", () => {
-    test("CASE-035 | Description: Staff opens the animal list | Expected: 200; each animal shows name, type and availability status", async () => {
+    test("CASE-035 | Description: Staff opens the animal list. | Expected: Animals are listed with name, type and status.", async () => {
         mock.method(Animal, "find", () => query([animalRow({ name: "Buddy" }), animalRow({ name: "Mimi", type: "Cat" })]));
 
         const result = await callRoute(animalRoutes, "GET", "/", { role: "staff" });
@@ -57,7 +57,7 @@ describe("Animal Management: View Animal Profiles", () => {
         }
     });
 
-    test("CASE-036 | Description: Volunteer filters the animal list by type (Cat) | Expected: 200; only Cat animals returned", async () => {
+    test("CASE-036 | Description: Volunteer filters the animal list by type. | Expected: Only that type is shown.", async () => {
         const find = mock.method(Animal, "find", () => query([animalRow({ type: "Cat" })]));
 
         const result = await callRoute(animalRoutes, "GET", "/?type=Cat", { role: "volunteer" });
@@ -67,7 +67,7 @@ describe("Animal Management: View Animal Profiles", () => {
         assert.deepEqual(result.body.animals.map((animal) => animal.type), ["Cat"]);
     });
 
-    test("CASE-037 | Description: Staff opens the profile of an animal with all 8 behavior scores | Expected: 200; details shown; personality 'complete' with 4 tags", async () => {
+    test("CASE-037 | Description: Staff opens an animal with all 8 behavior scores. | Expected: Details and personality tags are shown.", async () => {
         const animal = animalRow({ ...ALL_EIGHT_SCORES });
         mock.method(Animal, "findById", () => query(animal));
 
@@ -79,7 +79,7 @@ describe("Animal Management: View Animal Profiles", () => {
         assert.deepEqual(result.body.animal.personality.tags, ["Well-trained", "Gentle", "Calm", "Friendly"]);
     });
 
-    test("CASE-038 | Description: Staff opens the profile of an animal with no behavior scores | Expected: Personality 'unassessed'; no tags", async () => {
+    test("CASE-038 | Description: Staff opens an animal with no behavior scores. | Expected: Animal is shown as unassessed with no tags.", async () => {
         const animal = animalRow();
         mock.method(Animal, "findById", () => query(animal));
 
@@ -91,7 +91,7 @@ describe("Animal Management: View Animal Profiles", () => {
 });
 
 describe("Animal Management: Register Animal Intake & Review Volunteer Submissions", () => {
-    test("CASE-039 | Description: Staff registers an animal intake with the required fields | Expected: 201; animal saved as approved intake", async () => {
+    test("CASE-039 | Description: Staff registers an animal intake with all required fields. | Expected: Animal record is created.", async () => {
         stubCreator("staff");
         const create = mock.method(Animal, "create", async (data) => fakeDocument(data));
 
@@ -105,7 +105,7 @@ describe("Animal Management: Register Animal Intake & Review Volunteer Submissio
         assert.equal(result.body.animal.name, "Rex");
     });
 
-    test("CASE-039 (volunteer) | Description: Volunteer registers an animal intake | Expected: 201; intake saved as pending review", async () => {
+    test("CASE-039 (volunteer) | Description: Volunteer registers an animal intake. | Expected: Intake is saved as pending review.", async () => {
         stubCreator("volunteer");
         const create = mock.method(Animal, "create", async (data) => fakeDocument(data));
 
@@ -115,7 +115,7 @@ describe("Animal Management: Register Animal Intake & Review Volunteer Submissio
         assert.equal(create.mock.calls[0].arguments[0].intakeStatus, "pending_review");
     });
 
-    test("CASE-040 | Description: Staff leaves the intake name or type empty | Expected: 400; the missing field is named; nothing saved", async () => {
+    test("CASE-040 | Description: Staff leaves the intake name or type empty. | Expected: Save fails with required field message.", async () => {
         const create = mock.method(Animal, "create", async (data) => fakeDocument(data));
 
         const noName = await callRoute(animalRoutes, "POST", "/", { role: "staff", body: { name: "", type: "Dog" } });
@@ -128,7 +128,7 @@ describe("Animal Management: Register Animal Intake & Review Volunteer Submissio
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-041 | Description: Staff opens the volunteer intake submissions | Expected: 200; only pending-review intakes listed", async () => {
+    test("CASE-041 | Description: Staff opens the volunteer intake submissions. | Expected: Pending submissions are listed.", async () => {
         const find = mock.method(Animal, "find", () => query([animalRow({ intakeStatus: "pending_review" })]));
 
         const result = await callRoute(animalRoutes, "GET", "/intakes", { role: "staff" });
@@ -138,7 +138,7 @@ describe("Animal Management: Register Animal Intake & Review Volunteer Submissio
         assert.equal(result.body.intakes.length, 1);
     });
 
-    test("CASE-042 | Description: Staff approves a volunteer intake | Expected: 200; intake approved; animal available; no rejection reason", async () => {
+    test("CASE-042 | Description: Staff approves a volunteer intake. | Expected: Intake is approved.", async () => {
         const animal = fakeDocument({ ...animalRow({ intakeStatus: "pending_review", availabilityStatus: "unavailable" }) });
         mock.method(Animal, "findById", () => query(animal));
 
@@ -150,7 +150,7 @@ describe("Animal Management: Register Animal Intake & Review Volunteer Submissio
         assert.equal(animal.rejectionReason, "");
     });
 
-    test("CASE-043 | Description: Staff rejects a volunteer intake without a reason | Expected: 400; intake stays pending; nothing saved", async () => {
+    test("CASE-043 | Description: Staff rejects an intake without a reason. | Expected: Rejection is refused until a reason is entered.", async () => {
         const animal = fakeDocument({ ...animalRow({ intakeStatus: "pending_review" }) });
         mock.method(Animal, "findById", () => query(animal));
 
@@ -161,7 +161,7 @@ describe("Animal Management: Register Animal Intake & Review Volunteer Submissio
         assert.equal(animal.savedTimes, 0);
     });
 
-    test("CASE-044 | Description: Staff rejects a volunteer intake with a reason | Expected: 200; intake rejected; reason saved", async () => {
+    test("CASE-044 | Description: Staff rejects an intake with a reason. | Expected: Intake is rejected and the reason is saved.", async () => {
         const animal = fakeDocument({ ...animalRow({ intakeStatus: "pending_review" }) });
         mock.method(Animal, "findById", () => query(animal));
 
@@ -174,7 +174,7 @@ describe("Animal Management: Register Animal Intake & Review Volunteer Submissio
 });
 
 describe("Animal Management: Edit Animal Profiles, Medical & Vaccination Records", () => {
-    test("CASE-045 | Description: Staff edits an animal's name and age | Expected: 200; only allowed fields saved; new values returned", async () => {
+    test("CASE-045 | Description: Staff edits an animal's details. | Expected: New values are saved.", async () => {
         const existing = animalRow({ name: "Buddy" });
         mock.method(Animal, "findById", () => query(existing));
         const update = mock.method(Animal, "findByIdAndUpdate", () => query({ ...existing, name: "Buddy Jr", age: 3 }));
@@ -189,7 +189,7 @@ describe("Animal Management: Edit Animal Profiles, Medical & Vaccination Records
         assert.equal(result.body.animal.name, "Buddy Jr");
     });
 
-    test("CASE-046 | Description: Staff saves an animal with an empty name | Expected: Model rejects the empty name; route returns 400", async () => {
+    test("CASE-046 | Description: Staff clears the animal name and saves. | Expected: Save fails with required field message.", async () => {
         const validationError = new Animal({ name: "", type: "Dog" }).validateSync();
         assert.ok(validationError.errors.name, "name is required on the animal model");
 
@@ -202,7 +202,7 @@ describe("Animal Management: Edit Animal Profiles, Medical & Vaccination Records
         assert.equal(result.status, 400);
     });
 
-    test("CASE-047 | Description: Staff adds a Checkup medical record | Expected: 201; record saved for the animal", async () => {
+    test("CASE-047 | Description: Staff adds a medical record. | Expected: Record is saved.", async () => {
         const animal = animalRow();
         mock.method(Animal, "findById", () => query(animal));
         const create = mock.method(MedicalRecord, "create", async (data) => ({ ...data, _id: newId(), populate: async () => {} }));
@@ -216,7 +216,7 @@ describe("Animal Management: Edit Animal Profiles, Medical & Vaccination Records
         assert.equal(create.mock.calls[0].arguments[0].record_type, "Checkup");
     });
 
-    test("CASE-048 | Description: Staff adds a vaccination with a due date, then opens the due-soon list | Expected: 201; due date saved; list covers the next 3 days", async () => {
+    test("CASE-048 | Description: Staff adds a vaccination with a due date. | Expected: Record is saved with its due date.", async () => {
         const animal = animalRow();
         mock.method(Animal, "findById", () => query(animal));
         const create = mock.method(VaccinationRecord, "create", async (data) => ({ ...data, _id: newId(), populate: async () => {} }));
@@ -238,7 +238,7 @@ describe("Animal Management: Edit Animal Profiles, Medical & Vaccination Records
         assert.ok(Math.abs(windowDays - 3) < 0.01, "only vaccinations due within the next 3 days are returned");
     });
 
-    test("CASE-049 | Description: Staff saves a vaccination with an empty date | Expected: 400 'vaccination date is required'; nothing saved", async () => {
+    test("CASE-049 | Description: Staff saves a vaccination with an empty date. | Expected: Save fails with required field message.", async () => {
         const create = mock.method(VaccinationRecord, "create", async () => ({}));
 
         const result = await callRoute(vaccinationRoutes, "POST", "/", {
@@ -253,7 +253,7 @@ describe("Animal Management: Edit Animal Profiles, Medical & Vaccination Records
 });
 
 describe("Animal Management: Rate Behavioral Assessment & Generate QR Tags", () => {
-    test("CASE-050 | Description: Staff rates all 8 behavior scores and saves | Expected: 200; 8 scores saved; 4 personality tags generated", async () => {
+    test("CASE-050 | Description: Staff rates all 8 behavior scores. | Expected: Scores are saved and personality tags are made.", async () => {
         const existing = animalRow();
         mock.method(Animal, "findById", () => query(existing));
         const update = mock.method(Animal, "findByIdAndUpdate", () => query({ ...existing, ...ALL_EIGHT_SCORES }));
@@ -266,7 +266,7 @@ describe("Animal Management: Rate Behavioral Assessment & Generate QR Tags", () 
         assert.deepEqual(result.body.animal.personality.tags, ["Well-trained", "Gentle", "Calm", "Friendly"]);
     });
 
-    test("CASE-051 | Description: Staff enters a behavior score outside 1 to 5 | Expected: Model rejects it (too high and too low); route returns 400", async () => {
+    test("CASE-051 | Description: Staff enters a behavior score outside 1 to 5. | Expected: Score is rejected with error message.", async () => {
         const tooHigh = new Animal({ name: "Rex", type: "Dog", energyLevel: 6 }).validateSync();
         const tooLow = new Animal({ name: "Rex", type: "Dog", aggressionLevel: 0 }).validateSync();
         assert.ok(tooHigh.errors.energyLevel);
@@ -281,7 +281,7 @@ describe("Animal Management: Rate Behavioral Assessment & Generate QR Tags", () 
         assert.equal(result.status, 400);
     });
 
-    test("CASE-052 | Description: Staff generates a QR tag for an animal | Expected: 201; tag code RB-…, QR link to /pet/<tag>, PNG image", async () => {
+    test("CASE-052 | Description: Staff generates a QR tag for an animal. | Expected: QR tag is saved.", async () => {
         const animal = animalRow();
         mock.method(Animal, "findById", () => query(animal));
         mock.method(QRTag, "findOne", () => query(null));
@@ -296,7 +296,7 @@ describe("Animal Management: Rate Behavioral Assessment & Generate QR Tags", () 
         assert.match(saved.qrImageUrl, /^data:image\/png;base64,/);
     });
 
-    test("CASE-053 | Description: Staff generates a QR tag for an animal that already has one | Expected: 409; no second tag created", async () => {
+    test("CASE-053 | Description: Staff generates a QR tag for an animal that has one. | Expected: A second tag is not created.", async () => {
         const animal = animalRow();
         mock.method(Animal, "findById", () => query(animal));
         mock.method(QRTag, "findOne", () => query({ _id: newId(), animal: animal._id }));
@@ -308,7 +308,7 @@ describe("Animal Management: Rate Behavioral Assessment & Generate QR Tags", () 
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-054 | Description: Anyone looks up an animal by its tag code | Expected: 200; the animal's public profile", async () => {
+    test("CASE-054 | Description: User looks up an animal by its tag code. | Expected: Public profile is shown.", async () => {
         const animal = animalRow({ name: "Buddy" });
         mock.method(QRTag, "findOne", () => query({ tagCode: "RB-1-ABC", animal }));
 
@@ -325,7 +325,7 @@ describe("Animal Management: Record Animal Transfers", () => {
         transfer_date: "2026-11-10", reason: "Needs surgery", status: "Pending", ...overrides,
     });
 
-    test("CASE-055 | Description: Staff records a transfer with all required details | Expected: 201; transfer saved", async () => {
+    test("CASE-055 | Description: Staff records a transfer with all required details. | Expected: Transfer is saved.", async () => {
         mock.method(Animal, "findById", () => query(animalRow()));
         const create = mock.method(AnimalTransfer, "create", async (data) => ({ ...data, populate: async () => {} }));
 
@@ -335,7 +335,7 @@ describe("Animal Management: Record Animal Transfers", () => {
         assert.equal(create.mock.calls[0].arguments[0].to_location, "Partner Rescue");
     });
 
-    test("CASE-056 | Description: Staff leaves the transfer 'to location' empty | Expected: 400 'to location is required'; nothing saved", async () => {
+    test("CASE-056 | Description: Staff leaves the transfer location empty. | Expected: Save fails with required field message.", async () => {
         const create = mock.method(AnimalTransfer, "create", async () => ({}));
 
         const result = await callRoute(animalTransferRoutes, "POST", "/", { role: "staff", body: transferBody({ to_location: "" }) });
@@ -345,7 +345,7 @@ describe("Animal Management: Record Animal Transfers", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-057 | Description: Staff views the transfer history | Expected: 200; recorded transfers listed", async () => {
+    test("CASE-057 | Description: Staff opens the transfer history. | Expected: Transfers are listed.", async () => {
         mock.method(AnimalTransfer, "find", () => query([{ _id: newId(), to_location: "Partner Rescue" }]));
 
         const result = await callRoute(animalTransferRoutes, "GET", "/", { role: "staff" });
@@ -364,7 +364,7 @@ describe("Animal Management: Delete Animal Records", () => {
         return mock.method(Animal, "findByIdAndDelete", async () => ({}));
     }
 
-    test("CASE-058 | Description: Admin deletes an animal with no open adoption application | Expected: 200; animal removed", async () => {
+    test("CASE-058 | Description: Admin deletes an animal with no open application. | Expected: Animal is removed.", async () => {
         const remove = stubDeleteChecks({ openApplications: 0 });
 
         const result = await callRoute(animalRoutes, "DELETE", `/${newId()}`, { role: "admin" });
@@ -373,7 +373,7 @@ describe("Animal Management: Delete Animal Records", () => {
         assert.equal(remove.mock.callCount(), 1);
     });
 
-    test("CASE-059 | Description: Admin deletes an animal with an open adoption application | Expected: 409 'open adoption application'; animal kept", async () => {
+    test("CASE-059 | Description: Admin deletes an animal with an open application. | Expected: Deletion is refused.", async () => {
         const remove = stubDeleteChecks({ openApplications: 1 });
 
         const result = await callRoute(animalRoutes, "DELETE", `/${newId()}`, { role: "admin" });
@@ -383,7 +383,7 @@ describe("Animal Management: Delete Animal Records", () => {
         assert.equal(remove.mock.callCount(), 0);
     });
 
-    test("CASE-060 | Description: Staff tries to delete an animal | Expected: 403; nothing deleted", async () => {
+    test("CASE-060 | Description: Staff tries to delete an animal. | Expected: Access is denied.", async () => {
         const remove = stubDeleteChecks();
 
         const result = await callRoute(animalRoutes, "DELETE", `/${newId()}`, { role: "staff" });

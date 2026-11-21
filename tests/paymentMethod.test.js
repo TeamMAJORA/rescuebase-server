@@ -13,7 +13,7 @@ afterEach(() => mock.restoreAll());
 const GCASH = { method_type: "GCash", account_name: "RescueBase Shelter", account_number: "09171234567", instructions: "Send the exact amount" };
 
 describe("Payment Methods: View and Manage Payment Methods", () => {
-    test("CASE-206 | Description: Adopter opens the payment methods | Expected: 200; only active methods (GCash first)", async () => {
+    test("CASE-206 | Description: Adopter opens the payment methods. | Expected: Only active methods are shown.", async () => {
         const find = mock.method(PaymentMethod, "find", () => query([{ method_type: "GCash", is_active: true }]));
 
         const result = await callRoute(paymentRoutes, "GET", "/", { role: "adopter" });
@@ -23,7 +23,7 @@ describe("Payment Methods: View and Manage Payment Methods", () => {
         assert.equal(result.body.methods[0].method_type, "GCash");
     });
 
-    test("CASE-207 | Description: Staff adds a payment method with valid details | Expected: 201; saved as active; an adopter gets 403", async () => {
+    test("CASE-207 | Description: Staff adds a payment method with valid details. | Expected: Method is saved as active.", async () => {
         const create = mock.method(PaymentMethod, "create", async (data) => ({ _id: newId(), ...data }));
 
         const result = await callRoute(paymentRoutes, "POST", "/", { role: "staff", body: GCASH });
@@ -36,7 +36,7 @@ describe("Payment Methods: View and Manage Payment Methods", () => {
         assert.equal(adopter.status, 403);
     });
 
-    test("CASE-208 | Description: Staff adds a payment method without an account number | Expected: 400 'required'; nothing saved", async () => {
+    test("CASE-208 | Description: Staff adds a payment method without an account number. | Expected: Save fails with required field message.", async () => {
         const create = mock.method(PaymentMethod, "create", async () => ({}));
 
         const result = await callRoute(paymentRoutes, "POST", "/", { role: "staff", body: { ...GCASH, account_number: " " } });
@@ -46,7 +46,7 @@ describe("Payment Methods: View and Manage Payment Methods", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-209 | Description: Staff adds an unsupported payment type | Expected: 400 'GCash, Maya, Bank Account'; nothing saved", async () => {
+    test("CASE-209 | Description: Staff adds an unsupported payment type. | Expected: Save fails with error message.", async () => {
         const create = mock.method(PaymentMethod, "create", async () => ({}));
 
         const result = await callRoute(paymentRoutes, "POST", "/", { role: "staff", body: { ...GCASH, method_type: "Bitcoin" } });
@@ -56,7 +56,7 @@ describe("Payment Methods: View and Manage Payment Methods", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-210 | Description: Staff turns a payment method off | Expected: 200; saved as inactive", async () => {
+    test("CASE-210 | Description: Staff turns a payment method off. | Expected: Method is saved as inactive.", async () => {
         const update = mock.method(PaymentMethod, "findByIdAndUpdate", async (_id, changes) => ({ _id: newId(), ...changes }));
 
         const result = await callRoute(paymentRoutes, "PATCH", `/${newId()}`, { role: "staff", body: { is_active: false } });
@@ -66,7 +66,7 @@ describe("Payment Methods: View and Manage Payment Methods", () => {
         assert.equal(result.body.method.is_active, false);
     });
 
-    test("CASE-211 | Description: Staff deletes a payment method | Expected: 200; removed", async () => {
+    test("CASE-211 | Description: Staff deletes a payment method. | Expected: Method is removed.", async () => {
         const remove = mock.method(PaymentMethod, "findByIdAndDelete", async () => ({ _id: newId() }));
 
         const result = await callRoute(paymentRoutes, "DELETE", `/${newId()}`, { role: "staff" });
@@ -75,7 +75,7 @@ describe("Payment Methods: View and Manage Payment Methods", () => {
         assert.equal(remove.mock.callCount(), 1);
     });
 
-    test("CASE-212 | Description: Anyone opens the public payment method list | Expected: 200 without login; only active methods", async () => {
+    test("CASE-212 | Description: User opens the public payment method list. | Expected: Only active methods are shown, no login needed.", async () => {
         const find = mock.method(PaymentMethod, "find", () => query([{ method_type: "Maya", account_name: "RescueBase", account_number: "0917" }]));
 
         const result = await callRoute(paymentRoutes, "GET", "/public", {});

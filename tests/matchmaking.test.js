@@ -59,38 +59,38 @@ afterEach(() => {
 });
 
 describe("matchmakingService.calculateFactorSimilarity", () => {
-    test("U-01 | Description: Trait equals the adopter's preference (3 vs 3) | Expected: Factor scores 1", () => {
+    test("U-01 | Description: Pet trait equals the adopter's preference. | Expected: Factor scores 1.", () => {
         assert.equal(calculateFactorSimilarity(3, 3, "preference"), 1);
     });
 
-    test("U-02 | Description: Trait is far from the preference (1 vs 5) | Expected: Factor scores 0", () => {
+    test("U-02 | Description: Pet trait is far from the preference (1 vs 5). | Expected: Factor scores 0.", () => {
         assert.equal(calculateFactorSimilarity(1, 5, "preference"), 0);
     });
 
-    test("U-03 | Description: Trait is two steps from the preference (2 vs 4) | Expected: Factor scores 0.5", () => {
+    test("U-03 | Description: Pet trait is two steps from the preference. | Expected: Factor scores 0.5.", () => {
         assert.equal(calculateFactorSimilarity(2, 4, "preference"), 0.5);
     });
 
-    test("U-04 | Description: Pet trait is above the adopter's tolerance (4 vs 2) | Expected: Factor scores 0.5", () => {
+    test("U-04 | Description: Pet trait is above the adopter's tolerance. | Expected: Factor scores 0.5.", () => {
         assert.equal(calculateFactorSimilarity(4, 2, "tolerance"), 0.5);
     });
 
-    test("U-05 | Description: Pet trait is below the adopter's tolerance (2 vs 4) | Expected: Factor scores 1; no penalty", () => {
+    test("U-05 | Description: Pet trait is below the adopter's tolerance. | Expected: Factor scores 1.", () => {
         assert.equal(calculateFactorSimilarity(2, 4, "tolerance"), 1);
     });
 
-    test("U-06 | Description: Pet trait is 5 and the adopter's tolerance is 1 | Expected: Factor scores 0", () => {
+    test("U-06 | Description: Pet trait is 5 and the tolerance is 1. | Expected: Factor scores 0.", () => {
         assert.equal(calculateFactorSimilarity(5, 1, "tolerance"), 0);
     });
 
-    test("U-07 | Description: A trait value is missing or not a number | Expected: Factor is skipped (null)", () => {
+    test("U-07 | Description: A trait value is missing or not a number. | Expected: Factor is skipped.", () => {
         assert.equal(calculateFactorSimilarity(null, 3, "preference"), null);
         assert.equal(calculateFactorSimilarity("abc", 3, "preference"), null);
     });
 });
 
 describe("matchmakingService.calculateBehavioralScore", () => {
-    test("U-08 | Description: Pet matches the adopter on all 8 factors | Expected: Score is 100", () => {
+    test("U-08 | Description: Pet matches the adopter on all 8 factors. | Expected: Score is 100.", () => {
         const { score } = calculateBehavioralScore(
             buildAnimalWithAllScores(3),
             buildAdopterWithAllAnswers(3)
@@ -98,7 +98,7 @@ describe("matchmakingService.calculateBehavioralScore", () => {
         assert.equal(score, 100);
     });
 
-    test("U-09 | Description: No factor can be used | Expected: Score is null", () => {
+    test("U-09 | Description: No factor can be used. | Expected: No score.", () => {
         const { score } = calculateBehavioralScore(
             buildAnimalWithAllScores(null),
             buildAdopterWithAllAnswers(3)
@@ -108,7 +108,7 @@ describe("matchmakingService.calculateBehavioralScore", () => {
 });
 
 describe("matchmakingService.getMatchTier", () => {
-    test("U-10 | Description: Scores on a tier boundary: 80, 79.99, 60, 59.99 | Expected: Perfect Paw Match, Paws for Thought, Paws for Thought, No Paw-sible Match", () => {
+    test("U-10 | Description: Score is on a tier boundary (80, 79.99, 60, 59.99). | Expected: Correct tier is shown for each.", () => {
         assert.equal(getMatchTier(80), "Perfect Paw Match");
         assert.equal(getMatchTier(79.99), "Paws for Thought");
         assert.equal(getMatchTier(60), "Paws for Thought");
@@ -117,7 +117,7 @@ describe("matchmakingService.getMatchTier", () => {
 });
 
 describe("matchmakingService.matchesBasicPreferences", () => {
-    test("U-11 | Description: Adopter filters the pets by type and size | Expected: Only pets of that type and size are kept", () => {
+    test("U-11 | Description: Adopter filters the pets by type and size. | Expected: Only matching pets are kept.", () => {
         const dogAndSmallAdopter = { preferredPetType: "Dog", preferredSize: "Small" };
 
         assert.equal(
@@ -139,7 +139,7 @@ describe("matchmakingService.matchesBasicPreferences", () => {
 });
 
 describe("matchmakingService.calculateAnimalMatch (AI service mocked)", () => {
-    test("U-12 | Description: Pet has no conflict with the adopter | Expected: AI score 90 kept; Perfect Paw Match; eligible", async () => {
+    test("U-12 | Description: Pet has no conflict with the adopter. | Expected: High score and Perfect Paw Match.", async () => {
         mockAiServiceReturningPercentage(90);
 
         const match = await calculateAnimalMatch(
@@ -153,7 +153,7 @@ describe("matchmakingService.calculateAnimalMatch (AI service mocked)", () => {
         assert.deepEqual(match.criticalConflicts, []);
     });
 
-    test("U-13 | Description: Pet's aggression is above the adopter's tolerance | Expected: Score capped at 59.99; No Paw-sible Match; 1 aggression conflict", async () => {
+    test("U-13 | Description: Pet's aggression is above the adopter's tolerance. | Expected: Score is capped below 60.", async () => {
         mockAiServiceReturningPercentage(90);
 
         const match = await calculateAnimalMatch(
@@ -167,7 +167,7 @@ describe("matchmakingService.calculateAnimalMatch (AI service mocked)", () => {
         assert.match(match.criticalConflicts[0], /aggression/i);
     });
 
-    test("U-14 | Description: Pet has very high aggression and the adopter has children | Expected: Score capped at 59.99; 1 'children' conflict", async () => {
+    test("U-14 | Description: Pet is very aggressive and the adopter has children. | Expected: Score is capped below 60.", async () => {
         mockAiServiceReturningPercentage(90);
 
         // Tolerance 5 so the only conflict is the children rule.
@@ -184,7 +184,7 @@ describe("matchmakingService.calculateAnimalMatch (AI service mocked)", () => {
         assert.match(match.criticalConflicts[0], /children/i);
     });
 
-    test("U-15 | Description: AI service is down while matching | Expected: Score null; 'AI Prediction Unavailable'; not eligible", async () => {
+    test("U-15 | Description: AI service is down. | Expected: No score; AI Prediction Unavailable.", async () => {
         mock.method(console, "error", () => {});
         mock.method(globalThis, "fetch", async () => {
             throw new Error("connect ECONNREFUSED");
@@ -200,7 +200,7 @@ describe("matchmakingService.calculateAnimalMatch (AI service mocked)", () => {
         assert.equal(match.eligible, false);
     });
 
-    test("U-16 | Description: Pet has no behavior data | Expected: 'Insufficient Behavioral Data'; not eligible; AI is not called", async () => {
+    test("U-16 | Description: Pet has no behavior data. | Expected: Insufficient Behavioral Data; no score.", async () => {
         const fetchMock = mockAiServiceReturningPercentage(90);
 
         const match = await calculateAnimalMatch(

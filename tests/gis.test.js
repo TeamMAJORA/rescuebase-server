@@ -23,7 +23,7 @@ function stubNoLostFoundPins() {
 const SIGHTING = { petName: "Stray dog", species: "Dog", locationName: "Colon Street", latitude: 10.2926, longitude: 123.9026, description: "Brown dog near the market" };
 
 describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest Shelter", () => {
-    test("CASE-144 | Description: User opens the GIS map | Expected: 200; plotted sightings with coordinates and type", async () => {
+    test("CASE-144 | Description: User opens the GIS map. | Expected: Sightings are plotted.", async () => {
         mock.method(GISLocation, "find", () => query([{ _id: newId(), reportType: "stray", status: "open", species: "dog", locationName: "Colon", latitude: 10.29, longitude: 123.9, description: "" }]));
         stubNoLostFoundPins();
 
@@ -35,7 +35,7 @@ describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest S
         assert.equal(result.body.locations[0].reportType, "stray");
     });
 
-    test("CASE-145 | Description: User reports a stray sighting with a pin and details | Expected: 201; saved as an open stray report with the pin", async () => {
+    test("CASE-145 | Description: User reports a stray sighting with a pin and details. | Expected: Sighting is saved as open on the map.", async () => {
         mock.method(User, "findById", () => query({ _id: newId(), name: "Vic Volunteer", email: "volunteer@test.rescuebase", role: "volunteer" }));
         const create = mock.method(GISLocation, "create", async (data) => ({ _id: newId(), ...data }));
 
@@ -49,7 +49,7 @@ describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest S
         assert.equal(saved.longitude, 123.9026);
     });
 
-    test("CASE-146 | Description: User leaves the location name empty | Expected: 400 'location name is required'", async () => {
+    test("CASE-146 | Description: User leaves the location name empty. | Expected: Save fails with required field message.", async () => {
         const create = mock.method(GISLocation, "create", async () => ({}));
 
         const result = await callRoute(gisRoutes, "POST", "/stray-sightings", { role: "volunteer", body: { ...SIGHTING, locationName: "" } });
@@ -59,7 +59,7 @@ describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest S
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-147 | Description: User enters a latitude or longitude out of range | Expected: 400 'invalid latitude' / 'invalid longitude'", async () => {
+    test("CASE-147 | Description: User enters a latitude or longitude out of range. | Expected: Save fails with error message.", async () => {
         const create = mock.method(GISLocation, "create", async () => ({}));
 
         const badLatitude = await callRoute(gisRoutes, "POST", "/stray-sightings", { role: "volunteer", body: { ...SIGHTING, latitude: 95 } });
@@ -77,7 +77,7 @@ describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest S
         { _id: newId(), name: "Mactan Pound", address: "Lapu-Lapu City", latitude: 10.31, longitude: 123.97, contact: "0323334444", status: "active" },
     ];
 
-    test("CASE-148 | Description: User opens the shelter list | Expected: 200; only active shelters, each with coordinates", async () => {
+    test("CASE-148 | Description: User opens the shelter list. | Expected: Only active shelters are listed.", async () => {
         const find = mock.method(Shelter, "find", () => query(SHELTERS));
 
         const result = await callRoute(gisRoutes, "GET", "/shelters", { role: "adopter" });
@@ -87,7 +87,7 @@ describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest S
         assert.equal(result.body.shelters.every((shelter) => Number.isFinite(shelter.latitude) && Number.isFinite(shelter.longitude)), true);
     });
 
-    test("CASE-149 | Description: Adopter opens the shelter list without sharing a location | Expected: 200; shelters returned so typed coordinates can be used", async () => {
+    test("CASE-149 | Description: Adopter opens the shelter list without sharing a location. | Expected: Shelters are listed; typed coordinates can be used.", async () => {
         mock.method(Shelter, "find", () => query(SHELTERS));
 
         const result = await callRoute(gisRoutes, "GET", "/shelters", {});
@@ -96,7 +96,7 @@ describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest S
         assert.equal(result.body.shelters.length, 2);
     });
 
-    test("CASE-150 | Description: User selects a shelter | Expected: Name, address and contact are shown", async () => {
+    test("CASE-150 | Description: User selects a shelter. | Expected: Name, address and contact are shown.", async () => {
         mock.method(Shelter, "find", () => query(SHELTERS));
 
         const result = await callRoute(gisRoutes, "GET", "/shelters", { role: "adopter" });
@@ -109,7 +109,7 @@ describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest S
 });
 
 describe("GIS Mapping: Edit, Resolve & Delete Sightings and Manage Shelters", () => {
-    test("CASE-151 | Description: Staff edits a stray sighting | Expected: 200; new location name and description saved", async () => {
+    test("CASE-151 | Description: Staff edits a stray sighting. | Expected: New values are saved.", async () => {
         const id = newId();
         const update = mock.method(GISLocation, "findByIdAndUpdate", async (_id, change) => ({ _id: id, ...change.$set }));
 
@@ -120,7 +120,7 @@ describe("GIS Mapping: Edit, Resolve & Delete Sightings and Manage Shelters", ()
         assert.equal(result.body.location.description, "Now near the fish stalls");
     });
 
-    test("CASE-152 | Description: Staff marks a sighting as resolved | Expected: 200; status 'resolved'", async () => {
+    test("CASE-152 | Description: Staff marks a sighting as resolved. | Expected: Status changes to resolved.", async () => {
         const location = fakeDocument({ status: "open" });
         mock.method(GISLocation, "findById", async () => location);
 
@@ -131,7 +131,7 @@ describe("GIS Mapping: Edit, Resolve & Delete Sightings and Manage Shelters", ()
         assert.equal(location.savedTimes, 1);
     });
 
-    test("CASE-153 | Description: Staff deletes a sighting | Expected: 200; sighting removed", async () => {
+    test("CASE-153 | Description: Staff deletes a sighting. | Expected: Sighting is removed.", async () => {
         const remove = mock.method(GISLocation, "findByIdAndDelete", async () => ({ _id: newId() }));
 
         const result = await callRoute(gisRoutes, "DELETE", `/${newId()}`, { role: "staff" });
@@ -140,7 +140,7 @@ describe("GIS Mapping: Edit, Resolve & Delete Sightings and Manage Shelters", ()
         assert.equal(remove.mock.callCount(), 1);
     });
 
-    test("CASE-154 | Description: Admin adds a shelter with name, address and coordinates | Expected: 201; saved as active", async () => {
+    test("CASE-154 | Description: Admin adds a shelter with name, address and coordinates. | Expected: Shelter is saved as active.", async () => {
         const create = mock.method(Shelter, "create", async (data) => ({ _id: newId(), ...data }));
 
         const result = await callRoute(gisRoutes, "POST", "/shelters", {
@@ -152,7 +152,7 @@ describe("GIS Mapping: Edit, Resolve & Delete Sightings and Manage Shelters", ()
         assert.equal(create.mock.calls[0].arguments[0].name, "Cebu Animal Shelter");
     });
 
-    test("CASE-155 | Description: Admin sets a shelter to inactive | Expected: 200; shelter drops out of the active list", async () => {
+    test("CASE-155 | Description: Admin sets a shelter to inactive. | Expected: Shelter is removed from the active list.", async () => {
         const update = mock.method(Shelter, "findByIdAndUpdate", async (_id, change) => ({ _id: newId(), ...change.$set }));
 
         const result = await callRoute(gisRoutes, "PATCH", `/shelters/${newId()}`, { role: "staff", body: { status: "inactive" } });
@@ -168,7 +168,7 @@ describe("GIS Mapping: Edit, Resolve & Delete Sightings and Manage Shelters", ()
 });
 
 describe("GIS Mapping: Generate Hotspot Analysis", () => {
-    test("CASE-156 | Description: Staff opens the hotspot analysis | Expected: 200; 4 reports grouped into 2 hotspots; top one has 3 (Colon)", async () => {
+    test("CASE-156 | Description: Staff opens the hotspot analysis. | Expected: Nearby sightings are grouped with a count.", async () => {
         const near = (latitude, longitude) => ({ latitude, longitude, reportType: "stray", locationName: "Colon, Cebu City" });
         mock.method(GISLocation, "find", () => query([
             near(10.2926, 123.9026), near(10.2930, 123.9028), near(10.2928, 123.9030), // three within 500 m
@@ -186,7 +186,7 @@ describe("GIS Mapping: Generate Hotspot Analysis", () => {
         assert.ok(Number.isFinite(result.body.hotspots[0].latitude));
     });
 
-    test("CASE-157 | Description: Staff opens the hotspot analysis with no sightings | Expected: 200; 0 reports; empty hotspot list", async () => {
+    test("CASE-157 | Description: Staff opens the hotspot analysis with no sightings. | Expected: Empty result is shown without error.", async () => {
         mock.method(GISLocation, "find", () => query([]));
         stubNoLostFoundPins();
 
