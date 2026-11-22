@@ -134,6 +134,12 @@ const userSchema = new mongoose.Schema(
             select: false,
         },
 
+        emailOtpLockedUntil: {
+            type: Date,
+            default: null,
+            select: false,
+        },
+
         loginOtp: {
             type: String,
             default: "",
@@ -165,6 +171,18 @@ const userSchema = new mongoose.Schema(
         },
 
         passwordResetExpires: {
+            type: Date,
+            default: null,
+            select: false,
+        },
+
+        passwordResetAttempts: {
+            type: Number,
+            default: 0,
+            select: false,
+        },
+
+        passwordResetLockedUntil: {
             type: Date,
             default: null,
             select: false,

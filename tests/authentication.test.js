@@ -223,6 +223,57 @@ describe("Authentication & Account: Register, Log In & Reset Password", () => {
         assert.equal(locked.status, 429, "even the right OTP is refused while locked");
     });
 
+    test("CASE-010 (log in again) | Description: Locked user logs in again with the right password. | Expected: No new code is sent; still locked.", async () => {
+        stubSettings();
+        const user = await verifiedUser({ loginOtpLockedUntil: new Date(Date.now() + 10 * 60000) });
+        mock.method(User, "findOne", () => query(user));
+
+        const result = await callRoute(authRoutes, "POST", "/email/login", { body: { email: user.email, password: STRONG_PASSWORD } });
+
+        assert.equal(result.status, 429);
+        assert.match(result.body.message, /try again in \d+ minute/i);
+        assert.equal(sentEmails.length, 0, "no fresh code is emailed while locked");
+        assert.ok(user.loginOtpLockedUntil > new Date(), "the lock is not cleared");
+    });
+
+    test("CASE-005 (lock) | Description: User enters wrong registration OTPs until the limit, then asks for a new code. | Expected: Locked; no new code.", async () => {
+        stubSettings();
+        const pending = fakeDocument({ verified: false, emailOtp: "123456", emailOtpExpires: new Date(Date.now() + 60000), emailOtpAttempts: 0 });
+        mock.method(User, "findOne", () => query(pending));
+
+        let last;
+        for (let attempt = 1; attempt <= 5; attempt++) {
+            last = await callRoute(authRoutes, "POST", "/email/verify-otp", { body: { email: "a@test.rescuebase", otp: "000000" } });
+        }
+        assert.equal(last.status, 429);
+        assert.ok(pending.emailOtpLockedUntil > new Date(), "the sign-up is locked for a while");
+
+        const resend = await callRoute(authRoutes, "POST", "/email/resend-otp", { body: { email: "a@test.rescuebase" } });
+        assert.equal(resend.status, 429, "Resend can't skip the lock");
+        assert.equal(sentEmails.length, 0);
+    });
+
+    test("CASE-013 (lock) | Description: User enters wrong reset OTPs until the limit. | Expected: Reset is locked; password unchanged.", async () => {
+        stubSettings();
+        const user = await verifiedUser({ passwordResetToken: "654321", passwordResetExpires: new Date(Date.now() + 60000), passwordResetAttempts: 0 });
+        mock.method(User, "findOne", () => query(user));
+        const oldHash = user.password;
+
+        let last;
+        for (let attempt = 1; attempt <= 5; attempt++) {
+            last = await callRoute(authRoutes, "POST", "/reset-password", {
+                body: { email: user.email, otp: "000000", password: "Newpass1!", confirmPassword: "Newpass1!" },
+            });
+        }
+        assert.equal(last.status, 429);
+
+        const rightCode = await callRoute(authRoutes, "POST", "/reset-password", {
+            body: { email: user.email, otp: "654321", password: "Newpass1!", confirmPassword: "Newpass1!" },
+        });
+        assert.equal(rightCode.status, 429, "even the old right code is refused while locked");
+        assert.equal(user.password, oldHash);
+    });
+
     test("CASE-011 | Description: Deactivated user tries to log in. | Expected: Login fails with account deactivated message.", async () => {
         const user = await verifiedUser({ status: "disabled" });
         mock.method(User, "findOne", () => query(user));
@@ -239,7 +290,7 @@ describe("Authentication & Account: Register, Log In & Reset Password", () => {
         const oldHash = user.password;
 
         const result = await callRoute(authRoutes, "POST", "/reset-password", {
-            body: { otp: "654321", password: "Newpass1!", confirmPassword: "Newpass1!" },
+            body: { email: user.email, otp: "654321", password: "Newpass1!", confirmPassword: "Newpass1!" },
         });
 
         assert.equal(result.status, 200);
@@ -252,7 +303,7 @@ describe("Authentication & Account: Register, Log In & Reset Password", () => {
         mock.method(User, "findOne", () => query(null));
 
         const result = await callRoute(authRoutes, "POST", "/reset-password", {
-            body: { otp: "000000", password: "Newpass1!", confirmPassword: "Newpass1!" },
+            body: { email: "a@test.rescuebase", otp: "000000", password: "Newpass1!", confirmPassword: "Newpass1!" },
         });
 
         assert.equal(result.status, 400);
