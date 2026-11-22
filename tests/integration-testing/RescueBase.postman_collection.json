@@ -79,6 +79,46 @@
     {
       "key": "TEST_LOCK_PASSWORD",
       "value": ""
+    },
+    {
+      "key": "FOSTER_APP_ID",
+      "value": ""
+    },
+    {
+      "key": "FOSTER_EMAIL",
+      "value": ""
+    },
+    {
+      "key": "ASSIGNMENT_ID",
+      "value": ""
+    },
+    {
+      "key": "FOOD_ID_2",
+      "value": ""
+    },
+    {
+      "key": "SUPPLY_ID",
+      "value": ""
+    },
+    {
+      "key": "PROOF_PHOTO_URL",
+      "value": ""
+    },
+    {
+      "key": "ADOPTER_EMAIL",
+      "value": ""
+    },
+    {
+      "key": "NOTIFICATION_ID",
+      "value": ""
+    },
+    {
+      "key": "MAYA_ID",
+      "value": ""
+    },
+    {
+      "key": "MAYA_DONATION_ID",
+      "value": ""
     }
   ],
   "item": [
@@ -1038,6 +1078,265 @@
               ]
             }
           }
+        },
+        {
+          "name": "INT-035 Step 1 Staff adds a Maya test method",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/payment-methods",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "payment-methods"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"method_type\": \"Maya\",\n  \"account_name\": \"Postman Shelter\",\n  \"account_number\": \"09179990000\",\n  \"instructions\": \"Postman test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "var m = pm.response.json().method || pm.response.json().paymentMethod || pm.response.json().data;",
+                  "pm.collectionVariables.set('MAYA_ID', m._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-035 Step 2 Adopter donates cash with Maya",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/donations",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "donations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"donorName\": \"Postman Donor\",\n  \"donationType\": \"Money\",\n  \"amount\": 250,\n  \"paymentMethod\": \"Maya\",\n  \"paymentReference\": \"PM-MAYA-1\",\n  \"proofOfPayment\": \"https://img.test/proof.jpg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "var d = pm.response.json().donation || pm.response.json().data;",
+                  "pm.test('Paid with Maya', function () { pm.expect(d.paymentMethod).to.eql('Maya'); });",
+                  "pm.collectionVariables.set('MAYA_DONATION_ID', d._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-036 Step 1 Staff turns Maya off",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/payment-methods/{{MAYA_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "payment-methods",
+                "{{MAYA_ID}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"is_active\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-036 Step 2 Adopter donates cash with the inactive Maya -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/donations",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "donations"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"donorName\": \"Postman Donor\",\n  \"donationType\": \"Money\",\n  \"amount\": 250,\n  \"paymentMethod\": \"Maya\",\n  \"paymentReference\": \"PM-MAYA-2\",\n  \"proofOfPayment\": \"https://img.test/proof.jpg\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Message: available payment methods', function () { pm.expect(pm.response.json().message).to.match(/available payment methods/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-035 Cleanup Admin deletes the Maya donation",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADMIN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/donations/{{MAYA_DONATION_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "donations",
+                "{{MAYA_DONATION_ID}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-035 Cleanup Staff deletes the Maya method",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/payment-methods/{{MAYA_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "payment-methods",
+                "{{MAYA_ID}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ]
         }
       ]
     },
@@ -1154,7 +1453,7 @@
             }
           ],
           "request": {
-            "method": "PATCH",
+            "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
@@ -1202,7 +1501,7 @@
             }
           ],
           "request": {
-            "method": "PATCH",
+            "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
@@ -1354,8 +1653,305 @@
       ]
     },
     {
-      "name": "5. Notifications and other role checks",
+      "name": "5. Notifications (INT-027) and other role checks",
       "item": [
+        {
+          "name": "INT-027 Step 1 Adopter reads own profile (saves ADOPTER_EMAIL)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/users/me",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.set('ADOPTER_EMAIL', pm.response.json().user.email);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-027 Step 2 Staff sends the adopter a notification",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ADOPTER_EMAIL}}\",\n  \"title\": \"Postman test\",\n  \"message\": \"Postman test notification\",\n  \"type\": \"general\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var n = pm.response.json().notification; pm.test('Unread', function () { pm.expect(n.read).to.eql(false); });",
+                  "pm.collectionVariables.set('NOTIFICATION_ID', n._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-027 Step 3 Adopter cannot send notifications -> 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{ADOPTER_EMAIL}}\",\n  \"title\": \"x\",\n  \"message\": \"x\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-027 Step 4 Unread count is at least 1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/unread-count",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Count >= 1', function () { pm.expect(pm.response.json().count).to.be.at.least(1); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-027 Step 5 Adopter marks it read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/{{NOTIFICATION_ID}}/read",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "{{NOTIFICATION_ID}}",
+                "read"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-027 Step 6 Adopter marks all read",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/read-all",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-027 Step 7 Unread count is 0",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/notifications/unread-count",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Count is 0', function () { pm.expect(pm.response.json().count).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Notifications as adopter",
           "event": [
@@ -1936,7 +2532,7 @@
       ]
     },
     {
-      "name": "7. Rescue Assignment (INT-017, part)",
+      "name": "7. Rescue Assignment (INT-017) - the upload step needs a .jpg chosen in its body",
       "item": [
         {
           "name": "Admin creates an open rescue (no volunteer)",
@@ -2131,7 +2727,7 @@
             }
           ],
           "request": {
-            "method": "PATCH",
+            "method": "POST",
             "header": [
               {
                 "key": "Content-Type",
@@ -2157,14 +2753,16 @@
           }
         },
         {
-          "name": "Start before accepting -> 400 (only accepted can start)",
+          "name": "Volunteer starts it (claimed = accepted, so it can start)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Starts, or refused 400 if still not accepted', function () { pm.expect(pm.response.code).to.be.oneOf([200, 400]); });"
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "pm.test('Now active', function () { pm.expect(pm.response.json().assignment.status).to.eql('active'); });"
                 ]
               }
             }
@@ -2196,14 +2794,213 @@
           }
         },
         {
-          "name": "Admin cancels the test rescue",
+          "name": "INT-017 Complete without proof -> 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_VOLUNTEER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/rescue-assignments/{{RESCUE_ID}}/complete",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "rescue-assignments",
+                "{{RESCUE_ID}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completionNotes\": \"\",\n  \"completionPhotos\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
           "event": [
             {
               "listen": "test",
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Cancelled (200), or 400 if already closed', function () { pm.expect(pm.response.code).to.be.oneOf([200, 400]); });"
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Message: Describe what was done', function () { pm.expect(pm.response.json().message).to.match(/Describe what was done/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-017 Proof photo from outside RescueBase -> 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_VOLUNTEER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/rescue-assignments/{{RESCUE_ID}}/complete",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "rescue-assignments",
+                "{{RESCUE_ID}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completionNotes\": \"Postman test rescue done.\",\n  \"completionPhotos\": [\n    \"https://example.com/photo.jpg\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Message: uploaded through RescueBase', function () { pm.expect(pm.response.json().message).to.match(/uploaded through RescueBase/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-017 Upload the proof photo (choose a .jpg or .png in the body)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_VOLUNTEER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/uploads/image",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "uploads",
+                "image"
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "folder",
+                  "value": "rescuebase/rescue-proof",
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is one of [200, 201]', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "var url = pm.response.json().imageUrl; pm.test('Returns an image URL', function () { pm.expect(url).to.be.a('string'); });",
+                  "pm.collectionVariables.set('PROOF_PHOTO_URL', url);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-017 Volunteer completes it with the proof photo",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_VOLUNTEER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/rescue-assignments/{{RESCUE_ID}}/complete",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "rescue-assignments",
+                "{{RESCUE_ID}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completionNotes\": \"Postman test rescue done.\",\n  \"completionPhotos\": [\n    \"{{PROOF_PHOTO_URL}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "pm.test('Completed', function () { pm.expect(pm.response.json().assignment.status).to.eql('completed'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Completed rescue cannot be cancelled -> 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
                 ]
               }
             }
@@ -2808,6 +3605,49 @@
     {
       "name": "11. Adoption Management (INT-009 to INT-012) - merged from Validor, routes corrected",
       "item": [
+        {
+          "name": "INT-009 Step 0 Prep: withdraw the adopter's open applications, if any",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/adoptions/user/history",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "adoptions",
+                "user",
+                "history"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "var open = (pm.response.json().applications || []).filter(function (a) { return ['pending', 'interview_scheduled', 'interview_completed'].indexOf(a.status) !== -1; });",
+                  "open.forEach(function (a) {",
+                  "  pm.sendRequest({ url: pm.environment.get('BASE_URL') + '/api/adoptions/' + a._id + '/withdraw', method: 'PATCH',",
+                  "    header: { Authorization: 'Bearer ' + pm.environment.get('TOKEN_ADOPTER'), 'Content-Type': 'application/json' },",
+                  "    body: { mode: 'raw', raw: JSON.stringify({ reason: 'Postman test prep' }) } }, function (err, res) {",
+                  "    pm.test('Open application withdrawn', function () { pm.expect(res.code).to.eql(200); });",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "INT-009 Step 1 Adopter submits application (set TEST_ANIMAL_ID to an available animal)",
           "event": [
@@ -4222,6 +5062,7 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "pm.collectionVariables.set('TEST_APPLICATION_ID_3', '');",
                   "pm.test('Status is one of [200, 201]', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
                   "var j = pm.response.json(); var a = j.application || j.data; pm.collectionVariables.set('TEST_APPLICATION_ID_3', a._id);"
                 ]
@@ -4259,6 +5100,16 @@
                 "exec": [
                   "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
                   "pm.test('Message matches', function () { pm.expect(String(pm.response.json().message||'')).to.match(/open adoption application/i); });"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Safety: without an open application this request would really delete the animal",
+                  "if (!pm.collectionVariables.get('TEST_APPLICATION_ID_3')) { console.log('Skipped: INT-008 Step 1 did not create an application'); pm.execution.skipRequest(); }"
                 ]
               }
             }
@@ -4382,10 +5233,18 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status is one of [200, 201]', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
-                  "var q = pm.response.json().qrTag; pm.test('Tag has a code', function () { pm.expect(q.tagCode).to.be.a('string'); });",
-                  "pm.test('QR points to the pet page', function () { pm.expect(q.qrData).to.include('/pet/' + q.tagCode); });",
-                  "pm.collectionVariables.set('TEST_TAG_CODE', q.tagCode); pm.collectionVariables.set('TEST_TAG_ID', q._id);"
+                  "pm.test('Tag generated, or the animal already has one', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201, 409]); });",
+                  "if (pm.response.code === 409) {",
+                  "  pm.sendRequest({ url: pm.environment.get('BASE_URL') + '/api/qr-tags', header: { Authorization: 'Bearer ' + pm.environment.get('TOKEN_STAFF') } }, function (err, res) {",
+                  "    var tag = res.json().qrTags.find(function (t) { return t.animal && String(t.animal._id || t.animal) === pm.environment.get('TEST_ANIMAL_ID'); });",
+                  "    pm.test('Existing tag found', function () { pm.expect(tag).to.be.an('object'); });",
+                  "    pm.collectionVariables.set('TEST_TAG_CODE', tag.tagCode); pm.collectionVariables.set('TEST_TAG_ID', tag._id);",
+                  "  });",
+                  "} else {",
+                  "  var q = pm.response.json().qrTag; pm.test('Tag has a code', function () { pm.expect(q.tagCode).to.be.a('string'); });",
+                  "  pm.test('QR points to the pet page', function () { pm.expect(q.qrData).to.include('/pet/' + q.tagCode); });",
+                  "  pm.collectionVariables.set('TEST_TAG_CODE', q.tagCode); pm.collectionVariables.set('TEST_TAG_ID', q._id);",
+                  "}"
                 ]
               }
             }
@@ -4533,7 +5392,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"reportType\": \"found\",\n  \"species\": \"Dog\",\n  \"breed\": \"Aspin\",\n  \"colour\": \"Brown\",\n  \"size\": \"Medium\",\n  \"sex\": \"Male\",\n  \"description\": \"brown aspin with a red collar found near city hall\",\n  \"location\": \"Cebu City Hall\",\n  \"contactNumber\": \"9171234567\",\n  \"latitude\": 10.2933,\n  \"longitude\": 123.9031,\n  \"dateReported\": \"2026-11-10\",\n  \"eventDate\": \"2026-11-10\"\n}",
+              "raw": "{\n  \"reportType\": \"found\",\n  \"species\": \"Dog\",\n  \"breed\": \"Aspin\",\n  \"colour\": \"Brown\",\n  \"size\": \"Medium\",\n  \"sex\": \"Male\",\n  \"description\": \"brown aspin with a red collar found near city hall\",\n  \"location\": \"Cebu City Hall\",\n  \"contactNumber\": \"9171234567\",\n  \"latitude\": 10.2933,\n  \"longitude\": 123.9031,\n  \"dateReported\": \"2026-11-10\",\n  \"eventDate\": \"2026-11-10\",\n  \"photoUrl\": \"https://res.cloudinary.com/demo/image/upload/sample.jpg\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -4760,7 +5619,7 @@
           ]
         },
         {
-          "name": "INT-016 Step 3 Staff approves the first claim",
+          "name": "INT-016 Step 3 The finder (volunteer who filed it) approves the first claim",
           "request": {
             "method": "PATCH",
             "header": [
@@ -4770,7 +5629,7 @@
               },
               {
                 "key": "Authorization",
-                "value": "Bearer {{TOKEN_STAFF}}"
+                "value": "Bearer {{TOKEN_VOLUNTEER}}"
               }
             ],
             "url": {
@@ -5399,7 +6258,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Postman Report\",\n  \"type\": \"animals\",\n  \"period\": \"2026-11-01 to 2026-11-15\",\n  \"summary\": \"Postman test report\",\n  \"status\": \"draft\"\n}",
+              "raw": "{\n  \"title\": \"Postman Report\",\n  \"type\": \"adoption\",\n  \"period\": \"2026-11-01 to 2026-11-15\",\n  \"summary\": \"Postman test report\",\n  \"status\": \"draft\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -5655,6 +6514,1912 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status is 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "19. Foster Management (INT-013) - set TOKEN_APPLICANT (spare adopter account) and TEST_FOSTER_ANIMAL_ID; uses TOKEN_FOSTER for the care steps",
+      "item": [
+        {
+          "name": "INT-013 Step 1 Applicant applies to foster",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_APPLICANT}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/applications",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "applications"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicantName\": \"Postman Foster Applicant\",\n  \"capacity\": 1,\n  \"phoneNumber\": \"09171234567\",\n  \"address\": \"Cebu City\",\n  \"housingType\": \"House\",\n  \"hasPets\": false,\n  \"hasChildren\": false,\n  \"petFriendly\": true,\n  \"fosterExperience\": \"Postman test\",\n  \"preferredAnimalType\": \"Dog\",\n  \"preferredSize\": \"Any\",\n  \"fosterDuration\": \"1 Month\",\n  \"emergencyName\": \"Test Contact\",\n  \"emergencyRelationship\": \"Friend\",\n  \"emergencyPhone\": \"09179876543\",\n  \"agreementAccepted\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var a = pm.response.json().application; pm.test('Saved as pending', function () { pm.expect(a.status).to.eql('pending'); });",
+                  "pm.collectionVariables.set('FOSTER_APP_ID', a._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 2 Applying again while pending -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_APPLICANT}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/applications",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "applications"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicantName\": \"Postman Foster Applicant\",\n  \"capacity\": 1,\n  \"agreementAccepted\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Message: already have a pending foster application', function () { pm.expect(pm.response.json().message).to.match(/already have a pending foster application/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 3 Staff sees it in the application list",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/applications",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "applications"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "var ids = pm.response.json().applications.map(function (x) { return x._id; }); pm.test('The new application is listed', function () { pm.expect(ids).to.include(pm.collectionVariables.get('FOSTER_APP_ID')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 4 Staff approves it (applicant becomes a foster)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/applications/{{FOSTER_APP_ID}}/status",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "applications",
+                "{{FOSTER_APP_ID}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"approved\",\n  \"reviewNotes\": \"Postman test approval\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var a = pm.response.json().application; pm.test('Status is approved', function () { pm.expect(a.status).to.eql('approved'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 5 Foster reads own approved application",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/applications/me",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "applications",
+                "me"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "var a = pm.response.json().application; pm.test('Approved foster', function () { pm.expect(a.status).to.eql('approved'); });",
+                  "pm.collectionVariables.set('FOSTER_EMAIL', a.applicantEmail);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 6 Staff assigns TEST_FOSTER_ANIMAL_ID to the foster",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fosterEmail\": \"{{FOSTER_EMAIL}}\",\n  \"animalId\": \"{{TEST_FOSTER_ANIMAL_ID}}\",\n  \"careInstructions\": \"Postman test: feed twice a day\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var a = pm.response.json().assignment; pm.test('Assignment is active', function () { pm.expect(a.status).to.eql('active'); });",
+                  "pm.collectionVariables.set('ASSIGNMENT_ID', a._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 7 Foster sees the active assignment",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/me/active",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "me",
+                "active"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "var j = pm.response.json(); var list = j.assignments || (j.assignment ? [j.assignment] : []); var ids = list.map(function (x) { return x._id; });",
+                  "pm.test('The new assignment is listed', function () { pm.expect(ids).to.include(pm.collectionVariables.get('ASSIGNMENT_ID')); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 8 Foster sends a care update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/updates",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "updates"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Postman test: eating well and playful.\",\n  \"healthStatus\": \"Healthy\",\n  \"appetite\": \"Good\",\n  \"behavior\": \"Playful\",\n  \"weight\": 8.5,\n  \"medication\": false,\n  \"exercise\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is one of [200, 201]', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 9 Care update without a note -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/updates",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "updates"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Message: note is required', function () { pm.expect(pm.response.json().message).to.match(/note is required/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 10 Foster submits the behavior evaluation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/behavior-evaluation",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "behavior-evaluation"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energyLevel\": 4,\n  \"friendliness\": 5,\n  \"humanSociability\": 4,\n  \"animalSociability\": 3,\n  \"trainability\": 4,\n  \"anxietyLevel\": 2,\n  \"aggressionLevel\": 1,\n  \"activityLevel\": 4,\n  \"notes\": \"Postman test evaluation\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is one of [200, 201]', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var e = (pm.response.json().assignment || {}).behaviorEvaluation || pm.response.json().behaviorEvaluation; pm.test('Waiting for review', function () { pm.expect(e.status).to.eql('pending'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 11 Submitting again while waiting -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/behavior-evaluation",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "behavior-evaluation"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energyLevel\": 4,\n  \"friendliness\": 5,\n  \"humanSociability\": 4,\n  \"animalSociability\": 3,\n  \"trainability\": 4,\n  \"anxietyLevel\": 2,\n  \"aggressionLevel\": 1,\n  \"activityLevel\": 4\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Message: already waiting', function () { pm.expect(pm.response.json().message).to.match(/already waiting/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 12 Staff sends it back without a reason -> 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/behavior-evaluation/return",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "behavior-evaluation",
+                "return"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Message: what to fix', function () { pm.expect(pm.response.json().message).to.match(/what to fix/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 13 Staff sends it back with a reason",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/behavior-evaluation/return",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "behavior-evaluation",
+                "return"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Postman test: please add notes about other dogs.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var e = (pm.response.json().assignment || {}).behaviorEvaluation || {}; pm.test('Sent back to the foster', function () { pm.expect(e.status).to.eql('revision'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 14 Foster resubmits",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/behavior-evaluation",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "behavior-evaluation"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"energyLevel\": 4,\n  \"friendliness\": 5,\n  \"humanSociability\": 4,\n  \"animalSociability\": 3,\n  \"trainability\": 4,\n  \"anxietyLevel\": 2,\n  \"aggressionLevel\": 1,\n  \"activityLevel\": 4,\n  \"notes\": \"Postman test: gets along with other dogs.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is one of [200, 201]', function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var e = (pm.response.json().assignment || {}).behaviorEvaluation || pm.response.json().behaviorEvaluation; pm.test('Waiting for review again', function () { pm.expect(e.status).to.eql('pending'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-013 Step 15 Staff accepts it",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/behavior-evaluation/accept",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "behavior-evaluation",
+                "accept"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var e = (pm.response.json().assignment || {}).behaviorEvaluation || {}; pm.test('Accepted', function () { pm.expect(e.status).to.eql('accepted'); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "20. Foster Management (INT-014) - run right after folder 19 (uses its ASSIGNMENT_ID); the last steps reset the test data",
+      "item": [
+        {
+          "name": "INT-014 Step 1 Foster edits own application",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/applications/me",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "applications",
+                "me"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phoneNumber\": \"09170001111\",\n  \"address\": \"Postman test address, Cebu City\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var a = pm.response.json().application; pm.test('Phone was saved', function () { pm.expect(a.phoneNumber).to.eql('09170001111'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-014 Step 2 Staff asks the foster for an update",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/request-update",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "request-update"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-014 Step 3 Asking again the same day -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/request-update",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "request-update"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Message: already asked', function () { pm.expect(pm.response.json().message).to.match(/already asked/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-014 Step 4 Return request without a reason -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/return-request",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "return-request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Message: choose a reason', function () { pm.expect(pm.response.json().message).to.match(/choose a reason/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-014 Step 5 Foster sends a return request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/return-request",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "return-request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Personal\",\n  \"notes\": \"Postman test: moving house.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "pm.test('Message: Return request sent', function () { pm.expect(pm.response.json().message).to.match(/Return request sent/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-014 Step 6 Sending it twice -> 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_FOSTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/return-request",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "return-request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Personal\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Message: already asked', function () { pm.expect(pm.response.json().message).to.match(/already asked/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-014 Step 7 Staff confirms the return (closes the assignment)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/assignments/{{ASSIGNMENT_ID}}/return-request",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "assignments",
+                "{{ASSIGNMENT_ID}}",
+                "return-request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"confirm\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "pm.test('Message: Return confirmed', function () { pm.expect(pm.response.json().message).to.match(/Return confirmed/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-014 Step 8 Applicant withdraws own application (back to adopter)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_APPLICANT}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/applications/me/withdraw",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "applications",
+                "me",
+                "withdraw"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Postman test cleanup\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-014 Step 9 Withdrawing again -> 404",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_APPLICANT}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/foster/applications/me/withdraw",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "foster",
+                "applications",
+                "me",
+                "withdraw"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"again\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', function () { pm.response.to.have.status(404); });",
+                  "pm.test('Message: no pending or approved foster application', function () { pm.expect(pm.response.json().message).to.match(/no pending or approved foster application/i); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "21. Authentication (INT-003) Google login - Step 3 needs FIREBASE_ID_TOKEN from a real Google sign-in",
+      "item": [
+        {
+          "name": "INT-003 Step 1 No Firebase token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/google/login",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('Message: missing', function () { pm.expect(pm.response.json().message).to.match(/missing/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-003 Step 2 Invalid Firebase token -> 401",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer not-a-real-firebase-token"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/google/login",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', function () { pm.response.to.have.status(401); });",
+                  "pm.test('Message: Invalid or expired Firebase', function () { pm.expect(pm.response.json().message).to.match(/Invalid or expired Firebase/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-003 Step 3 Valid Firebase token (set FIREBASE_ID_TOKEN) -> OTP step starts",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{FIREBASE_ID_TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/google/login",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "google",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "pm.test('Asks for the emailed code', function () { pm.expect(pm.response.json().requiresOtp).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "22. Needed Supplies and food stock link (INT-020, INT-032, INT-033)",
+      "item": [
+        {
+          "name": "INT-032 Step 1 Staff creates a food item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/food-inventory",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "food-inventory"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"PM Linked Food {{$timestamp}}\",\n  \"quantityInStock\": 5,\n  \"unit\": \"kg\",\n  \"forAnimals\": \"All\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "var it = pm.response.json().item;",
+                  "pm.collectionVariables.set('FOOD_ID_2', it._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-020 Step 1 Staff adds a needed supply linked to that food",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"PM Linked Supply\",\n  \"category\": \"Pet Food\",\n  \"quantityNeeded\": 10,\n  \"quantityReceived\": 0,\n  \"priority\": \"High\",\n  \"description\": \"Postman test\",\n  \"foodInventoryId\": \"{{FOOD_ID_2}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', function () { pm.response.to.have.status(201); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var s = pm.response.json().supply;",
+                  "pm.test('Linked to the food item', function () { pm.expect(String(s.foodInventoryId)).to.eql(pm.collectionVariables.get('FOOD_ID_2')); });",
+                  "pm.collectionVariables.set('SUPPLY_ID', s._id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-020 Step 2 Missing name -> 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"Pet Food\",\n  \"quantityNeeded\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-032 Step 2 Add 4 kg with the reason Delivery / Donation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/food-inventory/{{FOOD_ID_2}}/adjust",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "food-inventory",
+                "{{FOOD_ID_2}}",
+                "adjust"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"add\",\n  \"quantity\": 4,\n  \"reason\": \"Delivery / Donation\",\n  \"note\": \"Postman test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-032 Step 3 The supply counts the 4 kg",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "var s = pm.response.json().supplies.find(function (x) { return x._id === pm.collectionVariables.get('SUPPLY_ID'); });",
+                  "pm.test('4 of 10 received', function () { pm.expect(s.quantityReceived).to.eql(4); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-020 Step 3 Staff edits the supply",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies/{{SUPPLY_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies",
+                "{{SUPPLY_ID}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"PM Linked Supply (edited)\",\n  \"priority\": \"Urgent\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });",
+                  "var s = pm.response.json().supply;",
+                  "pm.test('Name and priority saved', function () { pm.expect(s.name).to.eql('PM Linked Supply (edited)'); pm.expect(s.priority).to.eql('Urgent'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-020 Step 4 Staff closes it",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies/{{SUPPLY_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies",
+                "{{SUPPLY_ID}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"fulfilled\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Closed', function () { pm.expect(pm.response.json().supply.status).to.eql('fulfilled'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-020 Step 5 Staff reopens it",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies/{{SUPPLY_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies",
+                "{{SUPPLY_ID}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Active again', function () { pm.expect(pm.response.json().supply.status).to.eql('active'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-020 Step 6 Unknown status -> 400",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies/{{SUPPLY_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies",
+                "{{SUPPLY_ID}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"needed\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Message: Status must be one of', function () { pm.expect(pm.response.json().message).to.match(/Status must be one of/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-020 Step 7 Adopter cannot change supplies -> 403",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADOPTER}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies/{{SUPPLY_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies",
+                "{{SUPPLY_ID}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"fulfilled\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 403', function () { pm.response.to.have.status(403); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-033 Step 1 Staff deletes the linked food item",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/food-inventory/{{FOOD_ID_2}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "food-inventory",
+                "{{FOOD_ID_2}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "pm.test('success is true', function () { pm.expect(pm.response.json().success).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-033 Step 2 The supply is kept but unlinked",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_STAFF}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+                  "var s = pm.response.json().supplies.find(function (x) { return x._id === pm.collectionVariables.get('SUPPLY_ID'); });",
+                  "pm.test('Supply still exists', function () { pm.expect(s).to.be.an('object'); });",
+                  "pm.test('No longer linked', function () { pm.expect(s.foodInventoryId).to.eql(null); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "INT-020 Cleanup Admin deletes the test supply",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN_ADMIN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/api/supplies/{{SUPPLY_ID}}",
+              "host": [
+                "{{BASE_URL}}"
+              ],
+              "path": [
+                "api",
+                "supplies",
+                "{{SUPPLY_ID}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () { pm.response.to.have.status(200); });"
                 ]
               }
             }
