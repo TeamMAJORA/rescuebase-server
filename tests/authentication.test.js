@@ -294,6 +294,7 @@ describe("Authentication & Account: Register, Log In & Reset Password", () => {
         });
 
         assert.equal(result.status, 200);
+        assert.match(result.body.message, /password reset successfully/i);
         assert.notEqual(user.password, oldHash);
         assert.equal(await bcrypt.compare("Newpass1!", user.password), true);
         assert.equal(user.passwordResetToken, "");
