@@ -25,8 +25,15 @@ const vaccinationRecordSchema =
                 default: null,
             },
 
-            // Due date we last sent a reminder for (prevents repeats)
+            // Due date we last reminded staff about (prevents repeats)
             reminder_sent_for: {
+                type: Date,
+                default: null,
+            },
+
+            // Due date we last reminded the foster about. Separate from staff, so a pet
+            // placed in foster care after staff were reminded still gets its foster reminded.
+            foster_reminder_sent_for: {
                 type: Date,
                 default: null,
             },
