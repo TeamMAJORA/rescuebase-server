@@ -13,6 +13,7 @@ const {
 } = require("../services/emailService");
 const { generateMatches } = require("../services/lostFoundMatchingService");
 const stripLegacyContact = require("../utils/stripLegacyContact");
+const { closeApplicationsForUnavailablePet } = require("../services/applicantNotifier");
 
 // In-app notification for one user, found by email. Never throws.
 async function notifyUserInApp(email, title, message) {
@@ -263,7 +264,12 @@ async function closeOwnersMatchedLostReports(foundReport, ownerEmail) {
 async function updateLinkedAnimal(report, animalChanges) {
     if (!report.linkedAnimal) return;
 
-    await Animal.findByIdAndUpdate(report.linkedAnimal, animalChanges);
+    // Returns the animal as it was before the update
+    const before = await Animal.findByIdAndUpdate(report.linkedAnimal, animalChanges);
+
+    if (animalChanges.adoptionStatus === "returned_to_owner" && before?.adoptionStatus === "available") {
+        await closeApplicationsForUnavailablePet(before._id, before.name, "returned to its owner");
+    }
 }
 
 // Called by animalController when an intake is saved by staff or approved.

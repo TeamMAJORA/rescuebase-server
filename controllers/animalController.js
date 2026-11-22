@@ -12,6 +12,7 @@ const {
 const { withPersonality } = require("../services/personalityService");
 const { listShelterIntakeAsFoundReport, removeShelterListing } = require("./lostFoundController");
 const LostFoundReport = require("../models/LostFoundReport");
+const { closeApplicationsForUnavailablePet } = require("../services/applicantNotifier");
 
 async function notifyAdoptersAboutAnimal(animal) {
     const adopters = await User.find({
@@ -523,6 +524,10 @@ exports.updateAnimal = async (req, res) => {
 
     if (!wasAvailable && isAvailable) {
         await notifyAdoptersAboutAnimal(animal);
+    }
+
+    if (wasAvailable && !isAvailable) {
+        await closeApplicationsForUnavailablePet(animal._id, animal.name, "");
     }
 
     return res.status(200).json({

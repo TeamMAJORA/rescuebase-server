@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const AnimalTransfer = require("../models/AnimalTransfer");
 const Animal = require("../models/Animal");
+const { closeApplicationsForUnavailablePet } = require("../services/applicantNotifier");
 
 const STATUSES = ["Pending", "In Transit", "Completed", "Cancelled"];
 
@@ -46,12 +47,17 @@ async function applyCompletedTransfer(transfer) {
     const animalId = transfer.animal_id?._id || transfer.animal_id;
     if (!animalId || !transfer.to_location) return;
 
-    await Animal.findByIdAndUpdate(animalId, {
+    // Returns the animal as it was before the update
+    const before = await Animal.findByIdAndUpdate(animalId, {
         $set: {
             location: transfer.to_location,
             ...(transfer.leaves_shelter ? { availabilityStatus: "unavailable" } : {}),
         },
     });
+
+    if (transfer.leaves_shelter && before?.availabilityStatus === "available") {
+        await closeApplicationsForUnavailablePet(animalId, before.name, "transferred out of the shelter");
+    }
 }
 
 // Undo the "left our care" effect (transfer no longer Completed, or box unticked)
