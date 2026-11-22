@@ -267,8 +267,8 @@ async function updateLinkedAnimal(report, animalChanges) {
     // Returns the animal as it was before the update
     const before = await Animal.findByIdAndUpdate(report.linkedAnimal, animalChanges);
 
-    if (animalChanges.adoptionStatus === "returned_to_owner" && before?.adoptionStatus === "available") {
-        await closeApplicationsForUnavailablePet(before._id, before.name, "returned to its owner");
+    if (animalChanges.availabilityStatus === "unavailable" && before?.availabilityStatus === "available") {
+        await closeApplicationsForUnavailablePet(before._id, before.name, "an owner has claimed this pet");
     }
 }
 

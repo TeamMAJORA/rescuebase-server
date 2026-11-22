@@ -526,8 +526,8 @@ exports.updateAnimal = async (req, res) => {
         await notifyAdoptersAboutAnimal(animal);
     }
 
-    // A temporary hold (medical, quarantine) keeps applications open; only a pet that left adoption closes them
-    if (wasAvailable && !isAvailable && animal.adoptionStatus !== "available") {
+    // Any open application is rejected automatically when the pet stops being available
+    if (wasAvailable && !isAvailable) {
         await closeApplicationsForUnavailablePet(animal._id, animal.name, "");
     }
 
