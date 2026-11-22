@@ -12,6 +12,7 @@ const {
 const { withPersonality } = require("../services/personalityService");
 const { listShelterIntakeAsFoundReport, removeShelterListing } = require("./lostFoundController");
 const LostFoundReport = require("../models/LostFoundReport");
+const { closeApplicationsForUnavailablePet } = require("../services/applicantNotifier");
 
 async function notifyAdoptersAboutAnimal(animal) {
     const adopters = await User.find({
@@ -523,6 +524,11 @@ exports.updateAnimal = async (req, res) => {
 
     if (!wasAvailable && isAvailable) {
         await notifyAdoptersAboutAnimal(animal);
+    }
+
+    // A temporary hold (medical, quarantine) keeps applications open; only a pet that left adoption closes them
+    if (wasAvailable && !isAvailable && animal.adoptionStatus !== "available") {
+        await closeApplicationsForUnavailablePet(animal._id, animal.name, "");
     }
 
     return res.status(200).json({

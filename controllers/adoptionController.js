@@ -740,6 +740,11 @@ exports.withdrawApplication = async (req, res) => {
         },
     });
 
+    await notifyApplicationReviewers(
+        "Adoption Application Withdrawn",
+        `${application.fullName} withdrew their application for ${application.petName}.`
+    );
+
     return res.status(200).json({
         success: true,
         message: "Your application has been withdrawn.",
