@@ -1,3 +1,4 @@
 /node_modules
 /config/serviceAccountKey.json
 .env
+tests/integration-testing/README.md
