@@ -53,7 +53,7 @@ async function runVaccinationReminders() {
             );
         }
 
-        // Email the foster if the animal is in an active foster home
+        // Tell the foster too (bell + email) if the animal is in an active foster home
         if (record.animal_id?._id) {
             const assignment = await FosterAssignment.findOne({
                 animalId: record.animal_id._id,
@@ -61,6 +61,16 @@ async function runVaccinationReminders() {
             }).select("fosterEmail");
 
             if (assignment?.fosterEmail) {
+                const foster = await User.findOne({ email: assignment.fosterEmail.toLowerCase() }).select("_id");
+                if (foster) {
+                    await Notification.create({
+                        user: foster._id,
+                        title,
+                        message: `${message} Please contact the shelter to arrange the shot.`,
+                        type: "vaccination",
+                    });
+                }
+
                 try {
                     await sendVaccinationReminderEmail(assignment.fosterEmail, petName, dueText);
                 } catch (error) {
