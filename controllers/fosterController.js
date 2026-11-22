@@ -1245,7 +1245,7 @@ exports.submitAssignmentUpdate = async (req, res) => {
     await notifyShelterStaff(
         "Foster weekly update",
         `${assignment.fosterName} sent a weekly update for ${assignment.petName}. See it in Foster Care.`,
-        { alsoEmail: false }
+        { alsoEmail: false, relatedId: assignment._id }
     );
 
     return res.status(200).json({
@@ -1360,7 +1360,7 @@ exports.submitBehaviorEvaluation = async (req, res) => {
     await notifyShelterStaff(
         "Behavior evaluation to review",
         `${assignment.fosterName} sent a behavior evaluation for ${assignment.petName}. Review it in Foster Care.`,
-        { alsoEmail: false }
+        { alsoEmail: false, relatedId: assignment._id }
     );
 
     return res.status(200).json({
@@ -2039,13 +2039,13 @@ exports.deleteAssignment = async (req, res) => {
 const RETURN_REASONS = ["Medical", "Behavior", "Personal", "Emergency"];
 
 // Tell every admin/staff account (in-app always, email unless alsoEmail is false)
-async function notifyShelterStaff(title, message, { alsoEmail = true } = {}) {
+async function notifyShelterStaff(title, message, { alsoEmail = true, relatedId = null } = {}) {
     try {
         const staff = await User.find({ role: { $in: ["admin", "staff"] } }).select("_id email");
 
         if (staff.length) {
             await Notification.insertMany(
-                staff.map((user) => ({ user: user._id, title, message, type: "foster_update" }))
+                staff.map((user) => ({ user: user._id, title, message, type: "foster_update", relatedId }))
             );
         }
 
@@ -2102,6 +2102,37 @@ async function askFosterForWeeklyUpdate(assignment, askedByName) {
 }
 
 // Admin/staff: ask the foster for a weekly update now
+// Admin/staff opened an assignment: its unseen weekly reports become "seen" for the foster
+exports.markWeeklyUpdatesSeen = async (req, res) => {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+        return res.status(400).json({ success: false, message: "Invalid assignment ID." });
+    }
+
+    const assignment = await FosterAssignment.findById(id);
+
+    if (!assignment) {
+        return res.status(404).json({ success: false, message: "Foster assignment not found." });
+    }
+
+    const unseen = (assignment.updates || []).filter((update) => !update.seenAt);
+
+    if (unseen.length > 0) {
+        const viewer = await User.findById(req.user?.id || req.user?._id).select("name username");
+        const seenByName = viewer?.name || viewer?.username || "Shelter staff";
+        const seenAt = new Date();
+
+        unseen.forEach((update) => {
+            update.seenAt = seenAt;
+            update.seenByName = seenByName;
+        });
+        await assignment.save();
+    }
+
+    return res.status(200).json({ success: true, marked: unseen.length });
+};
+
 exports.requestWeeklyUpdate = async (req, res) => {
     const { id } = req.params;
 
@@ -2269,7 +2300,8 @@ exports.requestReturn = async (req, res) => {
 
     await notifyShelterStaff(
         urgent ? "URGENT: Foster return request" : "Foster return request",
-        `${assignment.fosterName} asked to return ${assignment.petName} (${reason}).${when}`
+        `${assignment.fosterName} asked to return ${assignment.petName} (${reason}).${when}`,
+        { relatedId: assignment._id }
     );
 
     return res.status(200).json({
@@ -2488,7 +2520,7 @@ exports.submitMedicalRequest = async (req, res) => {
     await notifyShelterStaff(
         isUrgentMedicalRequest ? `URGENT: Medical help for ${assignment.petName}` : `Medical help for ${assignment.petName}`,
         `${assignment.fosterName} asked for medical help (${urgency}): ${issue}. See it in Foster Care.`,
-        { alsoEmail: isUrgentMedicalRequest }
+        { alsoEmail: isUrgentMedicalRequest, relatedId: assignment._id }
     );
 
     return res.status(201).json({
