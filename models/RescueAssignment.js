@@ -81,6 +81,21 @@ const rescueAssignmentSchema = new mongoose.Schema(
             trim: true,
         },
 
+        // Optional map pin for the location (null = no pin)
+        latitude: {
+            type: Number,
+            default: null,
+            min: -90,
+            max: 90,
+        },
+
+        longitude: {
+            type: Number,
+            default: null,
+            min: -180,
+            max: 180,
+        },
+
         scheduledDate: {
             type: Date,
             required: true,

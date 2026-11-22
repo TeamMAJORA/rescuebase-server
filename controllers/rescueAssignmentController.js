@@ -109,6 +109,25 @@ async function createNotification({
 }
 
 
+// Optional map pin: both coordinates or neither
+function readPinCoordinates(body) {
+    const hasLatitude = body.latitude !== undefined && body.latitude !== null && body.latitude !== "";
+    const hasLongitude = body.longitude !== undefined && body.longitude !== null && body.longitude !== "";
+
+    if (!hasLatitude && !hasLongitude) return { latitude: null, longitude: null };
+
+    const latitude = Number(body.latitude);
+    const longitude = Number(body.longitude);
+
+    if (!hasLatitude || !hasLongitude || !Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+        const e = new Error("The map pin is invalid. Drop the pin again or clear it.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    return { latitude, longitude };
+}
+
 exports.createAssignment = async (req, res) => {
     const volunteerId = String(req.body.volunteerId || "").trim();
     const animalId = String(req.body.animalId || "").trim();
@@ -141,6 +160,8 @@ exports.createAssignment = async (req, res) => {
         e.statusCode = 400;
         throw e;
     }
+
+    const pin = readPinCoordinates(req.body);
 
     // No one chosen = open for any volunteer to claim
     const volunteer = volunteerId ? await findAssignablePerson(volunteerId) : null;
@@ -198,6 +219,8 @@ exports.createAssignment = async (req, res) => {
         title,
         description,
         location,
+        latitude: pin.latitude,
+        longitude: pin.longitude,
         scheduledDate,
         scheduledTime: String(req.body.scheduledTime || "").trim(),
         priority: req.body.priority || "normal",
@@ -775,6 +798,10 @@ exports.updateAssignment = async (req, res) => {
             assignment[field] =
                 req.body[field];
         }
+    }
+
+    if (req.body.latitude !== undefined || req.body.longitude !== undefined) {
+        Object.assign(assignment, readPinCoordinates(req.body));
     }
 
     if (req.body.animalId !== undefined) {

@@ -12,16 +12,17 @@ exports.getActivityLogs = async (req, res) => {
 
     const filter = {};
 
-    // Admin can view all logs, while other authorized users
-    // are restricted to their own activity.
-    if (role !== "admin") {
+    // Admin and staff see everyone's activity; volunteers only their own.
+    const canSeeAllLogs = role === "admin" || role === "staff";
+
+    if (!canSeeAllLogs) {
         if (!mongoose.isValidObjectId(authenticatedUserId)) {
             const error = new Error("Invalid authenticated user ID.");
             error.statusCode = 401;
             throw error;
         }
 
-        // Ignore any userId supplied by a non-admin.
+        // Ignore any userId a volunteer supplies.
         filter.user = authenticatedUserId;
     } else if (userId) {
         if (!mongoose.isValidObjectId(userId)) {
