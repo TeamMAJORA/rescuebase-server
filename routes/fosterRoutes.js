@@ -171,6 +171,15 @@ router.patch(
     )
 );
 
+router.patch(
+    "/assignments/:id/updates/seen",
+    verifyToken,
+    authoriseRoles("admin", "staff"),
+    asyncHandler(
+        fosterController.markWeeklyUpdatesSeen
+    )
+);
+
 router.post(
     "/assignments/:id/request-update",
     verifyToken,

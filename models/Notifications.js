@@ -41,6 +41,12 @@ const notificationSchema = new mongoose.Schema(
             default: "general",
         },
 
+        // The record it is about (e.g. a foster assignment), so the bell can open it
+        relatedId: {
+            type: mongoose.Schema.Types.ObjectId,
+            default: null,
+        },
+
         read: {
             type: Boolean,
             default: false,

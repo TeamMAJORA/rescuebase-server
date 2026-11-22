@@ -13,6 +13,9 @@ const fosterUpdateSchema = new mongoose.Schema(
         exercise: { type: Boolean, default: false },
         submittedBy: String,
         submittedByEmail: String,
+        // First time admin/staff opened it, so the foster sees "Seen by the shelter"
+        seenAt: { type: Date, default: null },
+        seenByName: { type: String, default: "", trim: true },
     },
     { timestamps: true }
 );
