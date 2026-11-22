@@ -232,10 +232,17 @@ exports.getAllAnimals = async (req, res) => {
     });
 };
 
+// Staff and admin: the review queue. Volunteers: only the intakes they logged, in every status,
+// so they can follow what happened to each one
 exports.getPendingIntakes = async (req, res) => {
-    const intakes = await Animal.find({
-        intakeStatus: "pending_review",
-    }).sort({
+    const filter = req.user?.role === "volunteer"
+        ? {
+            createdByEmail: String(req.user.email || "").trim().toLowerCase(),
+            intakeStatus: { $in: ["pending_review", "approved", "rejected"] },
+        }
+        : { intakeStatus: "pending_review" };
+
+    const intakes = await Animal.find(filter).sort({
         createdAt: -1,
     });
 

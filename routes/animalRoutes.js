@@ -25,7 +25,7 @@ router.get(
 router.get(
     "/intakes",
     verifyToken,
-    authoriseRoles("admin", "staff"),
+    authoriseRoles("admin", "staff", "volunteer"),
     asyncHandler(animalController.getPendingIntakes)
 );
 
