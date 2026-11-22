@@ -5,16 +5,6 @@ const FoodInventory = require("../models/FoodInventory");
 
 const SUPPLY_STATUSES = ["active", "fulfilled", "inactive"];
 
-function updateSupplyStatus(supply) {
-    if (supply.quantityReceived >= supply.quantityNeeded) {
-        supply.status = "fulfilled";
-    } else if (supply.quantityReceived > 0) {
-        supply.status = "partially_fulfilled";
-    } else {
-        supply.status = "needed";
-    }
-}
-
 exports.getAllSupplies = async (req, res) => {
     const supplies = await NeededSupply.find()
         .sort({ createdAt: -1 });
@@ -155,12 +145,21 @@ exports.updateSupply = async (req, res) => {
         });
     }
 
+    if (req.body.status !== undefined && !SUPPLY_STATUSES.includes(req.body.status)) {
+        return res.status(400).json({
+            success: false,
+            message: `Status must be one of: ${SUPPLY_STATUSES.join(", ")}.`,
+        });
+    }
+
+    // The fields the Needed Supplies form sends
     const allowedFields = [
-        "shelter",
-        "item",
+        "name",
+        "category",
         "quantityNeeded",
         "quantityReceived",
-        "notes",
+        "priority",
+        "description",
         "status",
     ];
 
@@ -183,11 +182,9 @@ exports.updateSupply = async (req, res) => {
         });
     }
 
-    if (
-        req.body.status === undefined ||
-        req.body.status !== "cancelled"
-    ) {
-        updateSupplyStatus(supply);
+    // A status picked by staff (Close / Reopen / Inactive) is kept; otherwise close it once everything is received
+    if (req.body.status === undefined && supply.quantityReceived >= supply.quantityNeeded) {
+        supply.status = "fulfilled";
     }
 
     await supply.save();
