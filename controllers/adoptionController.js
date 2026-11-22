@@ -42,6 +42,20 @@ async function createLedgerEntrySafely(data) {
     }
 }
 
+// A foster may apply for the pet in their own care even before staff list it for adoption;
+// staff still review and approve the application as usual
+async function isApplicantsFosterPet(animalId, applicantEmail) {
+    const fosterEmail = String(applicantEmail || "").trim().toLowerCase();
+    if (!animalId || !fosterEmail) return false;
+    return Boolean(await FosterAssignment.exists({ animalId, status: "active", fosterEmail }));
+}
+
+function adoptableAnimalFilter(animalId, isOwnFosterPet) {
+    return isOwnFosterPet
+        ? { _id: animalId, adoptionStatus: "available" }
+        : { _id: animalId, availabilityStatus: "available", adoptionStatus: "available" };
+}
+
 exports.submitApplication = async (req, res) => {
     const animalId = String(req.body.animalId || "").trim();
 
@@ -81,11 +95,8 @@ exports.submitApplication = async (req, res) => {
         throw error;
     }
 
-    const animal = await Animal.findOne({
-        _id: animalId,
-        availabilityStatus: "available",
-        adoptionStatus: "available",
-    }).lean();
+    const isOwnFosterPet = await isApplicantsFosterPet(animalId, email);
+    const animal = await Animal.findOne(adoptableAnimalFilter(animalId, isOwnFosterPet)).lean();
 
     if (!animal) {
         const animalExists = await Animal.exists({ _id: animalId });
@@ -386,14 +397,17 @@ exports.updateApplicationStatus = async (req, res) => {
     };
 
     let adoptedAnimal = null;
+    let availabilityBeforeAdoption = "available";
 
     if (status === "approved") {
+        const isOwnFosterPet = await isApplicantsFosterPet(application.animalId, application.email);
+        const animalBefore = await Animal.findOne(adoptableAnimalFilter(application.animalId, isOwnFosterPet))
+            .select("availabilityStatus")
+            .lean();
+        availabilityBeforeAdoption = animalBefore?.availabilityStatus || "available";
+
         adoptedAnimal = await Animal.findOneAndUpdate(
-            {
-                _id: application.animalId,
-                availabilityStatus: "available",
-                adoptionStatus: "available",
-            },
+            adoptableAnimalFilter(application.animalId, isOwnFosterPet),
             {
                 $set: {
                     adoptionStatus: "adopted",
@@ -448,7 +462,7 @@ exports.updateApplicationStatus = async (req, res) => {
                     {
                         $set: {
                             adoptionStatus: "available",
-                            availabilityStatus: "available",
+                            availabilityStatus: availabilityBeforeAdoption,
                         },
                     }
                 );
