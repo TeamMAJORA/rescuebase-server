@@ -47,7 +47,7 @@ async function createLedgerEntrySafely(data) {
 async function isApplicantsFosterPet(animalId, applicantEmail) {
     const fosterEmail = String(applicantEmail || "").trim().toLowerCase();
     if (!animalId || !fosterEmail) return false;
-    return Boolean(await FosterAssignment.exists({ animalId, status: "active", fosterEmail }));
+    return Boolean(await FosterAssignment.findOne({ animalId, status: "active", fosterEmail }));
 }
 
 function adoptableAnimalFilter(animalId, isOwnFosterPet) {
@@ -397,14 +397,10 @@ exports.updateApplicationStatus = async (req, res) => {
     };
 
     let adoptedAnimal = null;
-    let availabilityBeforeAdoption = "available";
+    let isOwnFosterPet = false;
 
     if (status === "approved") {
-        const isOwnFosterPet = await isApplicantsFosterPet(application.animalId, application.email);
-        const animalBefore = await Animal.findOne(adoptableAnimalFilter(application.animalId, isOwnFosterPet))
-            .select("availabilityStatus")
-            .lean();
-        availabilityBeforeAdoption = animalBefore?.availabilityStatus || "available";
+        isOwnFosterPet = await isApplicantsFosterPet(application.animalId, application.email);
 
         adoptedAnimal = await Animal.findOneAndUpdate(
             adoptableAnimalFilter(application.animalId, isOwnFosterPet),
@@ -460,10 +456,10 @@ exports.updateApplicationStatus = async (req, res) => {
                         availabilityStatus: "unavailable",
                     },
                     {
-                        $set: {
-                            adoptionStatus: "available",
-                            availabilityStatus: availabilityBeforeAdoption,
-                        },
+                        // A foster's own pet may not have been listed: leave it unlisted rather than guess
+                        $set: isOwnFosterPet
+                            ? { adoptionStatus: "available" }
+                            : { adoptionStatus: "available", availabilityStatus: "available" },
                     }
                 );
             } catch (rollbackError) {

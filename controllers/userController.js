@@ -7,6 +7,7 @@ const {
     sendRoleApplicationEmail,
 } = require("../services/emailService");
 const { validatePassword } = require("../utils/passwordPolicy");
+const { assertRealEmail } = require("../utils/emailCheck");
 
 const EMAIL_PREF_KEYS = ["adoption", "petAvailable", "foster", "lostFound", "donation", "rescue", "feedback"];
 
@@ -298,6 +299,9 @@ exports.adminCreateUser = async (req, res) => {
         error.statusCode = 400;
         throw error;
     }
+
+    // Staff-made accounts skip the email code, so the email must look real here too
+    await assertRealEmail(email);
 
     if (password.length < 6) {
         const error = new Error(
