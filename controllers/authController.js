@@ -6,6 +6,7 @@ const cleanUser = require("../utils/cleanUser");
 const generateToken = require("../utils/generateToken");
 const { getGlobalSettings } = require("../utils/globalSettings");
 const { validatePassword } = require("../utils/passwordPolicy");
+const { assertRealEmail } = require("../utils/emailCheck");
 
 const {
     sendOtpEmail, sendPasswordResetEmail
@@ -29,12 +30,8 @@ exports.emailSignup = async (req, res) => {
         throw error;
     }
 
-    // Same pattern as the sign-up form (AuthPage.jsx EMAIL_PATTERN), so the server does not rely on the browser
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        const error = new Error("Enter an email like name@example.com.");
-        error.statusCode = 400;
-        throw error;
-    }
+    // Format, provider typos ("mgail.cmo") and a domain that can actually receive the code
+    await assertRealEmail(email);
 
     if (!password) {
         const error = new Error("Password is required.");

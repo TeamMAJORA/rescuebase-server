@@ -1,4 +1,4 @@
-// Table 35 - Reports Module (CASE-181 to CASE-184)
+// Reports Module (CASE-181 to CASE-184)
 // Real report routes run with mocked models. The ZIP is built by the real archiver; the response headers are checked.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -20,8 +20,8 @@ function stubStaffAndAnimals() {
 
 const RANGE = { dateRange: "custom", fromDate: "2026-11-01", toDate: "2026-11-15", reportType: "animals", title: "November intake" };
 
-describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
-    test("CASE-181 generating a report for a custom date range creates it, returns a ZIP and lists it", async () => {
+describe("Reports: Generate & Download Operational Reports", () => {
+    test("CASE-181 | Description: Staff generates a report for a custom date range. | Expected: Report is created as a ZIP file.", async () => {
         stubStaffAndAnimals();
         const saved = [];
         const create = mock.method(Report, "create", async (data) => { const row = fakeDocument({ ...data }); saved.push(row); return row; });
@@ -39,7 +39,7 @@ describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
         assert.equal(list.body.reports[0].title, "November intake");
     });
 
-    test("CASE-182 downloading a generated report returns a ZIP file", async () => {
+    test("CASE-182 | Description: Staff downloads a generated report. | Expected: ZIP file is downloaded.", async () => {
         stubStaffAndAnimals();
         mock.method(Report, "findById", () => query({
             _id: newId(), title: "November intake", type: "animals", exportFormat: "zip",
@@ -54,7 +54,7 @@ describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
         assert.match(result.res.headers["content-disposition"], /November_intake\.zip|November intake\.zip|\.zip/);
     });
 
-    test("CASE-183 a start date after the end date is refused with a message", async () => {
+    test("CASE-183 | Description: Staff sets a start date after the end date. | Expected: Generation fails with error message.", async () => {
         stubStaffAndAnimals();
         const create = mock.method(Report, "create", async () => ({}));
 
@@ -67,7 +67,7 @@ describe("Table 35 - Reports: Generate & Download Operational Reports", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-184 the report list returns the previously generated reports", async () => {
+    test("CASE-184 | Description: Staff opens the generated reports list. | Expected: Saved reports are listed.", async () => {
         mock.method(Report, "find", () => query([{ _id: newId(), title: "Report A" }, { _id: newId(), title: "Report B" }]));
 
         const result = await callRoute(reportsRoutes, "GET", "/", { role: "staff" });

@@ -1,4 +1,4 @@
-// Table 35 - Administration Module (CASE-185 to CASE-194)
+// Administration Module (CASE-185 to CASE-194)
 // Real activity-log and global-settings routes run with mocked models. Settings are kept in a small
 // in-memory store so a saved change is really read back by the later steps (maintenance mode, password rule).
 const { describe, test, afterEach } = require("node:test");
@@ -38,8 +38,8 @@ function stubLogQueries(rows = []) {
     return find;
 }
 
-describe("Table 35 - Administration: View Activity Logs", () => {
-    test("CASE-185 after an admin action (adding an animal) a new activity entry is written and shown in the log", async () => {
+describe("Administration: View Activity Logs", () => {
+    test("CASE-185 | Description: Admin adds an animal. | Expected: A new activity entry is shown in the log.", async () => {
         const adminId = newId();
         const create = mock.method(ActivityLog, "create", async (data) => data);
         const res = new EventEmitter();
@@ -63,7 +63,7 @@ describe("Table 35 - Administration: View Activity Logs", () => {
         assert.equal(log.body.logs[0].activity, "Added animal Buddy");
     });
 
-    test("CASE-186 filtering the activity log by user asks only for that user's entries", async () => {
+    test("CASE-186 | Description: Admin filters the activity log by user. | Expected: Only that user's entries are shown.", async () => {
         const find = stubLogQueries([]);
         const userId = newId();
 
@@ -73,7 +73,7 @@ describe("Table 35 - Administration: View Activity Logs", () => {
         assert.equal(find.mock.calls[0].arguments[0].user, userId);
     });
 
-    test("CASE-187 filtering the activity log by a date range asks only for entries inside the range", async () => {
+    test("CASE-187 | Description: Admin filters the activity log by date range. | Expected: Only entries in the range are shown.", async () => {
         const find = stubLogQueries([]);
 
         const result = await callRoute(activityLogRoutes, "GET", "/?startDate=2026-11-01&endDate=2026-11-15", { role: "admin" });
@@ -84,7 +84,7 @@ describe("Table 35 - Administration: View Activity Logs", () => {
         assert.equal(range.$lte.getDate(), 15);
     });
 
-    test("CASE-188 staff see only their own entries in the activity log, even if they ask for another user", async () => {
+    test("CASE-188 | Description: Staff opens the activity log. | Expected: Only their own entries are shown.", async () => {
         const find = stubLogQueries([]);
         const staffId = newId();
 
@@ -95,8 +95,8 @@ describe("Table 35 - Administration: View Activity Logs", () => {
     });
 });
 
-describe("Table 35 - Administration: Manage Global Settings (including Maintenance Mode)", () => {
-    test("CASE-189 the admin saves a new shelter name and capacity and the saved values are returned", async () => {
+describe("Administration: Manage Global Settings (including Maintenance Mode)", () => {
+    test("CASE-189 | Description: Admin saves a new shelter name and capacity. | Expected: Saved values are shown.", async () => {
         const { update } = stubSettingsStore();
 
         const result = await callRoute(globalSettingsRoutes, "PATCH", "/", {
@@ -110,7 +110,7 @@ describe("Table 35 - Administration: Manage Global Settings (including Maintenan
         assert.equal(result.body.settings.general.shelterCapacity, 50);
     });
 
-    test("CASE-190 an invalid shelter capacity is refused with a message", async () => {
+    test("CASE-190 | Description: Admin saves an invalid shelter capacity. | Expected: Save fails with error message.", async () => {
         stubSettingsStore();
 
         for (const capacity of [0, -5, "abc", 2.5, 20000]) {
@@ -127,7 +127,7 @@ describe("Table 35 - Administration: Manage Global Settings (including Maintenan
         return { method: "GET", path: "/api/animals", headers };
     }
 
-    test("CASE-191 with maintenance mode on, an adopter gets the maintenance screen and the admin can still use the system", async () => {
+    test("CASE-191 | Description: Admin turns maintenance mode on. | Expected: Adopters see the maintenance screen; admin still works.", async () => {
         stubSettingsStore();
 
         const turnedOn = await callRoute(globalSettingsRoutes, "PATCH", "/", {
@@ -145,7 +145,7 @@ describe("Table 35 - Administration: Manage Global Settings (including Maintenan
         assert.equal(admin.body, undefined);
     });
 
-    test("CASE-192 with maintenance mode turned off again, adopters can use the system", async () => {
+    test("CASE-192 | Description: Admin turns maintenance mode off. | Expected: Adopters can use the system again.", async () => {
         stubSettingsStore();
         await callRoute(globalSettingsRoutes, "PATCH", "/", { role: "admin", settings: false, body: { maintenance: { enabled: true } } });
         await callRoute(globalSettingsRoutes, "PATCH", "/", { role: "admin", settings: false, body: { maintenance: { enabled: false } } });
@@ -156,7 +156,7 @@ describe("Table 35 - Administration: Manage Global Settings (including Maintenan
         assert.equal(adopter.body, undefined);
     });
 
-    test("CASE-193 with strong passwords turned off, a 5-character password is rejected because the minimum length is 6 (U-20)", async () => {
+    test("CASE-193 | Description: Strong passwords is off and a user enters 5 characters. | Expected: Password is rejected; 6 characters are accepted.", async () => {
         stubSettingsStore();
         await callRoute(globalSettingsRoutes, "PATCH", "/", { role: "admin", settings: false, body: { security: { requireStrongPasswords: false } } });
 
@@ -164,7 +164,7 @@ describe("Table 35 - Administration: Manage Global Settings (including Maintenan
         await assert.doesNotReject(validatePassword("abcdef"));
     });
 
-    test("CASE-194 staff cannot open the global settings", async () => {
+    test("CASE-194 | Description: Staff opens the global settings. | Expected: Access is denied.", async () => {
         stubSettingsStore();
 
         const result = await callRoute(globalSettingsRoutes, "GET", "/", { role: "staff", settings: false });

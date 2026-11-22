@@ -1,9 +1,11 @@
-// Shared helpers for the Table 35 tests. No database, network or email is used:
+// Shared helpers for the unit tests. No database, network or email is used:
 // models and services are replaced with mock.method in each test.
 const { mock } = require("node:test");
 const mongoose = require("mongoose");
 
 process.env.JWT_SECRET = process.env.JWT_SECRET || "table35-test-secret";
+// Test emails use made-up domains: skip the "can this domain receive mail" DNS lookup
+process.env.EMAIL_DOMAIN_CHECK = "off";
 
 // Emails are replaced with recorders BEFORE any controller loads, because controllers
 // copy the functions when they are first required.

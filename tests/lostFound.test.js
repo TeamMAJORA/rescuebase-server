@@ -1,4 +1,4 @@
-// Table 35 - Lost-and-Found Module (CASE-131 to CASE-143)
+// Lost-and-Found Module (CASE-131 to CASE-143)
 // Real Lost & Found routes (login check, role check, controller, matching service) run with mocked models.
 // The matching score itself is also covered by lostFoundMatching.test.js (U-22, U-23).
 const { describe, test, afterEach } = require("node:test");
@@ -57,8 +57,8 @@ function foundDogCandidate(overrides = {}) {
     };
 }
 
-describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownership Claims", () => {
-    test("CASE-131 a lost pet report with the required details and a map pin is saved as open", async () => {
+describe("Lost-and-Found: Report Lost or Found Pets & Submit Ownership Claims", () => {
+    test("CASE-131 | Description: User files a lost pet report with a map pin. | Expected: Report is saved as open.", async () => {
         const { created } = stubReportCreation();
 
         const result = await callRoute(lostFoundRoutes, "POST", "/reports", { role: "adopter", body: LOST_DOG });
@@ -69,7 +69,7 @@ describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownershi
         assert.deepEqual(created[0].coordinates, { latitude: 10.2931, longitude: 123.9029 });
     });
 
-    test("CASE-132 a found pet report with the required details is saved as open", async () => {
+    test("CASE-132 | Description: User files a found pet report with the required details. | Expected: Report is saved as open.", async () => {
         const { created } = stubReportCreation();
 
         const result = await callRoute(lostFoundRoutes, "POST", "/reports", {
@@ -81,7 +81,7 @@ describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownershi
         assert.equal(created[0].status, "open");
     });
 
-    test("CASE-133 leaving a required report field empty is refused with a message", async () => {
+    test("CASE-133 | Description: User leaves a required report field empty. | Expected: Save fails with required field message.", async () => {
         const { created } = stubReportCreation();
 
         for (const [field, pattern] of [["species", /species is required/i], ["description", /description is required/i], ["location", /location is required/i]]) {
@@ -92,7 +92,7 @@ describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownershi
         assert.equal(created.length, 0);
     });
 
-    test("CASE-134 a lost and a found report of the same species with similar details and nearby locations create a suggested match and notify both reporters", async () => {
+    test("CASE-134 | Description: Similar lost and found reports of the same species are nearby. | Expected: A suggested match is created and both reporters are notified.", async () => {
         const { createMatch, notification } = stubReportCreation({ candidates: [foundDogCandidate()] });
 
         const result = await callRoute(lostFoundRoutes, "POST", "/reports", { role: "adopter", body: LOST_DOG });
@@ -105,7 +105,7 @@ describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownershi
         assert.equal(sentEmails.filter((mail) => mail.name === "sendLostFoundMatchEmail").length, 2);
     });
 
-    test("CASE-135 a lost dog and a found cat are not suggested as a match", async () => {
+    test("CASE-135 | Description: A lost dog and a found cat are reported. | Expected: No match is suggested.", async () => {
         const { createMatch, notification } = stubReportCreation({ candidates: [foundDogCandidate({ species: "cat" })] });
 
         const result = await callRoute(lostFoundRoutes, "POST", "/reports", { role: "adopter", body: LOST_DOG });
@@ -138,7 +138,7 @@ describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownershi
 
     const claimBody = { claimNotes: "She has a scar on her left ear and answers to Choco", claimContactNumber: "9181234567", claimProofPhotoUrl: PHOTO };
 
-    test("CASE-136 an ownership claim with proof is saved on the found report and the finder is told", async () => {
+    test("CASE-136 | Description: Owner claims a found pet with proof. | Expected: Claim is saved as pending.", async () => {
         const report = foundReport();
         mock.method(LostFoundReport, "findById", async () => report);
         const notification = stubClaimSideEffects();
@@ -153,7 +153,7 @@ describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownershi
         assert.equal(notification.mock.calls[0].arguments[0].title, "Someone Claimed the Pet You Found");
     });
 
-    test("CASE-137 an ownership claim without proof is refused with a message", async () => {
+    test("CASE-137 | Description: Owner claims a found pet without proof. | Expected: Claim fails with required field message.", async () => {
         const report = foundReport();
         mock.method(LostFoundReport, "findById", async () => report);
         stubClaimSideEffects();
@@ -168,7 +168,7 @@ describe("Table 35 - Lost-and-Found: Report Lost or Found Pets & Submit Ownershi
     });
 });
 
-describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
+describe("Lost-and-Found: Review Ownership Claims & Matches", () => {
     function reportWithClaim(claimOverrides = {}, reportOverrides = {}) {
         const claim = {
             _id: newId(), claimType: "ownership", claimantName: "Owner Olga", claimantEmail: OWNER, status: "pending",
@@ -196,7 +196,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         return { updateMany, lostReport };
     }
 
-    test("CASE-138 the finder opens their found report and sees the claims with their proof", async () => {
+    test("CASE-138 | Description: Finder opens their found report. | Expected: Claims are shown with their proof.", async () => {
         const { report } = reportWithClaim();
         mock.method(LostFoundReport, "findById", async () => report);
 
@@ -208,7 +208,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.match(result.body.report.claims[0].proofNotes, /Scar/);
     });
 
-    test("CASE-139 approving a claim marks the case reunited and closes the owner's matching lost report", async () => {
+    test("CASE-139 | Description: Staff approves a claim. | Expected: Report is marked reunited.", async () => {
         const { report, claim } = reportWithClaim();
         mock.method(LostFoundReport, "findById", async () => report);
         const { updateMany } = stubReviewSideEffects();
@@ -228,7 +228,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.equal(sentEmails.filter((mail) => mail.name === "sendLostFoundReunitedEmail").length, 2);
     });
 
-    test("CASE-140 rejecting a claim returns the report to open", async () => {
+    test("CASE-140 | Description: Staff rejects a claim. | Expected: Report returns to open.", async () => {
         const { report, claim } = reportWithClaim();
         mock.method(LostFoundReport, "findById", async () => report);
         stubReviewSideEffects();
@@ -243,7 +243,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.equal(report.claimStatus, "none");
     });
 
-    test("CASE-141 a second owner can submit a claim on the same found report and it is listed", async () => {
+    test("CASE-141 | Description: A second owner claims the same found pet. | Expected: Both claims are listed.", async () => {
         const { report } = reportWithClaim();
         mock.method(LostFoundReport, "findById", async () => report);
         mock.method(LedgerEntry, "create", async () => ({}));
@@ -260,7 +260,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.equal(report.claimStatus, "pending");
     });
 
-    test("CASE-142 an admin deletes a lost or found report and it is removed", async () => {
+    test("CASE-142 | Description: Admin deletes a lost or found report. | Expected: Report is removed.", async () => {
         const report = fakeDocument({ reporterEmail: FINDER, species: "Dog", claims: [] });
         mock.method(LostFoundReport, "findById", async () => report);
         const deleteMatches = mock.method(LostFoundMatch, "deleteMany", async () => ({}));
@@ -273,7 +273,7 @@ describe("Table 35 - Lost-and-Found: Review Ownership Claims & Matches", () => {
         assert.equal(deleteMatches.mock.callCount(), 1);
     });
 
-    test("CASE-143 staff cannot delete a report filed by someone else", async () => {
+    test("CASE-143 | Description: Staff deletes a report filed by someone else. | Expected: Access is denied.", async () => {
         const report = fakeDocument({ reporterEmail: FINDER, species: "Dog", claims: [] });
         mock.method(LostFoundReport, "findById", async () => report);
         const remove = mock.method(LostFoundReport, "findByIdAndDelete", async () => report);

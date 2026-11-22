@@ -3,8 +3,8 @@ const assert = require("node:assert/strict");
 
 const generateOtp = require("../utils/generateOtp");
 
-describe("Table 35 - generateOtp", () => {
-    test("U-21 always returns a 6-digit string from 100000 to 999999", () => {
+describe("generateOtp", () => {
+    test("U-21 | Description: An OTP is generated. | Expected: It is a 6-digit number.", () => {
         for (let attempt = 0; attempt < 100; attempt++) {
             const otp = generateOtp();
 

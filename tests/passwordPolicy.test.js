@@ -19,14 +19,14 @@ afterEach(() => {
     mock.restoreAll();
 });
 
-describe("Table 35 - passwordPolicy", () => {
-    test("U-19 isStrongPassword accepts strong and rejects weak passwords", () => {
+describe("passwordPolicy", () => {
+    test("U-19 | Description: Strong-password check on a strong and two weak passwords. | Expected: Strong is accepted; weak are rejected.", () => {
         assert.equal(isStrongPassword("Abcdef1!"), true);
         assert.equal(isStrongPassword("abcdefg1"), false);
         assert.equal(isStrongPassword("Short1!"), false);
     });
 
-    test("U-20 with strong passwords off, the minimum length is 6", async () => {
+    test("U-20 | Description: Strong passwords is off; password has 5 then 6 characters. | Expected: 5 is rejected; 6 is accepted.", async () => {
         stubRequireStrongPasswords(false);
 
         await assert.rejects(validatePassword("abcde"), (error) => {

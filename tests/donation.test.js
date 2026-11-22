@@ -1,4 +1,4 @@
-// Table 35 - Donation Management Module (CASE-111 to CASE-130)
+// Donation Management Module (CASE-111 to CASE-130)
 // Real donation and needed-supply routes (login check, role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -33,8 +33,8 @@ const cashDonation = (overrides = {}) => ({
     paymentMethod: "GCash", paymentReference: "REF-123", proofOfPayment: PROOF, ...overrides,
 });
 
-describe("Table 35 - Donation Management: View Needed Supplies & Submit Donations", () => {
-    test("CASE-111 the needed supplies list shows each item with the quantity needed and received", async () => {
+describe("Donation Management: View Needed Supplies & Submit Donations", () => {
+    test("CASE-111 | Description: Adopter opens the needed supplies list. | Expected: Items show quantity needed and received.", async () => {
         mock.method(NeededSupply, "find", () => query([{ _id: newId(), name: "Dog food", quantityNeeded: 20, quantityReceived: 5 }]));
 
         const result = await callRoute(neededSuppliesRoutes, "GET", "/", { role: "adopter" });
@@ -45,7 +45,7 @@ describe("Table 35 - Donation Management: View Needed Supplies & Submit Donation
         assert.equal(result.body.supplies[0].quantityReceived, 5);
     });
 
-    test("CASE-112 donating a listed item saves the donation linked to that supply", async () => {
+    test("CASE-112 | Description: Adopter donates a listed supply item. | Expected: Donation is saved for that supply.", async () => {
         const create = stubDonationCreate();
         const supplyId = newId();
 
@@ -58,7 +58,7 @@ describe("Table 35 - Donation Management: View Needed Supplies & Submit Donation
         assert.equal(create.mock.calls[0].arguments[0].neededSupplyId, supplyId);
     });
 
-    test("CASE-113 a cash donation with an amount, reference and proof of payment is saved as pending", async () => {
+    test("CASE-113 | Description: Adopter donates cash with amount, reference and proof. | Expected: Donation is saved as pending.", async () => {
         const create = stubDonationCreate();
 
         const result = await callRoute(donationRoutes, "POST", "/", { role: "adopter", body: cashDonation() });
@@ -72,7 +72,7 @@ describe("Table 35 - Donation Management: View Needed Supplies & Submit Donation
         assert.equal(sentEmails.some((mail) => mail.name === "sendDonationConfirmationEmail"), true);
     });
 
-    test("CASE-114 a cash donation with an invalid amount is refused", async () => {
+    test("CASE-114 | Description: Adopter donates cash with an invalid amount. | Expected: Donation fails with error message.", async () => {
         const create = stubDonationCreate();
 
         const negative = await callRoute(donationRoutes, "POST", "/", { role: "adopter", body: cashDonation({ amount: -50 }) });
@@ -86,7 +86,7 @@ describe("Table 35 - Donation Management: View Needed Supplies & Submit Donation
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-115 a cash donation without proof of payment is refused with a required-field message", async () => {
+    test("CASE-115 | Description: Adopter donates cash without proof of payment. | Expected: Donation fails with required field message.", async () => {
         const create = stubDonationCreate();
 
         const result = await callRoute(donationRoutes, "POST", "/", { role: "adopter", body: cashDonation({ proofOfPayment: "" }) });
@@ -96,7 +96,7 @@ describe("Table 35 - Donation Management: View Needed Supplies & Submit Donation
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-116 an in-kind donation with item name, quantity and photo is saved as pending", async () => {
+    test("CASE-116 | Description: Adopter donates an item with name, quantity and photo. | Expected: Donation is saved as pending.", async () => {
         const create = stubDonationCreate();
 
         const result = await callRoute(donationRoutes, "POST", "/", {
@@ -111,7 +111,7 @@ describe("Table 35 - Donation Management: View Needed Supplies & Submit Donation
         assert.equal(saved.itemPhotoUrl, PROOF);
     });
 
-    test("CASE-117 an in-kind donation with a quantity of 0 is refused", async () => {
+    test("CASE-117 | Description: Adopter donates an item with a quantity of 0. | Expected: Donation is refused.", async () => {
         const create = stubDonationCreate();
 
         const result = await callRoute(donationRoutes, "POST", "/", {
@@ -124,13 +124,13 @@ describe("Table 35 - Donation Management: View Needed Supplies & Submit Donation
     });
 });
 
-describe("Table 35 - Donation Management: View Donation History", () => {
+describe("Donation Management: View Donation History", () => {
     function stubHistory(donations) {
         mock.method(User, "findById", () => query({ _id: newId(), email: "adopter@test.rescuebase" }));
         return mock.method(Donation, "find", () => query(donations));
     }
 
-    test("CASE-118 the donation history lists the donor's donations with a status", async () => {
+    test("CASE-118 | Description: Donor opens their donation history. | Expected: Donations are listed with status.", async () => {
         const find = stubHistory([{ donationType: "Money", status: "pending" }, { donationType: "Food", status: "received" }]);
 
         const result = await callRoute(donationRoutes, "GET", "/my", { role: "adopter" });
@@ -140,7 +140,7 @@ describe("Table 35 - Donation Management: View Donation History", () => {
         assert.equal(find.mock.calls[0].arguments[0].donorEmail, "adopter@test.rescuebase");
     });
 
-    test("CASE-119 a donor with no donations gets an empty list (the screen shows the empty message)", async () => {
+    test("CASE-119 | Description: Donor with no donations opens the history. | Expected: Empty message is shown.", async () => {
         stubHistory([]);
 
         const result = await callRoute(donationRoutes, "GET", "/my", { role: "adopter" });
@@ -149,7 +149,7 @@ describe("Table 35 - Donation Management: View Donation History", () => {
         assert.deepEqual(result.body, []);
     });
 
-    test("CASE-120 after staff verified a donation the history returns the updated status", async () => {
+    test("CASE-120 | Description: Staff verifies a donation, then the donor opens the history. | Expected: Updated status is shown.", async () => {
         stubHistory([{ donationType: "Money", status: "received" }]);
 
         const result = await callRoute(donationRoutes, "GET", "/my", { role: "adopter" });
@@ -158,8 +158,8 @@ describe("Table 35 - Donation Management: View Donation History", () => {
     });
 });
 
-describe("Table 35 - Donation Management: Verify Donations & Proof of Payment", () => {
-    test("CASE-121 staff open the donation list with each donation's proof of payment", async () => {
+describe("Donation Management: Verify Donations & Proof of Payment", () => {
+    test("CASE-121 | Description: Staff opens the donation list. | Expected: Donations are listed with proof of payment.", async () => {
         mock.method(Donation, "find", () => query([{ _id: newId(), status: "pending", donationType: "Money", proofOfPayment: PROOF }]));
 
         const result = await callRoute(donationRoutes, "GET", "/", { role: "staff" });
@@ -169,7 +169,7 @@ describe("Table 35 - Donation Management: Verify Donations & Proof of Payment", 
         assert.equal(result.body.donations[0].proofOfPayment, PROOF);
     });
 
-    test("CASE-122 marking a donation as received changes its status and adds it to the supply totals", async () => {
+    test("CASE-122 | Description: Staff marks a donation as received. | Expected: Status changes and supply totals go up.", async () => {
         const supplyId = newId();
         const donation = { _id: newId(), status: "pending", quantity: 3, neededSupplyId: supplyId, donationType: "Food" };
         mock.method(Donation, "findById", async () => donation);
@@ -185,7 +185,7 @@ describe("Table 35 - Donation Management: Verify Donations & Proof of Payment", 
         assert.deepEqual(supplyUpdate.mock.calls[0].arguments[1], { $inc: { quantityReceived: 3 } });
     });
 
-    test("CASE-123 marking a donation as cancelled changes its status and notifies the donor with the reason", async () => {
+    test("CASE-123 | Description: Staff marks a donation as cancelled. | Expected: Status changes and the donor is notified.", async () => {
         const donation = { _id: newId(), status: "pending", quantity: 1, donationType: "Money", amount: 500, donorEmail: "donor@test.rescuebase" };
         mock.method(Donation, "findById", async () => donation);
         mock.method(User, "findById", () => query({ name: "Staff Sam" }));
@@ -205,7 +205,7 @@ describe("Table 35 - Donation Management: Verify Donations & Proof of Payment", 
         assert.equal(notification.mock.calls[0].arguments[0].title, "Donation Not Received");
     });
 
-    test("CASE-124 the donation record carries the proof-of-payment image for staff to open", async () => {
+    test("CASE-124 | Description: Staff opens a donation record. | Expected: Proof of payment image is shown.", async () => {
         mock.method(Donation, "find", () => query([{ _id: newId(), donationType: "Money", proofOfPayment: PROOF }]));
 
         const result = await callRoute(donationRoutes, "GET", "/", { role: "admin" });
@@ -214,8 +214,8 @@ describe("Table 35 - Donation Management: Verify Donations & Proof of Payment", 
     });
 });
 
-describe("Table 35 - Donation Management: Manage Needed Supplies & Delete Donation Records", () => {
-    test("CASE-125 an admin adds a needed supply with valid details and it is saved", async () => {
+describe("Donation Management: Manage Needed Supplies & Delete Donation Records", () => {
+    test("CASE-125 | Description: Admin adds a needed supply with valid details. | Expected: Supply is saved.", async () => {
         const create = mock.method(NeededSupply, "create", async (data) => ({ _id: newId(), ...data }));
 
         const result = await callRoute(neededSuppliesRoutes, "POST", "/", {
@@ -227,7 +227,7 @@ describe("Table 35 - Donation Management: Manage Needed Supplies & Delete Donati
         assert.equal(create.mock.calls[0].arguments[0].quantityNeeded, 20);
     });
 
-    test("CASE-126 a needed supply with an empty name is refused with a required-field message", async () => {
+    test("CASE-126 | Description: Admin adds a needed supply with an empty name. | Expected: Save fails with required field message.", async () => {
         const create = mock.method(NeededSupply, "create", async () => ({}));
 
         const result = await callRoute(neededSuppliesRoutes, "POST", "/", {
@@ -239,7 +239,7 @@ describe("Table 35 - Donation Management: Manage Needed Supplies & Delete Donati
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-127 editing the quantity needed saves the new quantity", async () => {
+    test("CASE-127 | Description: Admin edits the quantity needed. | Expected: New quantity is saved.", async () => {
         const supply = fakeDocument({ name: "Dog food", quantityNeeded: 10, quantityReceived: 2, status: "active" });
         mock.method(NeededSupply, "findById", async () => supply);
 
@@ -250,7 +250,7 @@ describe("Table 35 - Donation Management: Manage Needed Supplies & Delete Donati
         assert.equal(supply.savedTimes, 1);
     });
 
-    test("CASE-128 an admin deletes a needed supply and it is removed", async () => {
+    test("CASE-128 | Description: Admin deletes a needed supply. | Expected: Supply is removed.", async () => {
         const remove = mock.method(NeededSupply, "findByIdAndDelete", async () => ({ _id: newId() }));
 
         const result = await callRoute(neededSuppliesRoutes, "DELETE", `/${newId()}`, { role: "admin" });
@@ -259,7 +259,7 @@ describe("Table 35 - Donation Management: Manage Needed Supplies & Delete Donati
         assert.equal(remove.mock.callCount(), 1);
     });
 
-    test("CASE-129 an admin deletes a pending donation record and it is removed", async () => {
+    test("CASE-129 | Description: Admin deletes a pending donation record. | Expected: Record is removed.", async () => {
         const donation = { _id: newId(), status: "pending" };
         mock.method(Donation, "findById", async () => donation);
         const remove = mock.method(Donation, "findByIdAndDelete", async () => donation);
@@ -270,7 +270,7 @@ describe("Table 35 - Donation Management: Manage Needed Supplies & Delete Donati
         assert.equal(remove.mock.callCount(), 1);
     });
 
-    test("CASE-130 staff can delete a donation record, and an adopter cannot", async () => {
+    test("CASE-130 | Description: Staff and an adopter try to delete a donation record. | Expected: Staff can delete; adopter is denied.", async () => {
         const donation = { _id: newId(), status: "pending" };
         mock.method(Donation, "findById", async () => donation);
         const removeById = mock.method(Donation, "findByIdAndDelete", async () => donation);

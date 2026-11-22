@@ -3,15 +3,15 @@ const assert = require("node:assert/strict");
 
 const { derivePersonality } = require("../services/personalityService");
 
-describe("Table 35 - personalityService.derivePersonality", () => {
-    test("U-17 animal with no scores is unassessed and gets no tags", () => {
+describe("personalityService.derivePersonality", () => {
+    test("U-17 | Description: Animal has no behavior scores. | Expected: Shown as unassessed with no tags.", () => {
         const personality = derivePersonality({ name: "No Scores" });
 
         assert.equal(personality.status, "unassessed");
         assert.deepEqual(personality.tags, []);
     });
 
-    test("U-18 animal with all scores is complete and tagged only where a rule passes", () => {
+    test("U-18 | Description: Animal has all 8 behavior scores. | Expected: Shown as complete with tags.", () => {
         const personality = derivePersonality({
             energyLevel: 1,
             friendliness: 3,

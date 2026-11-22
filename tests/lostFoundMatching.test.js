@@ -25,8 +25,8 @@ function buildFoundDogReport() {
     };
 }
 
-describe("Table 35 - lostFoundMatchingService", () => {
-    test("U-22 distance is 0 for the same point and plausible for two Cebu points", () => {
+describe("lostFoundMatchingService", () => {
+    test("U-22 | Description: Distance is computed for the same point and two Cebu points. | Expected: Same point is 0 km; Cebu points give a plausible distance.", () => {
         const samePoint = calculateDistanceKm(
             { coordinates: CEBU_CITY_HALL },
             { coordinates: CEBU_CITY_HALL }
@@ -44,7 +44,7 @@ describe("Table 35 - lostFoundMatchingService", () => {
         );
     });
 
-    test("U-23 same species, colour and location scores high; dog vs cat is not a match", () => {
+    test("U-23 | Description: Compare lost and found reports, same species and place, and dog vs cat. | Expected: Same details score high; dog vs cat is no match.", () => {
         const lostDog = {
             ...buildFoundDogReport(),
             reportType: "lost",

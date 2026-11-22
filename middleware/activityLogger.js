@@ -120,9 +120,9 @@ const RULES = [
     ["DELETE", /^\/api\/lost-found\/reports\/[^/]+$/, "Lost & Found", () => "Deleted a lost & found report"],
     ["POST", /^\/api\/gis\/shelters$/, "GIS", (c) => withName("Added place", c.name)],
     ["PATCH", /^\/api\/gis\/shelters\/[^/]+$/, "GIS", (c) => withName("Updated place", c.name)],
-    ["POST", /^\/api\/gis(\/stray-sightings)?$/, "GIS", (c) => withName(`Pinned a ${c.body?.reportType || "stray"} report`, c.name ? `at ${c.name}` : "")],
-    ["PATCH", /^\/api\/gis\/[^/]+\/resolve$/, "GIS", (c) => withName("Resolved a map report", c.name ? `at ${c.name}` : "")],
-    ["PATCH", /^\/api\/gis\/[^/]+$/, "GIS", (c) => withName("Updated a map report", c.name ? `at ${c.name}` : "")],
+    ["POST", /^\/api\/gis(\/stray-sightings)?$/, "GIS", (c) => withName(`Pinned a ${c.body?.reportType || "stray"} report${c.name ? ":" : ""}`, c.name)],
+    ["PATCH", /^\/api\/gis\/[^/]+\/resolve$/, "GIS", (c) => withName(c.name ? "Resolved a map report:" : "Resolved a map report", c.name)],
+    ["PATCH", /^\/api\/gis\/[^/]+$/, "GIS", (c) => withName(c.name ? "Updated a map report:" : "Updated a map report", c.name)],
     ["DELETE", /^\/api\/gis\/[^/]+$/, "GIS", () => "Deleted a map report"],
 
     // Donations & supplies

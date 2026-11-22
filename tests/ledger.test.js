@@ -1,4 +1,4 @@
-// Table 35 - Ledger Module (CASE-213 to CASE-215)
+// Ledger Module (CASE-213 to CASE-215)
 // Real ledger routes (login check, role check, controller) run with mocked models.
 const { describe, test, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -11,8 +11,8 @@ const ledgerRoutes = require("../routes/ledgerRoutes");
 
 afterEach(() => mock.restoreAll());
 
-describe("Table 35 - Ledger: View Ledger Entries and Food Transactions", () => {
-    test("CASE-213 the admin opens the ledger and gets the latest entries, newest first", async () => {
+describe("Ledger: View Ledger Entries and Food Transactions", () => {
+    test("CASE-213 | Description: Admin opens the ledger. | Expected: Latest entries are shown, newest first.", async () => {
         const find = mock.method(LedgerEntry, "find", () => query([{ _id: newId(), action: "foster_assignment_created" }]));
 
         const result = await callRoute(ledgerRoutes, "GET", "/?limit=5", { role: "admin" });
@@ -22,7 +22,7 @@ describe("Table 35 - Ledger: View Ledger Entries and Food Transactions", () => {
         assert.equal(find.mock.callCount(), 1);
     });
 
-    test("CASE-214 the food transaction ledger refuses an invalid inventory ID", async () => {
+    test("CASE-214 | Description: Admin opens food transactions with an invalid inventory ID. | Expected: Request fails with error message.", async () => {
         const find = mock.method(FoodInventoryTransaction, "find", () => query([]));
 
         const result = await callRoute(ledgerRoutes, "GET", "/food-transactions?inventoryId=not-an-id", { role: "admin" });
@@ -32,7 +32,7 @@ describe("Table 35 - Ledger: View Ledger Entries and Food Transactions", () => {
         assert.equal(find.mock.callCount(), 0);
     });
 
-    test("CASE-215 staff cannot open the ledger", async () => {
+    test("CASE-215 | Description: Staff opens the ledger. | Expected: Access is denied.", async () => {
         const find = mock.method(LedgerEntry, "find", () => query([]));
 
         const result = await callRoute(ledgerRoutes, "GET", "/", { role: "staff" });
