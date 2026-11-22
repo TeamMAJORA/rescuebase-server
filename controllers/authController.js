@@ -12,6 +12,22 @@ const {
     sendOtpEmail, sendPasswordResetEmail
 } = require("../services/emailService");
 
+// One rule for every emailed code (sign-up, sign-in, password reset): each wrong code counts, and at the
+// Settings limit (Security: max login attempts) the code is cancelled and the account locks for the
+// lockout time. While locked, no new code is sent, so logging in again or "Resend" can't skip the lock.
+const isLocked = (lockedUntil) => Boolean(lockedUntil && lockedUntil > new Date());
+
+function lockedError(lockedUntil) {
+    const minutes = Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000));
+    const error = new Error(`Too many wrong codes. Try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`);
+    error.statusCode = 429;
+    return error;
+}
+
+function triesLeftText(triesLeft) {
+    return `${triesLeft} ${triesLeft === 1 ? "try" : "tries"} left.`;
+}
+
 exports.emailSignup = async (req, res) => {
     const username = String(req.body.username || "").trim();
     const email = String(req.body.email || "").trim().toLowerCase();
@@ -56,8 +72,12 @@ exports.emailSignup = async (req, res) => {
     const existingUser = await User.findOne({
         email
     }).select(
-        "+password +emailOtp +emailOtpExpires +emailOtpAttempts"
+        "+password +emailOtp +emailOtpExpires +emailOtpAttempts +emailOtpLockedUntil"
     );
+
+    if (existingUser && !existingUser.verified && isLocked(existingUser.emailOtpLockedUntil)) {
+        throw lockedError(existingUser.emailOtpLockedUntil);
+    }
 
     if (existingUser?.verified) {
         const error = new Error("Email is already registered. Please login instead.");
@@ -136,13 +156,17 @@ exports.verifyOtp = async (req, res) => {
     const user = await User.findOne({
         email,
     }).select(
-        "+password +emailOtp +emailOtpExpires +emailOtpAttempts"
+        "+password +emailOtp +emailOtpExpires +emailOtpAttempts +emailOtpLockedUntil"
     );
 
     if (!user) {
         const error = new Error("User not found.");
         error.statusCode = 404;
         throw error;
+    }
+
+    if (!user.verified && isLocked(user.emailOtpLockedUntil)) {
+        throw lockedError(user.emailOtpLockedUntil);
     }
 
     if (user.verified) {
@@ -165,16 +189,22 @@ exports.verifyOtp = async (req, res) => {
         throw error;
     }
 
-    if (user.emailOtpAttempts >= 5) {
-        const error = new Error("Too many OTP Entry attempts. Please request a new code")
-        error.statusCode = 429;
-        throw error;
-    }
+    const settings = await getGlobalSettings();
+    const { maxLoginAttempts, lockoutMinutes } = settings.security;
 
     if (user.emailOtp !== otp) {
-        user.emailOtpAttempts += 1;
+        user.emailOtpAttempts = (user.emailOtpAttempts || 0) + 1;
+
+        if (user.emailOtpAttempts >= maxLoginAttempts) {
+            user.emailOtp = "";
+            user.emailOtpExpires = null;
+            user.emailOtpLockedUntil = new Date(Date.now() + lockoutMinutes * 60 * 1000);
+            await user.save();
+            throw lockedError(user.emailOtpLockedUntil);
+        }
+
         await user.save();
-        const error = new Error("Invalid OTP");
+        const error = new Error(`Invalid OTP. ${triesLeftText(maxLoginAttempts - user.emailOtpAttempts)}`);
         error.statusCode = 400;
         throw error;
     }
@@ -183,8 +213,8 @@ exports.verifyOtp = async (req, res) => {
     user.emailOtp = "";
     user.emailOtpExpires = null;
     user.emailOtpAttempts = 0;
+    user.emailOtpLockedUntil = null;
     await user.save();
-    const settings = await getGlobalSettings();
 
     const token = generateToken(
         user,
@@ -211,7 +241,7 @@ exports.resendOtp = async (req, res) => {
     const user = await User.findOne({
         email,
     }).select(
-        "+emailOtp +emailOtpExpires +emailOtpAttempts"
+        "+emailOtp +emailOtpExpires +emailOtpAttempts +emailOtpLockedUntil"
     );
 
     if (!user) {
@@ -225,6 +255,8 @@ exports.resendOtp = async (req, res) => {
         error.statusCode = 400;
         throw error;
     }
+
+    if (isLocked(user.emailOtpLockedUntil)) throw lockedError(user.emailOtpLockedUntil);
 
     const otp = generateOtp();
     user.emailOtp = otp;
@@ -334,6 +366,12 @@ exports.emailLogin = async (req, res) => {
     user.passwordLoginAttempts = 0;
     user.passwordLoginLockedUntil = null;
 
+    // Locked after too many wrong codes: logging in again must not hand out a fresh code
+    if (isLocked(user.loginOtpLockedUntil)) {
+        await user.save();
+        throw lockedError(user.loginOtpLockedUntil);
+    }
+
     const loginOtp = generateOtp();
 
     user.loginOtp = loginOtp;
@@ -381,16 +419,7 @@ exports.verifyLoginOtp = async (req, res) => {
         throw error;
     }
 
-    if (
-        user.loginOtpLockedUntil &&
-        user.loginOtpLockedUntil > new Date()
-    ) {
-        const error = new Error(
-            "Too many incorrect OTP attempts. Please try again later."
-        );
-        error.statusCode = 429;
-        throw error;
-    }
+    if (isLocked(user.loginOtpLockedUntil)) throw lockedError(user.loginOtpLockedUntil);
 
     if (
         user.loginOtpLockedUntil &&
@@ -434,12 +463,7 @@ exports.verifyLoginOtp = async (req, res) => {
             );
 
             await user.save();
-
-            const error = new Error(
-                "Too many incorrect OTP attempts. Please try again later."
-            );
-            error.statusCode = 429;
-            throw error;
+            throw lockedError(user.loginOtpLockedUntil);
         }
 
         await user.save();
@@ -447,9 +471,7 @@ exports.verifyLoginOtp = async (req, res) => {
         const remainingAttempts =
             maxLoginAttempts - user.loginOtpAttempts;
 
-        const error = new Error(
-            `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`
-        );
+        const error = new Error(`Invalid OTP. ${triesLeftText(remainingAttempts)}`);
         error.statusCode = 401;
         throw error;
     }
@@ -483,8 +505,10 @@ exports.forgotPassword = async (req, res) => {
     }
 
     const user = await User.findOne({ email }).select(
-        "+passwordResetToken +passwordResetExpires"
+        "+passwordResetToken +passwordResetExpires +passwordResetLockedUntil"
     );
+
+    if (user && isLocked(user.passwordResetLockedUntil)) throw lockedError(user.passwordResetLockedUntil);
 
     if (!user) {
         return res.status(200).json({
@@ -514,6 +538,7 @@ exports.forgotPassword = async (req, res) => {
     user.passwordResetExpires = new Date(
         Date.now() + 15 * 60 * 1000
     );
+    user.passwordResetAttempts = 0;
 
     await user.save();
 
@@ -576,21 +601,45 @@ exports.resetPassword = async (req, res) => {
 
     await validatePassword(password);
 
-    const user = await User.findOne({
-        passwordResetToken: otp,
-        passwordResetExpires: {
-            $gt: new Date(),
-        },
-    }).select(
+    // The code is checked against this email's account only, and wrong codes count toward the lock
+    const email = String(req.body.email || "").trim().toLowerCase();
+    if (!email) {
+        const e = new Error("Email is required.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    const user = await User.findOne({ email }).select(
         "+password " +
         "+passwordResetToken " +
-        "+passwordResetExpires"
+        "+passwordResetExpires " +
+        "+passwordResetAttempts " +
+        "+passwordResetLockedUntil"
     );
 
-    if (!user) {
-        const e = new Error(
-            "Invalid or expired password reset OTP."
-        );
+    if (user && isLocked(user.passwordResetLockedUntil)) throw lockedError(user.passwordResetLockedUntil);
+
+    const hasLiveCode = Boolean(user?.passwordResetToken && user.passwordResetExpires > new Date());
+    if (!hasLiveCode) {
+        const e = new Error("Invalid or expired password reset OTP.");
+        e.statusCode = 400;
+        throw e;
+    }
+
+    if (user.passwordResetToken !== otp) {
+        const { maxLoginAttempts, lockoutMinutes } = (await getGlobalSettings()).security;
+        user.passwordResetAttempts = (user.passwordResetAttempts || 0) + 1;
+
+        if (user.passwordResetAttempts >= maxLoginAttempts) {
+            user.passwordResetToken = "";
+            user.passwordResetExpires = null;
+            user.passwordResetLockedUntil = new Date(Date.now() + lockoutMinutes * 60 * 1000);
+            await user.save();
+            throw lockedError(user.passwordResetLockedUntil);
+        }
+
+        await user.save();
+        const e = new Error(`Invalid or expired password reset OTP. ${triesLeftText(maxLoginAttempts - user.passwordResetAttempts)}`);
         e.statusCode = 400;
         throw e;
     }
@@ -605,6 +654,8 @@ exports.resetPassword = async (req, res) => {
 
     user.passwordResetToken = "";
     user.passwordResetExpires = null;
+    user.passwordResetAttempts = 0;
+    user.passwordResetLockedUntil = null;
 
     user.loginOtp = "";
     user.loginOtpExpires = null;
@@ -701,7 +752,7 @@ exports.googleLogin = async (req, res) => {
             { firebaseUid },
             { email },
         ],
-    });
+    }).select("+loginOtpLockedUntil");
 
     if (!user) {
         const error = new Error("You don't have an account with RescueBase. Please sign up first.");
@@ -714,6 +765,8 @@ exports.googleLogin = async (req, res) => {
         error.statusCode = 403;
         throw error;
     }
+
+    if (isLocked(user.loginOtpLockedUntil)) throw lockedError(user.loginOtpLockedUntil);
 
     const loginOtp = generateOtp();
 
