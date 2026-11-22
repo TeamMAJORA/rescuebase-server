@@ -69,6 +69,10 @@ describe("GIS Mapping: View GIS Map, Record Stray Sightings & Find the Nearest S
         assert.match(badLatitude.body.message, /invalid latitude/i);
         assert.equal(badLongitude.status, 400);
         assert.match(badLongitude.body.message, /invalid longitude/i);
+
+        const outsideCebu = await callRoute(gisRoutes, "POST", "/stray-sightings", { role: "volunteer", body: { ...SIGHTING, latitude: 14.5995, longitude: 120.9842 } });
+        assert.equal(outsideCebu.status, 400);
+        assert.match(outsideCebu.body.message, /within 30 km of Cebu City/i);
         assert.equal(create.mock.callCount(), 0);
     });
 

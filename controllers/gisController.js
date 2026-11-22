@@ -4,6 +4,7 @@ const LostFoundReport = require("../models/LostFoundReport");
 const User = require("../models/User");
 const Shelter = require("../models/Shelter");
 const stripLegacyContact = require("../utils/stripLegacyContact");
+const { assertWithinServiceArea } = require("../utils/serviceArea");
 
 exports.createLocation = async (req, res) => {
     const petName = String(req.body.petName || "").trim();
@@ -81,6 +82,8 @@ exports.createLocation = async (req, res) => {
         error.statusCode = 400;
         throw error;
     }
+
+    assertWithinServiceArea(latitude, longitude);
 
     const userId = req.user?.id;
 
@@ -164,6 +167,8 @@ exports.createStraySighting = async (req, res) => {
         e.statusCode = 400;
         throw e;
     }
+
+    assertWithinServiceArea(latitude, longitude);
 
     const userId = req.user?.id;
 
@@ -528,6 +533,15 @@ exports.updateLocation = async (
             error.statusCode = 400;
             throw error;
         }
+    }
+
+    if (updates.latitude !== undefined || updates.longitude !== undefined) {
+        // Only one coordinate sent: use the saved value for the other
+        const saved = await GISLocation.findById(locationId).select("latitude longitude");
+        assertWithinServiceArea(
+            updates.latitude ?? saved?.latitude,
+            updates.longitude ?? saved?.longitude
+        );
     }
 
     if (
