@@ -8,6 +8,8 @@ const LedgerEntry = require("../models/LedgerEntry");
 const User = require("../models/User");
 const Notification = require("../models/Notifications");
 const { sendApplicationUpdateEmail, sendFosterUpdateEmail } = require("../services/emailService");
+const { VACCINE_REMINDER_DAYS, findDueVaccinations } = require("../utils/vaccinationDoses");
+const { remindFoster, vaccinationAlertsEnabled } = require("../jobs/vaccinationReminders");
 
 // email must have a function that returns a promise(promise??), and it must throw an error if the email fails to send
 async function sendEmailSafely(sendFn, ...args) {
@@ -1074,12 +1076,38 @@ exports.getMyActiveAssignment = async (req, res) => {
             status: "active",
         })
             .sort({ createdAt: -1 })
-            .populate("animalId", "type age gender size");
+            .populate("animalId", "type age gender size")
+            .lean();
+
+    // Shots due within the reminder window (or overdue), so the dashboard can flag them
+    const dueVaccinations = await findDueVaccinations(
+        assignments.map((assignment) => assignment.animalId?._id).filter(Boolean),
+        new Date(Date.now() + VACCINE_REMINDER_DAYS * 24 * 60 * 60 * 1000)
+    );
+
+    // Anything flagged on the dashboard is also in the bell: remind now if the
+    // daily run hasn't yet (e.g. the pet was placed after this morning's run)
+    const unremindedDoses = dueVaccinations.filter(
+        (record) => !record.foster_reminder_sent_for || new Date(record.foster_reminder_sent_for).getTime() !== new Date(record.next_due_date).getTime()
+    );
+    if (unremindedDoses.length > 0 && (await vaccinationAlertsEnabled())) {
+        for (const record of unremindedDoses) {
+            const assignment = assignments.find((item) => String(item.animalId?._id) === String(record.animal_id));
+            await remindFoster({ record, petName: assignment?.petName || "Your foster pet", fosterEmail: email, fosterUserId: req.user?.id || req.user?._id });
+        }
+    }
+
+    const withVaccinations = assignments.map((assignment) => ({
+        ...assignment,
+        dueVaccinations: dueVaccinations
+            .filter((record) => String(record.animal_id) === String(assignment.animalId?._id))
+            .map((record) => ({ _id: record._id, vaccineName: record.vaccine_name, dueDate: record.next_due_date })),
+    }));
 
     return res.status(200).json({
         success: true,
-        assignment: assignments[0] || null,
-        assignments,
+        assignment: withVaccinations[0] || null,
+        assignments: withVaccinations,
     });
 };
 
