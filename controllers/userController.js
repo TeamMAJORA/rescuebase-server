@@ -2,6 +2,7 @@ const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const cleanUser = require("../utils/cleanUser");
 const Notification = require("../models/Notifications");
+const { withdrawOpenApplicationsForUser } = require("../services/applicantNotifier");
 
 const {
     sendRoleApplicationEmail,
@@ -374,6 +375,8 @@ exports.deactivateUser = async (req, res) => {
 
     user.status = "disabled";
     await user.save();
+
+    await withdrawOpenApplicationsForUser(user._id);
 
     return res.status(200).json({
         success: true,

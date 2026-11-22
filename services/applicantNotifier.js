@@ -58,4 +58,25 @@ async function closeApplicationsForUnavailablePet(animalId, petName, reason) {
     }
 }
 
-module.exports = { closeApplicationsForUnavailablePet };
+// The user's account was deactivated: withdraw their open applications so staff
+// don't schedule interviews with someone who can no longer log in. Never throws.
+async function withdrawOpenApplicationsForUser(userId) {
+    try {
+        const openApplications = await AdoptionApplication.find({
+            applicantUserId: userId,
+            status: { $in: OPEN_APPLICATION_STATUSES },
+        });
+
+        for (const application of openApplications) {
+            application.withdrawnFromStatus = application.status;
+            application.status = "withdrawn";
+            application.withdrawnAt = new Date();
+            application.withdrawalReason = "Applicant account was deactivated.";
+            await application.save();
+        }
+    } catch (error) {
+        console.error("Withdraw applications for deactivated user error:", error);
+    }
+}
+
+module.exports = { closeApplicationsForUnavailablePet, withdrawOpenApplicationsForUser };
