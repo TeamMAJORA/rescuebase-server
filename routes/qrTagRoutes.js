@@ -17,6 +17,16 @@ router.get(
     )
 );
 
+// Tag codes only (no QR images), so volunteers can look up a pet by its tag in the field
+router.get(
+    "/tag-codes",
+    verifyToken,
+    authorizeRoles("admin", "staff", "volunteer"),
+    asyncHandler(
+        qrTagController.getTagCodes
+    )
+);
+
 router.post(
     "/generate",
     verifyToken,
