@@ -46,6 +46,11 @@ exports.getAllQRTags = async (req, res) => {
     });
 };
 
+exports.getTagCodes = async (req, res) => {
+    const tagCodes = await QRTag.find({}, { animal: 1, tagCode: 1, _id: 0 }).lean();
+    return res.status(200).json({ success: true, tagCodes });
+};
+
 exports.generateQRTag = async (req, res) => {
     const animalId = String(
         req.body.animalId || ""
