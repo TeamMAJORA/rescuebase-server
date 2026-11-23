@@ -3,14 +3,12 @@ const mongoose = require("mongoose");
 
 const PaymentMethodSchema = new mongoose.Schema(
     {
+        // GCash, Maya, Bank Account, or a name the shelter typed (e.g. PayPal)
         method_type: {
             type: String,
-            enum: [
-                "GCash",
-                "Maya",
-                "Bank Account",
-            ],
             required: true,
+            trim: true,
+            maxlength: 40,
         },
 
         account_name: {
