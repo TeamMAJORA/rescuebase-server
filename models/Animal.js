@@ -60,6 +60,13 @@ const animalSchema = new mongoose.Schema(
             trim: true,
         },
 
+        // Shown to adopters as a Health tag ("Spayed" / "Neutered"). The surgery itself goes in Medical Records.
+        spayNeuterStatus: {
+            type: String,
+            enum: ["Yes", "No", "Unknown"],
+            default: "Unknown",
+        },
+
         behaviorNotes: {
             type: String,
             default: "",

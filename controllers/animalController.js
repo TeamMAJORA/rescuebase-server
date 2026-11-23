@@ -122,6 +122,7 @@ exports.createAnimal = async (req, res) => {
         medicalStatus: String(
             req.body.medicalStatus || ""
         ).trim(),
+        spayNeuterStatus: String(req.body.spayNeuterStatus || "Unknown").trim(),
         behaviorNotes: String(
             req.body.behaviorNotes || ""
         ).trim(),
@@ -419,6 +420,7 @@ exports.updateAnimal = async (req, res) => {
         "image",
         "description",
         "medicalStatus",
+        "spayNeuterStatus",
         "behaviorNotes",
         "behaviorAssessedBy",
         "behaviorAssessedAt",
