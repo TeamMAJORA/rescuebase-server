@@ -1,11 +1,15 @@
 
 const PaymentMethod = require("../models/PaymentMethods");
 
-const SUPPORTED_PAYMENT_METHOD_TYPES = ["GCash", "Maya", "Bank Account"];
+// Listed choices in the admin form; any other name is allowed ("Other" in the form)
+const LISTED_PAYMENT_METHOD_NAMES = ["GCash", "Maya", "Bank Account"];
+const OTHER_METHOD_NAME_LENGTH = { min: 2, max: 40 };
 
 function paymentMethodTypeError(methodType) {
-    if (!SUPPORTED_PAYMENT_METHOD_TYPES.includes(methodType)) {
-        return `Payment method must be one of: ${SUPPORTED_PAYMENT_METHOD_TYPES.join(", ")}.`;
+    const name = String(methodType || "").trim();
+    if (LISTED_PAYMENT_METHOD_NAMES.includes(name)) return null;
+    if (name.length < OTHER_METHOD_NAME_LENGTH.min || name.length > OTHER_METHOD_NAME_LENGTH.max) {
+        return `Method name must be ${OTHER_METHOD_NAME_LENGTH.min} to ${OTHER_METHOD_NAME_LENGTH.max} characters.`;
     }
     return null;
 }
@@ -65,7 +69,7 @@ exports.createPaymentMethod = async (req, res) => {
 
     const paymentMethod =
         await PaymentMethod.create({
-            method_type,
+            method_type: String(method_type).trim(),
             account_name: String(account_name).trim(),
             account_number: String(account_number).trim(),
             qr_image_url: qr_image_url || "",
@@ -113,6 +117,7 @@ exports.updatePaymentMethod = async (req, res) => {
         if (typeError) {
             return res.status(400).json({ success: false, message: typeError });
         }
+        updates.method_type = String(updates.method_type).trim();
     }
 
     for (const field of ["account_name", "account_number"]) {
