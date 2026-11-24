@@ -1,13 +1,17 @@
 
 const PaymentMethod = require("../models/PaymentMethods");
 
-// Only these payment methods are supported
-const SUPPORTED_PAYMENT_METHOD_NAMES = ["GCash", "Maya", "Bank Account"];
+// Listed choices in the admin form; any other name is allowed ("Other" in the form)
+const LISTED_PAYMENT_METHOD_NAMES = ["GCash", "Maya", "Bank Account"];
+const OTHER_METHOD_NAME_LENGTH = { min: 2, max: 40 };
 
 function paymentMethodTypeError(methodType) {
     const name = String(methodType || "").trim();
-    if (SUPPORTED_PAYMENT_METHOD_NAMES.includes(name)) return null;
-    return `Method name must be one of: ${SUPPORTED_PAYMENT_METHOD_NAMES.join(", ")}.`;
+    if (LISTED_PAYMENT_METHOD_NAMES.includes(name)) return null;
+    if (name.length < OTHER_METHOD_NAME_LENGTH.min || name.length > OTHER_METHOD_NAME_LENGTH.max) {
+        return `Method name must be ${OTHER_METHOD_NAME_LENGTH.min} to ${OTHER_METHOD_NAME_LENGTH.max} characters.`;
+    }
+    return null;
 }
 
 exports.getPaymentMethods = async (req, res) => {

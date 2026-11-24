@@ -7,7 +7,9 @@ const { mock, query, callRoute, newId } = require("./helpers/http");
 
 const LedgerEntry = require("../models/LedgerEntry");
 const FoodInventoryTransaction = require("../models/FoodInventoryTransaction");
+const Donation = require("../models/Donations");
 const ledgerRoutes = require("../routes/ledgerRoutes");
+const donationRoutes = require("../routes/donationRoutes");
 
 afterEach(() => mock.restoreAll());
 
@@ -32,12 +34,13 @@ describe("Ledger: View Ledger Entries and Food Transactions", () => {
         assert.equal(find.mock.callCount(), 0);
     });
 
-    test("CASE-215 | Description: Staff opens the ledger. | Expected: Access is denied.", async () => {
-        const find = mock.method(LedgerEntry, "find", () => query([]));
+    test("CASE-215 | Description: Staff opens the donation ledger. | Expected: The ledger is shown.", async () => {
+        const find = mock.method(Donation, "find", () => query([{ _id: newId(), status: "received", donationType: "Money" }]));
 
-        const result = await callRoute(ledgerRoutes, "GET", "/", { role: "staff" });
+        const result = await callRoute(donationRoutes, "GET", "/", { role: "staff" });
 
-        assert.equal(result.status, 403);
-        assert.equal(find.mock.callCount(), 0);
+        assert.equal(result.status, 200);
+        assert.equal(result.body.donations[0].status, "received");
+        assert.equal(find.mock.callCount(), 1);
     });
 });
