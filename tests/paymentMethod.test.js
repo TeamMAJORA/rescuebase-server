@@ -46,13 +46,13 @@ describe("Payment Methods: View and Manage Payment Methods", () => {
         assert.equal(create.mock.callCount(), 0);
     });
 
-    test("CASE-209 | Description: Staff adds an unsupported payment type. | Expected: Save fails with error message.", async () => {
+    test("CASE-209 | Description: Staff adds a payment method with a name that is too short. | Expected: Save fails with error message.", async () => {
         const create = mock.method(PaymentMethod, "create", async () => ({}));
 
-        const result = await callRoute(paymentRoutes, "POST", "/", { role: "staff", body: { ...GCASH, method_type: "Bitcoin" } });
+        const result = await callRoute(paymentRoutes, "POST", "/", { role: "staff", body: { ...GCASH, method_type: "X" } });
 
         assert.equal(result.status, 400);
-        assert.match(result.body.message, /GCash, Maya, Bank Account/);
+        assert.match(result.body.message, /2 to 40 characters/);
         assert.equal(create.mock.callCount(), 0);
     });
 
