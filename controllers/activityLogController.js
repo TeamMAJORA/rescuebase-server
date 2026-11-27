@@ -12,8 +12,8 @@ exports.getActivityLogs = async (req, res) => {
 
     const filter = {};
 
-    // Admin and staff see everyone's activity; volunteers only their own.
-    const canSeeAllLogs = role === "admin" || role === "staff";
+    // Only admins see everyone's activity; staff and volunteers see only their own.
+    const canSeeAllLogs = role === "admin";
 
     if (!canSeeAllLogs) {
         if (!mongoose.isValidObjectId(authenticatedUserId)) {
@@ -22,7 +22,7 @@ exports.getActivityLogs = async (req, res) => {
             throw error;
         }
 
-        // Ignore any userId a volunteer supplies.
+        // Ignore any userId a non-admin supplies.
         filter.user = authenticatedUserId;
     } else if (userId) {
         if (!mongoose.isValidObjectId(userId)) {

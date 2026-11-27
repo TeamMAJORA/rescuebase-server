@@ -74,7 +74,7 @@ module.exports = async function verifyToken(req, res, next) {
 
         // A deactivated (or deleted) account is signed out on its next request,
         // not only when the session runs out
-        const account = await User.findById(decoded.id).select("status name username").lean();
+        const account = await User.findById(decoded.id).select("status name username role").lean();
 
         if (!account) {
             return res.status(401).json({
@@ -91,7 +91,8 @@ module.exports = async function verifyToken(req, res, next) {
             });
         }
 
-        const role = String(decoded.role).trim().toLowerCase();
+        // Role comes from the database so a demotion takes effect on the next request
+        const role = String(account.role || "").trim().toLowerCase();
 
         if (!role) {
             return res.status(401).json({
