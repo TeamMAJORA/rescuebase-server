@@ -104,3 +104,23 @@ describe("Rescue Assignment: Create & Assign Rescue Tasks", () => {
         ]);
     });
 });
+
+describe("Rescue Assignment: View a single assignment", () => {
+    test("A volunteer opens another volunteer's assignment by ID. | Expected: Not found; their own and open ones still load.", async () => {
+        const me = newId();
+        const other = fakeDocument({ _id: newId(), status: "accepted", volunteerId: newId() });
+        const mine = fakeDocument({ _id: newId(), status: "accepted", volunteerId: me });
+        const open = fakeDocument({ _id: newId(), status: "open", volunteerId: null });
+
+        for (const [assignment, status] of [[other, 404], [mine, 200], [open, 200]]) {
+            mock.method(RescueAssignment, "findById", () => query(assignment));
+            const result = await callRoute(rescueRoutes, "GET", `/${assignment._id}`, { role: "volunteer", user: { id: me } });
+            assert.equal(result.status, status);
+            mock.restoreAll();
+        }
+
+        mock.method(RescueAssignment, "findById", () => query(other));
+        const staff = await callRoute(rescueRoutes, "GET", `/${other._id}`, { role: "staff" });
+        assert.equal(staff.status, 200, "staff still see every assignment");
+    });
+});

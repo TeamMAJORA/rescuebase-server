@@ -14,6 +14,7 @@ const FosterApplication = require("../models/FosterApplication");
 const FosterAssignment = require("../models/FosterAssignment");
 const LedgerEntry = require("../models/LedgerEntry");
 const Notification = require("../models/Notifications");
+const VaccinationRecord = require("../models/VaccinationRecord");
 
 const fosterRoutes = require("../routes/fosterRoutes");
 
@@ -120,6 +121,7 @@ describe("Foster Management: Assign Animals to Foster Caregivers", () => {
 describe("Foster Management: View Foster Pet, Submit Care Updates & View History", () => {
     test("CASE-097 | Description: Foster opens their assigned animals. | Expected: Animals are listed.", async () => {
         const find = mock.method(FosterAssignment, "find", () => query([activeAssignment(), activeAssignment({ petName: "Mimi" })]));
+        mock.method(VaccinationRecord, "find", () => query([])); // no shots due
 
         const result = await callRoute(fosterRoutes, "GET", "/assignments/me/active", { role: "foster", user: { email: FOSTER_EMAIL } });
 
@@ -314,6 +316,7 @@ describe("Foster Management: Review Evaluations, Medical Requests & Return Reque
 
         // the foster's own assignment view returns the same record
         mock.method(FosterAssignment, "find", () => query([assignment]));
+        mock.method(VaccinationRecord, "find", () => query([])); // no shots due
         const fosterView = await callRoute(fosterRoutes, "GET", "/assignments/me/active", { role: "foster", user: { email: FOSTER_EMAIL } });
         assert.equal(JSON.stringify(fosterView.body).includes("Vet visit booked Friday"), true);
     });
