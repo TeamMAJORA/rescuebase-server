@@ -393,7 +393,11 @@ exports.getAssignmentById = async (req, res) => {
 
     const assignment = await RescueAssignment.findById(assignmentId);
 
-    if (!assignment) {
+    // Volunteers only see their own assignments or open ones, same as their lists
+    const hiddenFromVolunteer = req.user?.role === "volunteer" && assignment &&
+        assignment.status !== "open" && String(assignment.volunteerId || "") !== String(req.user.id);
+
+    if (!assignment || hiddenFromVolunteer) {
         const e = new Error("Rescue assignment not found.");
         e.statusCode = 404;
         throw e;

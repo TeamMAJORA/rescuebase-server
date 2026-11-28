@@ -122,10 +122,13 @@ describe("Notification: View Automated Notifications", () => {
                 animal_id: { _id: newId(), name: "Buddy" },
             };
             mock.method(VaccinationRecord, "find", () => query([record]));
+            mock.method(VaccinationRecord, "exists", async () => null); // no newer dose recorded
             mock.method(User, "find", () => query([{ _id: newId() }]));
+            mock.method(User, "findOne", () => query({ _id: newId() })); // the foster's account
             const insertMany = mock.method(Notification, "insertMany", async () => []);
             mock.method(FosterAssignment, "findOne", () => query({ fosterEmail: "foster@test.rescuebase" }));
-            const markSent = mock.method(VaccinationRecord, "updateOne", async () => ({}));
+            const markSent = mock.method(VaccinationRecord, "updateOne", async () => ({ modifiedCount: 1 }));
+            mock.method(Notification, "create", async (data) => data); // the foster's bell
 
             await runVaccinationReminders();
 
@@ -133,7 +136,7 @@ describe("Notification: View Automated Notifications", () => {
             assert.equal(insertMany.mock.calls[0].arguments[0][0].title, "Vaccination due soon");
             assert.match(insertMany.mock.calls[0].arguments[0][0].message, /Buddy: Rabies is due/);
             assert.equal(sentEmails.some((mail) => mail.name === "sendVaccinationReminderEmail" && mail.args[0] === "foster@test.rescuebase"), true);
-            assert.equal(markSent.mock.callCount(), 1); // the same dose is not reminded twice
+            assert.equal(markSent.mock.callCount(), 2); // staff and foster marks, so the same dose is not reminded twice
         } finally {
             if (originalState) Object.defineProperty(mongoose.connection, "readyState", originalState);
             else delete mongoose.connection.readyState;
